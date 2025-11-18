@@ -1,0 +1,195 @@
+/* ============================================
+   ANIMATED LOGIN BACKGROUND
+   ============================================ */
+.animated-login-bg {
+  background: radial-gradient(circle at top, #0f172a, #020617 55%, #000 100%);
+  position: relative;
+  overflow: hidden;
+  min-height: 100vh;
+}
+
+.animated-login-bg::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(circle at 20% 30%, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, rgba(34, 197, 94, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(234, 179, 8, 0.05) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ============================================
+   CRYPTO COINS (FLOATING)
+   ============================================ */
+.crypto-coin {
+  position: absolute;
+  font-size: 1.75rem;
+  opacity: 0.9;
+  animation: floatCoin 12s ease-in-out infinite;
+  user-select: none;
+  pointer-events: auto;
+  text-shadow: 0 0 20px currentColor;
+  filter: drop-shadow(0 0 10px currentColor);
+  z-index: 2;
+}
+
+.crypto-coin:hover {
+  opacity: 1;
+  transform: scale(1.1);
+  transition: all 0.3s ease;
+}
+
+@keyframes floatCoin {
+  0%, 100% {
+    transform: translateY(0) translateX(0) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-20px) translateX(10px) rotate(5deg);
+  }
+  50% {
+    transform: translateY(-15px) translateX(6px) rotate(-3deg);
+  }
+  75% {
+    transform: translateY(-25px) translateX(-8px) rotate(4deg);
+  }
+}
+
+/* ============================================
+   PRICE TICKERS
+   ============================================ */
+.price-ticker {
+  position: absolute;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  box-shadow: 
+    0 10px 25px rgba(15, 23, 42, 0.8),
+    0 0 15px rgba(59, 130, 246, 0.2);
+  white-space: nowrap;
+  backdrop-filter: blur(10px);
+  user-select: none;
+  pointer-events: auto;
+  z-index: 2;
+  transition: all 0.2s ease;
+}
+
+.price-ticker:hover {
+  transform: scale(1.05);
+  box-shadow: 
+    0 15px 35px rgba(15, 23, 42, 0.9),
+    0 0 25px rgba(59, 130, 246, 0.3);
+}
+
+.price-ticker.green {
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.6);
+  box-shadow: 
+    0 10px 25px rgba(15, 23, 42, 0.8),
+    0 0 15px rgba(74, 222, 128, 0.3);
+}
+
+.price-ticker.green:hover {
+  box-shadow: 
+    0 15px 35px rgba(15, 23, 42, 0.9),
+    0 0 25px rgba(74, 222, 128, 0.4);
+}
+
+.price-ticker.red {
+  color: #f97373;
+  border-color: rgba(248, 113, 113, 0.6);
+  box-shadow: 
+    0 10px 25px rgba(15, 23, 42, 0.8),
+    0 0 15px rgba(248, 113, 113, 0.3);
+}
+
+.price-ticker.red:hover {
+  box-shadow: 
+    0 15px 35px rgba(15, 23, 42, 0.9),
+    0 0 25px rgba(248, 113, 113, 0.4);
+}
+
+/* ============================================
+   CANDLESTICK CHARTS
+   ============================================ */
+.candlestick {
+  position: absolute;
+  width: 4px;
+  height: 32px;
+  border-radius: 999px;
+  background: #22c55e;
+  box-shadow: 
+    0 0 20px rgba(34, 197, 94, 0.5),
+    inset 0 0 10px rgba(34, 197, 94, 0.3);
+  opacity: 0.7;
+  z-index: 2;
+  animation: candlestickPulse 3s ease-in-out infinite;
+}
+
+.candlestick.red {
+  background: #f97373;
+  box-shadow: 
+    0 0 20px rgba(248, 113, 113, 0.5),
+    inset 0 0 10px rgba(248, 113, 113, 0.3);
+}
+
+@keyframes candlestickPulse {
+  0%, 100% {
+    opacity: 0.7;
+    transform: scaleY(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleY(1.1);
+  }
+}
+
+/* ============================================
+   DRAGGABLE ELEMENTS
+   ============================================ */
+.draggable-element {
+  transition: transform 0.1s linear;
+  cursor: grab;
+}
+
+.draggable-element:active {
+  cursor: grabbing;
+  z-index: 1000;
+}
+
+/* ============================================
+   RESPONSIVE ADJUSTMENTS
+   ============================================ */
+@media (max-width: 640px) {
+  .crypto-coin {
+    font-size: 1.5rem;
+  }
+  
+  .price-ticker {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.6rem;
+  }
+  
+  .candlestick {
+    width: 3px;
+    height: 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .crypto-coin {
+    font-size: 1.25rem;
+  }
+  
+  .price-ticker {
+    font-size: 0.6rem;
+    padding: 0.15rem 0.5rem;
+  }
+}
