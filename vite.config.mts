@@ -14,10 +14,18 @@ export default defineConfig({
     minify: 'terser',
     rollupOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'chart-vendor': ['apexcharts', 'react-apexcharts', 'recharts'],
-          'firebase-vendor': ['firebase']
+        manualChunks: (id) => {
+          if (id.includes('node_modules')) {
+            if (id.includes('firebase')) {
+              return 'firebase-vendor'
+            }
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+              return 'react-vendor'
+            }
+            if (id.includes('apexcharts') || id.includes('recharts')) {
+              return 'chart-vendor'
+            }
+          }
         }
       }
     }
