@@ -808,7 +808,6 @@ const translations = {
     important: 'Important',
     positive: 'Positive',
     negative: 'Negative',
-    neutral: 'Neutral',
     highPriorityNews: 'High Priority News',
     criticalImportance: 'News of critical importance',
     recordOrImportant: 'Record or important developments',
