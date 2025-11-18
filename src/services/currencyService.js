@@ -1,16 +1,13 @@
 /**
  * Currency Service
  * Döviz kurlarını yöneten servis
+ * Artık backend scheduler tarafından yönetiliyor, MongoDB'den okuyoruz
  */
 
 const CACHE_KEY = 'currency_rates_cache'
 const CACHE_DURATION = 5 * 60 * 1000 // 5 dakika
 
-// ExchangeRate API (ücretsiz)
-const EXCHANGE_RATE_API = 'https://api.exchangerate-api.com/v4/latest/USD'
-
-// Fallback: Fixer.io veya başka bir API kullanılabilir
-// Şimdilik ExchangeRate API kullanıyoruz (ücretsiz, rate limit var ama yeterli)
+const MONGO_API_URL = import.meta.env.VITE_MONGO_API_URL || import.meta.env.VITE_API_ENDPOINT || 'http://localhost:3000'
 
 const getCachedData = () => {
   try {
@@ -39,42 +36,37 @@ const setCachedData = (data) => {
 }
 
 /**
- * Döviz kurlarını API'den çek
+ * Döviz kurlarını MongoDB'den çek (backend scheduler tarafından yönetiliyor)
  */
 const fetchCurrencyRates = async () => {
   try {
-    const response = await fetch(EXCHANGE_RATE_API, {
+    // Önce MongoDB'den çek
+    const response = await fetch(`${MONGO_API_URL}/api/cache/currency_rates`, {
       headers: {
         'Accept': 'application/json'
       },
       cache: 'no-cache'
     })
     
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-    }
-    
-    const data = await response.json()
-    
-    // API'den gelen format: { base: 'USD', rates: { EUR: 0.92, TRY: 42.0, ... } }
-    // Bizim format: { EUR: 0.92, TRY: 42.0, ... }
-    const rates = data.rates || {}
-    
-    // USD'yi de ekle (1.0)
-    rates.USD = 1.0
-    
-    return {
-      data: rates,
-      apiStatus: {
-        source: 'api',
-        success: true,
-        apiStatuses: [
-          { name: 'ExchangeRate API', success: true }
-        ]
+    if (response.ok) {
+      const result = await response.json()
+      if (result.success && result.data) {
+        // Başarılı, cache'e kaydet
+        setCachedData(result.data)
+        return {
+          data: result.data,
+          apiStatus: {
+            source: 'mongodb',
+            success: true,
+            apiStatuses: [
+              { name: 'MongoDB Currency Rates', success: true }
+            ]
+          }
+        }
       }
     }
-  } catch (error) {
-    // Fallback: Cache'den dene
+    
+    // MongoDB'den veri yoksa, cache'den dene
     const cachedData = getCachedData()
     if (cachedData) {
       return {
@@ -82,9 +74,8 @@ const fetchCurrencyRates = async () => {
         apiStatus: {
           source: 'stale_cache',
           success: true,
-          error: error.message,
           apiStatuses: [
-            { name: 'ExchangeRate API', success: false, error: error.message },
+            { name: 'MongoDB Currency Rates', success: false, error: 'Not found' },
             { name: 'Stale Cache Fallback', success: true }
           ]
         }
@@ -105,9 +96,47 @@ const fetchCurrencyRates = async () => {
       apiStatus: {
         source: 'default',
         success: false,
+        apiStatuses: [
+          { name: 'MongoDB Currency Rates', success: false, error: 'Not found' },
+          { name: 'Default Rates', success: true }
+        ]
+      }
+    }
+  } catch (error) {
+    // Fallback: Cache'den dene
+    const cachedData = getCachedData()
+    if (cachedData) {
+      return {
+        data: cachedData,
+        apiStatus: {
+          source: 'stale_cache',
+          success: true,
+          error: error.message,
+          apiStatuses: [
+            { name: 'MongoDB Currency Rates', success: false, error: error.message },
+            { name: 'Stale Cache Fallback', success: true }
+          ]
+        }
+      }
+    }
+    
+    // Son çare: Varsayılan kurlar
+    const defaultRates = {
+      USD: 1.0,
+      EUR: 0.92,
+      TRY: 42.0,
+      GBP: 0.79,
+      JPY: 150.0
+    }
+    
+    return {
+      data: defaultRates,
+      apiStatus: {
+        source: 'default',
+        success: false,
         error: error.message,
         apiStatuses: [
-          { name: 'ExchangeRate API', success: false, error: error.message },
+          { name: 'MongoDB Currency Rates', success: false, error: error.message },
           { name: 'Default Rates', success: true }
         ]
       }

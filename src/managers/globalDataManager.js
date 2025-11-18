@@ -6,7 +6,7 @@
 import cryptoService from '../services/cryptoService'
 import dominanceService from '../services/dominanceService'
 import fearGreedService from '../services/fearGreedService'
-import currencyService from '../services/currencyService'
+// currencyService artık backend scheduler tarafından yönetiliyor, sadece MongoDB'den okuyoruz
 
 class GlobalDataManager {
   constructor() {
@@ -293,37 +293,55 @@ class GlobalDataManager {
       }
 
       // ========== 5. CURRENCY RATES (Settings sayfası için) ==========
+      // Currency Rates artık backend scheduler tarafından yönetiliyor
       const currencyStartTime = Date.now()
       try {
-        const currencyResult = await currencyService.fetchCurrencyRatesWithStatus(false)
-        const rates = currencyResult.data || {}
-        const currencyApiStatus = currencyResult.apiStatus || {}
+        // MongoDB'den currency rates çek
+        const MONGO_API_URL = import.meta.env.VITE_MONGO_API_URL || import.meta.env.VITE_API_ENDPOINT || 'http://localhost:3000'
+        let currencyResult = null
+        let currencyApiStatuses = []
         
-        if (rates && Object.keys(rates).length > 0) {
-          this.currencyRates = rates
-          this.lastCurrencyUpdate = new Date()
+        try {
+          const mongoResponse = await fetch(`${MONGO_API_URL}/api/cache/currency_rates`)
+          if (mongoResponse.ok) {
+            const mongoResult = await mongoResponse.json()
+            if (mongoResult.success && mongoResult.data) {
+              currencyResult = mongoResult.data
+              currencyApiStatuses.push({ name: 'MongoDB Currency Rates', success: true })
+            }
+          } else if (mongoResponse.status === 404) {
+            currencyApiStatuses.push({ name: 'MongoDB Currency Rates', success: false, error: 'Not found (404)' })
+          }
+        } catch (mongoError) {
+          currencyApiStatuses.push({ name: 'MongoDB Currency Rates', success: false, error: mongoError.message })
+        }
+        
+        // MongoDB'den veri yoksa, backend scheduler zaten güncelliyor
+        if (!currencyResult || Object.keys(currencyResult).length === 0) {
+          currencyApiStatuses.push({ name: 'Backend Scheduler', success: true, message: 'Veri backend scheduler tarafından güncellenecek' })
+        }
+        
+        // MongoDB'den gelen veriyi kullan
+        if (currencyResult && Object.keys(currencyResult).length > 0) {
+          this.currencyRates = currencyResult
+          this.lastCurrencyUpdate = Date.now()
           
           // window.__exchangeRates'i güncelle (currencyConverter için)
           if (typeof window !== 'undefined') {
-            window.__exchangeRates = rates
+            window.__exchangeRates = currencyResult
             // Event dispatch et (Settings sayfası için)
-            window.dispatchEvent(new CustomEvent('exchangeRatesUpdated', { detail: rates }))
-            window.dispatchEvent(new CustomEvent('globalUpdateCompleted', { detail: { currencyRates: rates } }))
+            window.dispatchEvent(new CustomEvent('exchangeRatesUpdated', { detail: currencyResult }))
+            window.dispatchEvent(new CustomEvent('globalUpdateCompleted', { detail: { currencyRates: currencyResult } }))
           }
           results.currency.success = true
         }
         
-        if (currencyApiStatus.apiStatuses && Array.isArray(currencyApiStatus.apiStatuses)) {
-          results.currency.apiStatuses = currencyApiStatus.apiStatuses
-        } else if (currencyApiStatus.source) {
-          results.currency.apiStatuses = [{ name: currencyApiStatus.source, success: currencyApiStatus.success || false }]
-        }
-        
         results.currency.duration = ((Date.now() - currencyStartTime) / 1000).toFixed(2)
+        results.currency.apiStatuses = currencyApiStatuses
       } catch (error) {
         results.currency.duration = ((Date.now() - currencyStartTime) / 1000).toFixed(2)
-        if (error.apiStatus) {
-          results.currency.apiStatuses = error.apiStatus.apiStatuses || []
+        if (error.apiStatuses) {
+          results.currency.apiStatuses = error.apiStatuses
         }
         console.error(`❌ [${timeStr}] Currency rates hatası:`, error.message || error)
       }

@@ -182,7 +182,35 @@ async function updateCrypto() {
 }
 
 /**
- * Tüm verileri güncelle (Crypto: 5 dakika, Dominance: 5 dakika, Fear & Greed: 10 dakika)
+ * Currency rates verilerini güncelle
+ */
+async function updateCurrencyRates() {
+  try {
+    const response = await fetch(`${MONGO_API_URL}/api/currency/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+    
+    if (response.ok) {
+      const result = await response.json()
+      const timeStr = new Date().toLocaleTimeString('tr-TR')
+      console.log(`✅ [${timeStr}] Currency rates verisi güncellendi`)
+      return true
+    } else {
+      const error = await response.text()
+      const timeStr = new Date().toLocaleTimeString('tr-TR')
+      console.error(`❌ [${timeStr}] Currency rates güncelleme hatası: ${error}`)
+      return false
+    }
+  } catch (error) {
+    const timeStr = new Date().toLocaleTimeString('tr-TR')
+    console.error(`❌ [${timeStr}] Currency rates güncelleme hatası:`, error.message)
+    return false
+  }
+}
+
+/**
+ * Tüm verileri güncelle (Crypto: 5 dakika, Dominance: 5 dakika, Currency Rates: 5 dakika, Fear & Greed: 10 dakika)
  */
 async function updateAll() {
   if (isRunning) {
@@ -199,10 +227,11 @@ async function updateAll() {
   const startTime = Date.now()
 
   try {
-    // Crypto ve Dominance güncelle (Fear & Greed ayrı scheduler'da)
-    const [cryptoSuccess, dominanceSuccess] = await Promise.all([
+    // Crypto, Dominance ve Currency Rates güncelle (Fear & Greed ayrı scheduler'da)
+    const [cryptoSuccess, dominanceSuccess, currencySuccess] = await Promise.all([
       updateCrypto(),
-      updateDominance()
+      updateDominance(),
+      updateCurrencyRates()
     ])
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2)
@@ -210,6 +239,7 @@ async function updateAll() {
     console.log(`⏱️  [${timeStr}] Toplam süre: ${duration}s`)
     console.log(`📈 [${timeStr}] Crypto: ${cryptoSuccess ? '✅ Başarılı' : '❌ Başarısız'}`)
     console.log(`📊 [${timeStr}] Dominance: ${dominanceSuccess ? '✅ Başarılı' : '❌ Başarısız'}`)
+    console.log(`💱 [${timeStr}] Currency Rates: ${currencySuccess ? '✅ Başarılı' : '❌ Başarısız'}`)
     console.log(`⏰ [${timeStr}] Bir sonraki güncelleme: ${nextUpdateTime}`)
     console.log(`═══════════════════════════════════════════════════════════\n`)
   } catch (error) {

@@ -87,6 +87,32 @@ const Trending = () => {
     }
   }
 
+  // Trend level ve direction label'ları (dil uyumlu)
+  const trendLevelLabels = useMemo(() => ({
+    veryStrongTrend: t('veryStrongTrend'),
+    strongTrend: t('strongTrend'),
+    moderateTrend: t('moderateTrend'),
+    weakTrend: t('weakTrend'),
+    veryWeakTrend: t('veryWeakTrend')
+  }), [t])
+
+  const trendDirectionLabels = useMemo(() => ({
+    strongBullish: t('strongBullish'),
+    bullish: t('bullish'),
+    neutral: t('neutral'),
+    bearish: t('bearish'),
+    strongBearish: t('strongBearish')
+  }), [t])
+
+  // Backend'den gelen string değerleri çevir
+  const translateMetric = useCallback((value) => {
+    if (!value || typeof value !== 'string') return value
+    if (trendLevelLabels[value]) return trendLevelLabels[value]
+    if (trendDirectionLabels[value]) return trendDirectionLabels[value]
+    const translated = t(value)
+    return typeof translated === 'string' ? translated : value
+  }, [t, trendLevelLabels, trendDirectionLabels])
+
   // Helper functions for trend level and direction
   const getTrendLevel = useCallback((trendScore) => {
     if (trendScore >= 80) return { level: t('veryStrongTrend'), emoji: '🔥', color: 'green' }
@@ -110,13 +136,26 @@ const Trending = () => {
     return t('positionBadgeNeutral')
   }, [t])
 
-  // Process coins to add calculated fields
+  // Process coins - Backend'den gelen verileri doğrudan kullan, sadece eksik olanları hesapla
   const processedCoins = useMemo(() => {
     return (trendingCoins || []).map((coin) => {
       const trendScore = coin.trend_score || 0
       const aiPrediction = parseFloat(coin.ai_prediction || 0)
-      const trendInfo = getTrendLevel(trendScore)
-      const aiInfo = getAIDirection(aiPrediction)
+      
+      // Backend'den gelen verileri kullan, yoksa frontend'de hesapla (fallback)
+      const trendInfo = coin.trend_level ? {
+        level: coin.trend_level,
+        emoji: coin.trend_emoji || '📊',
+        color: coin.trend_color || 'orange'
+      } : getTrendLevel(trendScore)
+      
+      const aiInfo = coin.ai_direction ? {
+        direction: coin.ai_direction,
+        emoji: coin.ai_emoji || '➖',
+        color: coin.ai_color || 'gray',
+        position: coin.position_type || 'neutral'
+      } : getAIDirection(aiPrediction)
+      
       const predictedPrice = coin.predicted_price || (coin.current_price || coin.price) * (1 + (aiPrediction / 100))
       const predictionBasePrice = coin.prediction_base_price || coin.current_price || coin.price
 
@@ -454,17 +493,17 @@ const Trending = () => {
                           style={{ width: `${coin.trend_score}%` }}
                         ></div>
                       </div>
-                      <div className="mt-1.5 text-center">
-                        <span className={`text-[9px] sm:text-xs font-semibold px-2 py-0.5 rounded-full ${
-                          coin.trend_color === 'green' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                          coin.trend_color === 'lime' ? 'bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-400' :
-                          coin.trend_color === 'yellow' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                          coin.trend_color === 'orange' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
-                          'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                        }`}>
-                          {coin.trend_level}
-                        </span>
-                      </div>
+                    <div className="mt-1.5 text-center">
+                      <span className={`text-[9px] sm:text-xs font-semibold px-2 py-0.5 rounded-full ${
+                        coin.trend_color === 'green' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                        coin.trend_color === 'lime' ? 'bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-400' :
+                        coin.trend_color === 'yellow' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                        coin.trend_color === 'orange' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
+                        'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                      }`}>
+                        {translateMetric(coin.trend_level)}
+                      </span>
+                    </div>
                     </div>
 
                     {/* AI Prediction Box */}
@@ -503,17 +542,17 @@ const Trending = () => {
                           </span>
                         </div>
                       </div>
-                      <div className="mt-2 text-center">
-                        <span className={`text-[9px] sm:text-xs font-semibold px-2 py-0.5 rounded-full ${
-                          coin.ai_color === 'green' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                          coin.ai_color === 'lime' ? 'bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-400' :
-                          coin.ai_color === 'red' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                          coin.ai_color === 'orange' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
-                          'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
-                        }`}>
-                          {coin.ai_direction}
-                        </span>
-                      </div>
+                    <div className="mt-2 text-center">
+                      <span className={`text-[9px] sm:text-xs font-semibold px-2 py-0.5 rounded-full ${
+                        coin.ai_color === 'green' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                        coin.ai_color === 'lime' ? 'bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-400' :
+                        coin.ai_color === 'red' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                        coin.ai_color === 'orange' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
+                        'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
+                      }`}>
+                        {translateMetric(coin.ai_direction)}
+                      </span>
+                    </div>
                     </div>
                   </div>
 
@@ -615,7 +654,7 @@ const Trending = () => {
 
                   <div className="flex justify-between items-center bg-white/10 backdrop-blur-sm p-1.5 sm:p-2 rounded mb-1 sm:mb-1.5">
                     <span className={`text-[8px] sm:text-xs ${isDark ? 'text-white/80' : 'text-white/80'}`}>{t('direction')}:</span>
-                    <span className={`text-xs sm:text-sm font-bold ${isDark ? 'text-white' : 'text-white'}`}>{selectedCoin.ai_direction}</span>
+                    <span className={`text-xs sm:text-sm font-bold ${isDark ? 'text-white' : 'text-white'}`}>{translateMetric(selectedCoin.ai_direction)}</span>
                   </div>
                 </div>
               </div>
@@ -652,7 +691,7 @@ const Trending = () => {
                     selectedCoin.trend_color === 'orange' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
                     'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
                   }`}>
-                    {selectedCoin.trend_level}
+                    {translateMetric(selectedCoin.trend_level)}
                   </span>
                 </div>
               </div>

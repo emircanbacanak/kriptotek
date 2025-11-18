@@ -1,9 +1,3 @@
-/**
- * Crypto List Handler
- * CoinGecko API'den kripto para listesi çeker, stablecoin'leri filtreler ve normalize eder
- * Her batch için farklı proxy kullanır (rate limit ve Cloudflare koruması için)
- */
-
 const COINGECKO_API = 'https://api.coingecko.com/api/v3'
 
 // Ücretsiz proxy listesi (her batch için farklı proxy kullanılacak)

@@ -9,19 +9,17 @@ import { dirname, join } from 'path'
 import { fetchDominanceData } from './services/apiHandlers/dominance.js'
 import { fetchFearGreedData } from './services/apiHandlers/fearGreed.js'
 
-// .env dosyasını yükle (root dizinden veya server dizininden)
+// .env dosyasını yükle (sadece root dizinden)
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
-// Önce server dizinindeki .env'i dene, yoksa root dizinindekini kullan
-const serverEnvPath = join(__dirname, '.env')
+// Root dizinindeki .env'yi kullan (Heroku için)
 const rootEnvPath = join(__dirname, '..', '.env')
 
-if (existsSync(serverEnvPath)) {
-  dotenv.config({ path: serverEnvPath })
-} else if (existsSync(rootEnvPath)) {
+if (existsSync(rootEnvPath)) {
   dotenv.config({ path: rootEnvPath })
 } else {
+  // Heroku'da environment variables otomatik yüklenir
   dotenv.config() // Varsayılan olarak process.cwd()'den yükle
 }
 
@@ -567,6 +565,142 @@ app.get('/api/cache/dominance_data', async (req, res) => {
     }
   } catch (error) {
     console.error('❌ GET /api/cache/dominance_data error:', error)
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    })
+  }
+})
+
+// Currency Rates - GET (MongoDB'den çek)
+app.get('/api/cache/currency_rates', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const collection = db.collection('api_cache')
+    const cacheDoc = await collection.findOne({ _id: 'currency_rates' })
+    
+    if (!cacheDoc || !cacheDoc.data) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Currency rates verisi bulunamadı' 
+      })
+    }
+
+    // Veri eski mi kontrol et (5 dakika)
+    const CACHE_DURATION = 5 * 60 * 1000 // 5 dakika
+    const isStale = !cacheDoc.updatedAt || (Date.now() - cacheDoc.updatedAt > CACHE_DURATION)
+    
+    return res.json({
+      success: true,
+      data: cacheDoc.data,
+      updatedAt: cacheDoc.updatedAt,
+      isStale: isStale
+    })
+  } catch (error) {
+    console.error('❌ GET /api/cache/currency_rates error:', error)
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    })
+  }
+})
+
+// Currency Rates - PUT (MongoDB'ye kaydet)
+app.put('/api/cache/currency_rates', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const { data } = req.body
+    
+    if (!data || typeof data !== 'object') {
+      return res.status(400).json({
+        success: false,
+        error: 'Currency rates data gerekli'
+      })
+    }
+
+    const collection = db.collection('api_cache')
+    await collection.updateOne(
+      { _id: 'currency_rates' },
+      { 
+        $set: {
+          data: data,
+          updatedAt: Date.now(),
+          lastUpdate: Date.now()
+        }
+      },
+      { upsert: true }
+    )
+    
+    return res.json({
+      success: true,
+      message: 'Currency rates verisi kaydedildi'
+    })
+  } catch (error) {
+    console.error('❌ PUT /api/cache/currency_rates error:', error)
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    })
+  }
+})
+
+// POST /api/currency/update - ExchangeRate API'den currency rates çek ve MongoDB'ye kaydet
+app.post('/api/currency/update', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const { fetchCurrencyRates } = await import('./services/apiHandlers/currency.js')
+    const result = await fetchCurrencyRates()
+    
+    if (!result.data || Object.keys(result.data).length === 0) {
+      return res.status(500).json({
+        success: false,
+        error: 'No data received from ExchangeRate API'
+      })
+    }
+    
+    // MongoDB'ye kaydet
+    const collection = db.collection('api_cache')
+    await collection.updateOne(
+      { _id: 'currency_rates' },
+      { 
+        $set: {
+          data: result.data,
+          updatedAt: Date.now(),
+          lastUpdate: Date.now()
+        }
+      },
+      { upsert: true }
+    )
+    
+    const timeStr = new Date().toLocaleTimeString('tr-TR')
+    console.log(`✅ [${timeStr}] Currency rates verisi güncellendi`)
+    
+    return res.json({
+      success: true,
+      data: result.data,
+      apiStatuses: result.apiStatus.apiStatuses || [{ name: 'ExchangeRate API', success: true }],
+      message: 'Currency rates updated'
+    })
+  } catch (error) {
+    console.error('❌ POST /api/currency/update error:', error)
     return res.status(500).json({
       success: false,
       error: error.message
@@ -1252,6 +1386,26 @@ app.post('/api/crypto/update', async (req, res) => {
     const timeStr = new Date().toLocaleTimeString('tr-TR')
     console.log(`✅ [${timeStr}] Crypto list verisi güncellendi (${result.data.length} coin)`)
     
+    // Crypto listesi güncellendiğinde trending'i de otomatik güncelle
+    try {
+      const trendingCoins = calculateTrendingScores(result.data)
+      const trendingCollection = db.collection('trending_data')
+      await trendingCollection.replaceOne(
+        { _id: 'trending_coins' },
+        {
+          _id: 'trending_coins',
+          coins: trendingCoins,
+          updatedAt: new Date(),
+          totalCoins: result.data.length,
+          processedCoins: trendingCoins.length
+        },
+        { upsert: true }
+      )
+      console.log(`✅ [${timeStr}] Trending verisi otomatik güncellendi (${trendingCoins.length} coin)`)
+    } catch (trendingError) {
+      console.warn(`⚠️ [${timeStr}] Trending güncelleme hatası (devam ediliyor):`, trendingError.message)
+    }
+    
     return res.json({
       success: true,
       data: result.data,
@@ -1391,41 +1545,211 @@ app.post('/api/trending/update', async (req, res) => {
   }
 })
 
-// Trending skorlarını hesapla (basitleştirilmiş versiyon)
+// Trending skorlarını hesapla (Referans algoritmaya göre)
 function calculateTrendingScores(coins) {
+  if (!coins || coins.length === 0) {
+    return []
+  }
+
   return coins
-    .map(coin => {
-      // Trend skoru hesaplama (basitleştirilmiş)
+    .map((coin, index) => {
       const priceChange = coin.price_change_percentage_24h || 0
       const volume = coin.total_volume || 0
       const marketCap = coin.market_cap || 0
+      const rank = coin.market_cap_rank || index + 1
       
-      // Basit trend skoru (daha sonra backend'deki detaylı algoritma kullanılabilir)
-      const trendScore = 
-        (priceChange * 0.4) + 
-        (Math.log10(volume + 1) * 0.3) + 
-        (Math.log10(marketCap + 1) * 0.3)
+      // ============ TREND SCORE HESAPLAMALARI ============
+      
+      // 1. Volume/Market Cap Ratio (Likidite Skoru) - %30 ağırlık
+      const volumeRatio = marketCap > 0 ? volume / marketCap : 0
+      const liquidityScore = Math.min(100, Math.max(0, volumeRatio * 500)) // 0.2 = 100
+      
+      // 2. Price Momentum (Fiyat Momentumu) - %25 ağırlık
+      const momentumScore = Math.min(100, Math.max(0, 50 + (priceChange * 2))) // -25% = 0, +25% = 100
+      
+      // 3. Market Cap Position (Piyasa Değeri Pozisyonu) - %20 ağırlık
+      const marketCapScore = Math.max(0, 100 - (rank * 2)) // Rank 1 = 100, Rank 50 = 0
+      
+      // 4. Volume Trend (Hacim Trendi) - %15 ağırlık
+      const avgVolume = 50000000 // Ortalama hacim benchmark (50M USD)
+      const volumeTrendScore = Math.min(100, (volume / avgVolume) * 50)
+      
+      // 5. Volatility (Volatilite/Oynaklık) - %10 ağırlık
+      const volatilityScore = Math.min(100, Math.abs(priceChange) * 5)
+      
+      // TOPLAM TREND SKORU (Ağırlıklı Ortalama)
+      const trendScore = Math.round(
+        (liquidityScore * 0.30) +
+        (momentumScore * 0.25) +
+        (marketCapScore * 0.20) +
+        (volumeTrendScore * 0.15) +
+        (volatilityScore * 0.10)
+      )
+      
+      // ============ AI TAHMİN MODELİ (24 Saatlik) ============
+      
+      // 1. Momentum Factor (Fiyat momentumu)
+      const momentumFactor = priceChange * 0.6
+      
+      // 2. Reversion Factor (Geri dönüş faktörü)
+      let reversionFactor = 0
+      if (priceChange > 10) {
+        reversionFactor = -2  // Aşırı yükseliş → düzeltme beklentisi
+      } else if (priceChange < -10) {
+        reversionFactor = 3  // Aşırı düşüş → toparlanma beklentisi
+      }
+      
+      // 3. Liquidity Impact (Likidite etkisi)
+      const liquidityImpact = (volumeRatio > 0.15) ? 1 : -0.5
+      
+      // 4. Stability Factor (İstikrar faktörü)
+      const stabilityFactor = (rank <= 10) ? 0.5 : 0
+      
+      // AI Prediction
+      const aiPrediction = momentumFactor + reversionFactor + liquidityImpact + stabilityFactor
+      
+      // ============ POZİSYON BELİRLEME ============
+      let predictionDirection = 'neutral'
+      let predictionEmoji = '➖'
+      let predictionColor = 'gray'
+      let positionType = 'neutral'
+      
+      if (aiPrediction > 3) {
+        predictionDirection = 'strongBullish'
+        predictionEmoji = '🚀'
+        predictionColor = 'green'
+        positionType = 'long'
+      } else if (aiPrediction > 1) {
+        predictionDirection = 'bullish'
+        predictionEmoji = '📈'
+        predictionColor = 'lime'
+        positionType = 'long'
+      } else if (aiPrediction < -3) {
+        predictionDirection = 'strongBearish'
+        predictionEmoji = '⚠️'
+        predictionColor = 'red'
+        positionType = 'short'
+      } else if (aiPrediction < -1) {
+        predictionDirection = 'bearish'
+        predictionEmoji = '📉'
+        predictionColor = 'orange'
+        positionType = 'short'
+      }
+      
+      // ============ TREND LEVEL ============
+      let trendLevel = 'weakTrend'
+      let trendEmoji = '📉'
+      let trendColor = 'red'
+      
+      if (trendScore >= 80) {
+        trendLevel = 'veryStrongTrend'
+        trendEmoji = '🔥'
+        trendColor = 'green'
+      } else if (trendScore >= 70) {
+        trendLevel = 'strongTrend'
+        trendEmoji = '📈'
+        trendColor = 'lime'
+      } else if (trendScore >= 45) {
+        trendLevel = 'moderateTrend'
+        trendEmoji = '➡️'
+        trendColor = 'yellow'
+      } else if (trendScore >= 20) {
+        trendLevel = 'weakTrend'
+        trendEmoji = '📊'
+        trendColor = 'orange'
+      } else {
+        trendLevel = 'veryWeakTrend'
+        trendEmoji = '📉'
+        trendColor = 'red'
+      }
+      
+      // ============ TAHMİN EDİLEN FİYAT ============
+      const predictedPrice = coin.current_price * (1 + (aiPrediction / 100))
+      const predictionBasePrice = coin.current_price
+      
+      // ============ CONFIDENCE SCORE ============
+      const confidenceScore = Math.min(100, Math.abs(aiPrediction) * 10)
+      
+      // ============ SHORT POZİSYON VERİLERİ ============
+      const shortSignalStrength = Math.abs(aiPrediction)
+      const shortConfidence = priceChange < -5 ? Math.min(100, Math.abs(priceChange) * 3) : 0
+      
+      // ============ POSITION BONUS (Composite Score için) ============
+      const absPrediction = Math.abs(aiPrediction)
+      let positionBonus = 0
+      if (absPrediction > 3) {
+        positionBonus = 40  // Çok güçlü
+      } else if (absPrediction > 1) {
+        positionBonus = 20  // Güçlü
+      } else if (absPrediction > 0) {
+        positionBonus = 10  // Normal
+      }
+      
+      const compositeScore = trendScore + positionBonus
       
       return {
         id: coin.id,
         name: coin.name,
-        symbol: coin.symbol,
+        symbol: coin.symbol?.toUpperCase() || '',
         image: coin.image,
+        price: coin.current_price,
         current_price: coin.current_price,
+        change_24h: priceChange,
         price_change_percentage_24h: priceChange,
         market_cap: marketCap,
+        volume_24h: volume,
         total_volume: volume,
         circulating_supply: coin.circulating_supply,
-        market_cap_rank: coin.market_cap_rank,
+        market_cap_rank: rank,
         sparkline_in_7d: coin.sparkline_in_7d,
+        
+        // Trend Score ve detayları
         trend_score: trendScore,
-        // AI Prediction (basitleştirilmiş)
-        predicted_price: coin.current_price * (1 + (priceChange / 100) * 1.1),
-        estimated_change: priceChange * 1.1
+        trend_level: trendLevel,
+        trend_emoji: trendEmoji,
+        trend_color: trendColor,
+        liquidity_score: Math.round(liquidityScore),
+        momentum_score: Math.round(momentumScore),
+        market_cap_score: Math.round(marketCapScore),
+        volume_trend_score: Math.round(volumeTrendScore),
+        volatility_score: Math.round(volatilityScore),
+        volume_ratio: parseFloat(volumeRatio.toFixed(4)),
+        volume_ratio_percentage: parseFloat((volumeRatio * 100).toFixed(2)),
+        
+        // AI Prediction
+        ai_prediction: parseFloat(aiPrediction.toFixed(2)),
+        ai_direction: predictionDirection,
+        ai_emoji: predictionEmoji,
+        ai_color: predictionColor,
+        ai_confidence: Math.round(confidenceScore),
+        position_type: positionType,
+        predicted_price: predictedPrice,
+        prediction_base_price: predictionBasePrice,
+        predicted_change: parseFloat(aiPrediction.toFixed(2)),
+        
+        // Short pozisyon verileri
+        short_signal_strength: Math.round(shortSignalStrength * 10),
+        short_confidence: Math.round(shortConfidence),
+        
+        // Composite score (sıralama için)
+        composite_score: compositeScore,
+        
+        updatedAt: new Date()
       }
     })
-    .sort((a, b) => b.trend_score - a.trend_score)
-    .slice(0, 45) // En iyi 45 coin
+    .sort((a, b) => {
+      // Önce composite score'a göre sırala
+      if (b.composite_score !== a.composite_score) {
+        return b.composite_score - a.composite_score
+      }
+      // Sonra trend score'a göre
+      if (b.trend_score !== a.trend_score) {
+        return b.trend_score - a.trend_score
+      }
+      // Son olarak 24 saatlik değişime göre
+      return b.change_24h - a.change_24h
+    })
+    .slice(0, 50) // En iyi 50 coin (referans kodda 45 ama kullanıcı 50 istedi)
 }
 
 // Health check
@@ -1436,15 +1760,43 @@ app.get('/health', (req, res) => {
   })
 })
 
+// Static dosyaları serve et (Heroku için - build edilmiş frontend)
+// Bu kod server başlatılmadan önce çalışmalı, bu yüzden aşağıda startServer içinde yapıyoruz
+
 // Server başlat
 async function startServer() {
   await connectToMongoDB()
+  
+  // Static dosyaları serve et (Heroku için - build edilmiş frontend)
+  const rootDir = join(__dirname, '..')
+  const distDir = join(rootDir, 'dist')
+  
+  if (existsSync(distDir)) {
+    // Production: Static dosyaları serve et
+    app.use(express.static(distDir))
+    
+    // Tüm route'ları index.html'e yönlendir (SPA için)
+    // API route'larından sonra ekle (yoksa API route'ları çalışmaz)
+    app.get('*', (req, res) => {
+      // API route'ları değilse
+      if (!req.path.startsWith('/api')) {
+        res.sendFile(join(distDir, 'index.html'))
+      }
+    })
+    
+    console.log('✅ Static dosyalar serve ediliyor:', distDir)
+  } else {
+    console.log('⚠️ dist/ klasörü bulunamadı (development mode)')
+  }
   
   // API Scheduler'ı import et
   const { start } = await import('./services/apiScheduler.js')
   
   app.listen(PORT, () => {
     console.log(`✅ Backend API çalışıyor: http://localhost:${PORT}`)
+    if (process.env.NODE_ENV === 'production') {
+      console.log(`✅ Frontend static dosyalar serve ediliyor`)
+    }
     
     // API Scheduler'ı başlat
     start()

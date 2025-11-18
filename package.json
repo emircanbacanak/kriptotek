@@ -12,7 +12,9 @@
     "dev:all": "concurrently -k -s first -n \"BACKEND,FRONTEND\" -c \"blue,green\" \"npm run dev:backend\" \"npm run dev:wait-frontend\"",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "eslint src --ext jsx,js --report-unused-disable-directives --max-warnings 0"
+    "lint": "eslint src --ext jsx,js --report-unused-disable-directives --max-warnings 0",
+    "start:heroku": "npm run build && npm start --prefix server",
+    "postinstall": "npm install --prefix server"
   },
   "dependencies": {
     "apexcharts": "^5.3.6",
