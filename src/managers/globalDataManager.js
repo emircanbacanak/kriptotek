@@ -129,16 +129,52 @@ class GlobalDataManager {
       // ========== 1. CRYPTO VERİLERİ (Home sayfası için) ==========
       const cryptoStartTime = Date.now()
       try {
-        const cryptoResult = await cryptoService.fetchCryptoListWithStatus()
-        const cryptoList = cryptoResult.data || []
-        const cryptoApiStatus = cryptoResult.apiStatus || {}
+        // ÖNCE MongoDB'den çek (hızlı, cache'den)
+        const MONGO_API_URL = import.meta.env.VITE_MONGO_API_URL || import.meta.env.VITE_API_ENDPOINT || 'http://localhost:3000'
+        let cryptoList = []
+        let cryptoApiStatuses = []
+        let fromMongoDB = false
         
-        if (cryptoApiStatus.apiStatuses && Array.isArray(cryptoApiStatus.apiStatuses)) {
-          results.crypto.apiStatuses = cryptoApiStatus.apiStatuses
-        } else if (cryptoApiStatus.source) {
-          results.crypto.apiStatuses = [{ name: cryptoApiStatus.source, success: cryptoApiStatus.success || false }]
+        try {
+          const mongoResponse = await fetch(`${MONGO_API_URL}/cache/crypto_list`, {
+            headers: { 'Accept': 'application/json' },
+            signal: AbortSignal.timeout(5000) // 5 saniye timeout (hızlı olmalı)
+          })
+          
+          if (mongoResponse.ok) {
+            const mongoResult = await mongoResponse.json()
+            if (mongoResult.success && mongoResult.data) {
+              // Backend'den gelen veri formatı: { _id: 'crypto_list', coins: [...], ... }
+              const coins = mongoResult.data.coins || mongoResult.data.data?.coins || []
+              if (Array.isArray(coins) && coins.length > 0) {
+                cryptoList = coins
+                cryptoApiStatuses.push({ name: 'MongoDB Cache', success: true })
+                fromMongoDB = true
+                console.log(`✅ [${timeStr}] Crypto verisi MongoDB'den yüklendi (${cryptoList.length} coin)`)
+              }
+            }
+          } else if (mongoResponse.status === 404) {
+            cryptoApiStatuses.push({ name: 'MongoDB Cache', success: false, error: 'Not found (404)' })
+          }
+        } catch (mongoError) {
+          cryptoApiStatuses.push({ name: 'MongoDB Cache', success: false, error: mongoError.message })
         }
         
+        // MongoDB'den veri yoksa veya boşsa, API'den çek
+        if (!fromMongoDB || cryptoList.length === 0) {
+          console.log(`⚠️ [${timeStr}] MongoDB'den veri yok, API'den çekiliyor...`)
+          const cryptoResult = await cryptoService.fetchCryptoListWithStatus()
+          cryptoList = cryptoResult.data || []
+          const cryptoApiStatus = cryptoResult.apiStatus || {}
+          
+          if (cryptoApiStatus.apiStatuses && Array.isArray(cryptoApiStatus.apiStatuses)) {
+            cryptoApiStatuses.push(...cryptoApiStatus.apiStatuses)
+          } else if (cryptoApiStatus.source) {
+            cryptoApiStatuses.push({ name: cryptoApiStatus.source, success: cryptoApiStatus.success || false })
+          }
+        }
+        
+        // Veriyi kaydet
         if (cryptoList && cryptoList.length > 0) {
           const limitedList = cryptoList.length > 500 ? cryptoList.slice(0, 500) : cryptoList
           this.coins = limitedList
@@ -146,6 +182,8 @@ class GlobalDataManager {
           this.lastCryptoUpdate = new Date()
           results.crypto.success = true
         }
+        
+        results.crypto.apiStatuses = cryptoApiStatuses
         results.crypto.duration = ((Date.now() - cryptoStartTime) / 1000).toFixed(2)
       } catch (error) {
         results.crypto.duration = ((Date.now() - cryptoStartTime) / 1000).toFixed(2)

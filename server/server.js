@@ -6,6 +6,8 @@ import admin from 'firebase-admin'
 import { readFileSync, readdirSync, existsSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
+import { createServer } from 'http'
+import { WebSocketServer } from 'ws'
 import { fetchDominanceData } from './services/apiHandlers/dominance.js'
 import { fetchFearGreedData } from './services/apiHandlers/fearGreed.js'
 
@@ -565,6 +567,42 @@ app.get('/api/cache/dominance_data', async (req, res) => {
     }
   } catch (error) {
     console.error('❌ GET /api/cache/dominance_data error:', error)
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    })
+  }
+})
+
+// Crypto List - GET (MongoDB'den çek) - /cache/crypto_list endpoint'i
+app.get('/cache/crypto_list', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const collection = db.collection('api_cache')
+    const cacheDoc = await collection.findOne({ _id: 'crypto_list' })
+    
+    if (cacheDoc && cacheDoc.data && Array.isArray(cacheDoc.data) && cacheDoc.data.length > 0) {
+      return res.json({
+        success: true,
+        data: {
+          coins: cacheDoc.data,
+          lastUpdate: cacheDoc.updatedAt || cacheDoc.lastUpdate || null
+        }
+      })
+    } else {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Crypto list verisi bulunamadı' 
+      })
+    }
+  } catch (error) {
+    console.error('❌ GET /cache/crypto_list error:', error)
     return res.status(500).json({
       success: false,
       error: error.message
@@ -1752,6 +1790,121 @@ function calculateTrendingScores(coins) {
     .slice(0, 50) // En iyi 50 coin (referans kodda 45 ama kullanıcı 50 istedi)
 }
 
+// ========== NEWS ENDPOINTS ==========
+// GET /api/news - MongoDB'den haberleri çek
+app.get('/api/news', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        ok: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const { limit = 100, orderBy = 'publishedAt', order = 'desc' } = req.query
+    const sort = order === 'desc' ? -1 : 1
+    const cursor = db.collection('crypto_news')
+      .find({})
+      .sort({ [orderBy]: sort })
+      .limit(parseInt(limit))
+    const docs = await cursor.toArray()
+    res.json({ ok: true, data: docs })
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message })
+  }
+})
+
+// POST /api/news - MongoDB'ye haber ekle
+app.post('/api/news', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        ok: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const payload = req.body
+    if (Array.isArray(payload)) {
+      // Batch insert
+      const result = await db.collection('crypto_news').insertMany(payload)
+      res.json({ ok: true, insertedCount: result.insertedCount })
+    } else {
+      // Single insert
+      const result = await db.collection('crypto_news').insertOne(payload)
+      res.json({ ok: true, insertedId: result.insertedId })
+    }
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message })
+  }
+})
+
+// PUT /api/news/:id - MongoDB'de haberi güncelle
+app.put('/api/news/:id', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        ok: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const { id } = req.params
+    const payload = req.body
+    await db.collection('crypto_news').replaceOne({ _id: id }, { _id: id, ...payload }, { upsert: true })
+    res.json({ ok: true })
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message })
+  }
+})
+
+// DELETE /api/news/:id - MongoDB'den haberi sil
+app.delete('/api/news/:id', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        ok: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const { id } = req.params
+    await db.collection('crypto_news').deleteOne({ _id: id })
+    res.json({ ok: true })
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message })
+  }
+})
+
+// POST /api/news/update - Haberleri güncelle (3 kaynaktan paralel çek)
+app.post('/api/news/update', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const { updateNews, setDb } = await import('./services/apiHandlers/news.js')
+    setDb(db)
+    
+    const news = await updateNews()
+    
+    return res.json({
+      success: true,
+      count: news.length,
+      message: `${news.length} haber güncellendi`
+    })
+  } catch (error) {
+    console.error('❌ POST /api/news/update error:', error)
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    })
+  }
+})
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ 
@@ -1789,11 +1942,56 @@ async function startServer() {
     console.log('⚠️ dist/ klasörü bulunamadı (development mode)')
   }
   
+  // HTTP server ve WebSocket server oluştur
+  const httpServer = createServer(app)
+  
+  // WebSocket server - path kontrolü ile
+  const wss = new WebSocketServer({ 
+    server: httpServer,
+    path: '/ws' // WebSocket path'i
+  })
+  
+  // WebSocket heartbeat ve bağlantı sınırı
+  {
+    const MAX_CLIENTS = parseInt(process.env.WS_MAX_CLIENTS || '500', 10)
+    const PING_INTERVAL_MS = 30000
+    wss.on('connection', (ws, req) => {
+      if (wss.clients.size > MAX_CLIENTS) {
+        try { ws.close(1013, 'Server is busy') } catch {}
+        return
+      }
+      ws.isAlive = true
+      ws.on('pong', () => { ws.isAlive = true })
+      console.log(`📡 Yeni WebSocket bağlantısı (toplam: ${wss.clients.size})`)
+    })
+    const interval = setInterval(() => {
+      wss.clients.forEach((ws) => {
+        if (ws.isAlive === false) {
+          try { ws.terminate() } catch {}
+          return
+        }
+        ws.isAlive = false
+        try { ws.ping() } catch {}
+      })
+    }, PING_INTERVAL_MS)
+    wss.on('close', () => clearInterval(interval))
+  }
+  
+  // Change Streams'i başlat (MongoDB realtime updates için)
+  try {
+    const { startChangeStreams } = await import('./services/changeStreams.js')
+    startChangeStreams(db, wss)
+    console.log('✅ Change Streams başlatıldı')
+  } catch (error) {
+    console.warn('⚠️ Change Streams başlatılamadı:', error.message)
+  }
+  
   // API Scheduler'ı import et
   const { start } = await import('./services/apiScheduler.js')
   
-  app.listen(PORT, () => {
+  httpServer.listen(PORT, () => {
     console.log(`✅ Backend API çalışıyor: http://localhost:${PORT}`)
+    console.log(`✅ WebSocket server çalışıyor: ws://localhost:${PORT}/ws`)
     if (process.env.NODE_ENV === 'production') {
       console.log(`✅ Frontend static dosyalar serve ediliyor`)
     }

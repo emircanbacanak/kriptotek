@@ -5,18 +5,24 @@ import Sidebar from './Sidebar';
 import Footer from './Footer';
 import { useLanguage } from '../contexts/LanguageContext';
 import globalDataManager from '../managers/globalDataManager';
+import realtimeService from '../services/realtimeService';
 
 const Layout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { t } = useLanguage();
 
-  // GlobalDataManager'ı başlat (sayfa açık olmasa bile çalışır)
+  // GlobalDataManager ve RealtimeService'i başlat
   useEffect(() => {
+    // GlobalDataManager'ı başlat (sayfa açık olmasa bile çalışır)
     globalDataManager.startAutoUpdate();
+    
+    // RealtimeService WebSocket bağlantısını başlat (News sayfası için)
+    realtimeService.connect();
     
     // Cleanup: Component unmount olduğunda durdur
     return () => {
       globalDataManager.stopAutoUpdate();
+      realtimeService.disconnect();
     };
   }, []);
 

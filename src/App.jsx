@@ -10,6 +10,7 @@ import Admin from './pages/Admin'
 import Settings from './pages/Settings'
 import Trending from './pages/Trending'
 import Favorites from './pages/Favorites'
+import News from './pages/News'
 import NotFound from './pages/NotFound'
 import PremiumRoute from './components/PremiumRoute'
 import { useAuth } from './contexts/AuthContext'
@@ -115,6 +116,14 @@ const App = () => {
           element={
             <PremiumRoute>
               <Favorites />
+            </PremiumRoute>
+          }
+        />
+        <Route
+          path="news"
+          element={
+            <PremiumRoute>
+              <News />
             </PremiumRoute>
           }
         />

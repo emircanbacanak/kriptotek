@@ -2,9 +2,6 @@ const COINGECKO_API = 'https://api.coingecko.com/api/v3'
 
 // Ücretsiz proxy listesi (her batch için farklı proxy kullanılacak)
 const FREE_PROXIES = [
-  'http://103.149.162.194:80',
-  'http://103.152.112.162:80',
-  'http://103.48.68.107:83',
   'http://103.49.202.252:80',
   'http://103.75.190.195:80',
   'http://103.78.141.10:80',

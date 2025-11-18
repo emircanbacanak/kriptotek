@@ -10,9 +10,6 @@ const ALTERNATIVE_ME_API = 'https://api.alternative.me/fng/' // Fallback API
 // Not: Ücretsiz proxy'ler genellikle güvenilir değildir, çalışmazsa normal fetch kullanılır
 const FREE_PROXIES = [
   // Public proxy'ler (örnekler - gerçek proxy'ler dinamik olarak güncellenebilir)
-  'http://103.149.162.194:80',
-  'http://103.152.112.162:80',
-  'http://103.48.68.107:83',
   'http://103.49.202.252:80',
   'http://103.75.190.195:80',
   'http://103.78.141.10:80',

@@ -21,7 +21,7 @@ class RealtimeService {
       return // Zaten bağlı
     }
 
-    const mongoApiUrl = import.meta.env.VITE_MONGO_API_URL || 'http://localhost:4000'
+    const mongoApiUrl = import.meta.env.VITE_MONGO_API_URL || import.meta.env.VITE_API_ENDPOINT || 'http://localhost:3000'
     const wsUrl = mongoApiUrl.replace(/^http/, 'ws') + '/ws'
     
     try {

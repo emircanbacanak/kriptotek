@@ -102,6 +102,10 @@ async function updateFearGreed() {
 let fearGreedSchedulerInterval = null
 let fearGreedIsRunning = false
 
+// News için ayrı scheduler
+let newsSchedulerInterval = null
+let newsIsRunning = false
+
 /**
  * Fear & Greed verilerini güncelle (10 dakikada bir)
  */
@@ -150,6 +154,57 @@ function scheduleFearGreedNext() {
   const delay = getNextUpdateTime(10) // 10 dakika
   fearGreedSchedulerInterval = setTimeout(() => {
     updateFearGreedScheduled()
+  }, delay)
+}
+
+/**
+ * News verilerini güncelle (10 dakikada bir)
+ */
+async function updateNewsScheduled() {
+  if (newsIsRunning) {
+    return
+  }
+
+  newsIsRunning = true
+  const timeStr = new Date().toLocaleTimeString('tr-TR')
+  const nextUpdateTime = new Date(Date.now() + getNextUpdateTime(10)).toLocaleTimeString('tr-TR')
+  
+  console.log(`\n📰 [${timeStr}] ========== News Güncelleme Başladı ==========`)
+  console.log(`⏰ [${timeStr}] Bir sonraki güncelleme: ${nextUpdateTime}`)
+
+  const startTime = Date.now()
+
+  try {
+    const success = await updateNews()
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2)
+    console.log(`\n📰 [${timeStr}] ========== News Güncelleme Tamamlandı ==========`)
+    console.log(`⏱️  [${timeStr}] Toplam süre: ${duration}s`)
+    console.log(`📰 [${timeStr}] News: ${success ? '✅ Başarılı' : '❌ Başarısız'}`)
+    console.log(`⏰ [${timeStr}] Bir sonraki güncelleme: ${nextUpdateTime}`)
+    console.log(`═══════════════════════════════════════════════════════════\n`)
+  } catch (error) {
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2)
+    console.error(`\n❌ [${timeStr}] ========== News Güncelleme Hatası ==========`)
+    console.error(`⏱️  [${timeStr}] Toplam süre: ${duration}s`)
+    console.error(`❌ [${timeStr}] Hata:`, error.message || error)
+    console.error(`═══════════════════════════════════════════════════════════\n`)
+  } finally {
+    newsIsRunning = false
+    scheduleNewsNext()
+  }
+}
+
+/**
+ * News için sonraki güncellemeyi planla (10 dakika)
+ */
+function scheduleNewsNext() {
+  if (newsSchedulerInterval) {
+    clearTimeout(newsSchedulerInterval)
+  }
+
+  const delay = getNextUpdateTime(10) // 10 dakika
+  newsSchedulerInterval = setTimeout(() => {
+    updateNewsScheduled()
   }, delay)
 }
 
@@ -210,6 +265,34 @@ async function updateCurrencyRates() {
 }
 
 /**
+ * News verilerini güncelle (10 dakikada bir)
+ */
+async function updateNews() {
+  try {
+    const response = await fetch(`${MONGO_API_URL}/api/news/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+    
+    if (response.ok) {
+      const result = await response.json()
+      const timeStr = new Date().toLocaleTimeString('tr-TR')
+      console.log(`✅ [${timeStr}] News verisi güncellendi (${result.count || 0} haber)`)
+      return true
+    } else {
+      const error = await response.text()
+      const timeStr = new Date().toLocaleTimeString('tr-TR')
+      console.error(`❌ [${timeStr}] News güncelleme hatası: ${error}`)
+      return false
+    }
+  } catch (error) {
+    const timeStr = new Date().toLocaleTimeString('tr-TR')
+    console.error(`❌ [${timeStr}] News güncelleme hatası:`, error.message)
+    return false
+  }
+}
+
+/**
  * Tüm verileri güncelle (Crypto: 5 dakika, Dominance: 5 dakika, Currency Rates: 5 dakika, Fear & Greed: 10 dakika)
  */
 async function updateAll() {
@@ -227,7 +310,8 @@ async function updateAll() {
   const startTime = Date.now()
 
   try {
-    // Crypto, Dominance ve Currency Rates güncelle (Fear & Greed ayrı scheduler'da)
+    // Crypto, Dominance ve Currency Rates güncelle (PARALEL - farklı endpoint'ler)
+    // Fear & Greed ve News ayrı scheduler'larda (10 dakikada bir)
     const [cryptoSuccess, dominanceSuccess, currencySuccess] = await Promise.all([
       updateCrypto(),
       updateDominance(),
@@ -286,6 +370,12 @@ function start() {
   if (!fearGreedSchedulerInterval) {
     console.log('🚀 Fear & Greed Scheduler başlatıldı (10 dakikada bir)')
     updateFearGreedScheduled()
+  }
+  
+  // News scheduler'ı başlat (10 dakikada bir)
+  if (!newsSchedulerInterval) {
+    console.log('🚀 News Scheduler başlatıldı (10 dakikada bir)')
+    updateNewsScheduled()
   }
 }
 
