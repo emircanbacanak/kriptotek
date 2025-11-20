@@ -158,6 +158,11 @@ function parseRSSFeed(xml, source) {
           publishedAt = new Date()
         }
         
+        // CoinTelegraph için +3 saat ekle (UTC+3 Türkiye saati)
+        if (source === 'cointelegraph') {
+          publishedAt = new Date(publishedAt.getTime() + (3 * 60 * 60 * 1000))
+        }
+        
         // Son 48 saat içindeki haberleri filtrele
         if (publishedAt < cutoff) continue
         
@@ -259,6 +264,9 @@ export async function updateNews() {
                   const description = descriptionRaw.replace(/<[^>]*>/g, '').substring(0, 500)
                   const pubDateRaw = item.pubDate || item.pubdate || ''
                   let pubDate = pubDateRaw ? new Date(pubDateRaw) : new Date()
+                  
+                  // CoinTelegraph için +3 saat ekle (UTC+3 Türkiye saati)
+                  pubDate = new Date(pubDate.getTime() + (3 * 60 * 60 * 1000))
                   
                   // Resim URL'i çıkar
                   let imageUrl = item.enclosure?.link || item.thumbnail || ''

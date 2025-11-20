@@ -196,7 +196,14 @@ function News() {
 
           previousNewsIdsRef.current = new Set(deduped.map(n => n.id))
           
-          // Son 24 saat içindeki haberleri filtrele (26 saat tampon uygula - fetchKriptofoniNews ile tutarlı olmak için)
+          // ÖNCE tüm haberleri en yeni önce sırala (filtrelenmemiş hali ile)
+          deduped.sort((a, b) => {
+            const dateA = new Date(a.publishedAt || a.published_at || a.pubDate || a.date || 0).getTime()
+            const dateB = new Date(b.publishedAt || b.published_at || b.pubDate || b.date || 0).getTime()
+            return dateB - dateA // Azalan sıra (en yeni önce)
+          })
+          
+          // SONRA son 24 saat içindeki haberleri filtrele (26 saat tampon uygula - fetchKriptofoniNews ile tutarlı olmak için)
           const now = new Date()
           // fetchKriptofoniNews'te 26 saat tampon var, bu yüzden burada da aynı tamponu kullan
           const effectiveHours = 26 // 24 saat + 2 saat tampon (timezone/farklar için)
@@ -215,13 +222,6 @@ function News() {
           
           // Eğer 24 saat içinde haber varsa onları göster, yoksa 26 saat içindekileri göster
           const finalNews = within24Hours.length > 0 ? within24Hours : recentNews
-          
-          // Haberleri en yeni önce sırala (publishedAt'a göre azalan sırada)
-          finalNews.sort((a, b) => {
-            const dateA = new Date(a.publishedAt || a.published_at || a.pubDate || a.date || 0).getTime()
-            const dateB = new Date(b.publishedAt || b.published_at || b.pubDate || b.date || 0).getTime()
-            return dateB - dateA // Azalan sıra (en yeni önce)
-          })
         
           setNews(finalNews)
           setFilteredNews(finalNews)
@@ -350,22 +350,9 @@ function News() {
 
   function formatTimeAgo(date, newsSource) {
     const now = new Date(nowTick)
-    let parsedDate
-    
-    // CoinTelegraph için özel işlem: UTC olarak parse et ve +3 saat ekle
-    if (newsSource === 'cointelegraph') {
-      // Tarihi direkt UTC olarak parse et
-      parsedDate = new Date(date)
-      if (isNaN(parsedDate.getTime())) {
-        parsedDate = parseIstanbulDate(date)
-      }
-      // UTC'den Türkiye saatine (UTC+3) çevir
-      if (parsedDate && !isNaN(parsedDate.getTime())) {
-        parsedDate = new Date(parsedDate.getTime() + (3 * 60 * 60 * 1000))
-      }
-    } else {
-      parsedDate = parseIstanbulDate(date)
-    }
+    // Veritabanına kaydedilirken zaten +3 saat eklenmiş (CoinTelegraph için)
+    // Bu yüzden burada tekrar eklemeye gerek yok
+    const parsedDate = parseIstanbulDate(date)
     
     if (!parsedDate || isNaN(parsedDate.getTime())) return '—'
     
