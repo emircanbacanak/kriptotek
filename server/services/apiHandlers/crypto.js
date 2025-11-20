@@ -525,7 +525,7 @@ async function fetchCryptoList() {
           }
           
           const controller = new AbortController()
-          const timeoutId = setTimeout(() => controller.abort(), 30000)
+          const timeoutId = setTimeout(() => controller.abort(), 60000) // 60 saniye timeout (Heroku için)
           
           const response = await fetchWithProxy(pageUrl, {
             headers: {
@@ -563,14 +563,26 @@ async function fetchCryptoList() {
             console.warn(`⚠️ [Ek Sayfa ${pageNum}] HTTP ${response.status}, atlanıyor`)
           }
         } catch (error) {
-          console.warn(`⚠️ [Ek Sayfa ${pageNum}] Hata: ${error.message}, atlanıyor`)
-          // Hata durumunda devam et
+          // Timeout veya network hatası - bir sonraki sayfayı dene
+          if (error.name === 'AbortError') {
+            console.warn(`⚠️ [Ek Sayfa ${pageNum}] Timeout (60s), bir sonraki sayfaya geçiliyor...`)
+          } else {
+            console.warn(`⚠️ [Ek Sayfa ${pageNum}] Hata: ${error.message}, bir sonraki sayfaya geçiliyor...`)
+          }
+          // Hata durumunda devam et - bir sonraki sayfayı dene
         }
       }
     }
 
     // 500 coin'e sınırla ve market_cap_rank'i düzelt
     const limitedData = filteredData.slice(0, 500)
+    
+    // Eğer hala 500'den az coin varsa, uyarı ver
+    if (limitedData.length < 500) {
+      console.warn(`⚠️ UYARI: Sadece ${limitedData.length} coin çekilebildi (500 hedeflendi). Ek sayfa çekme işlemi başarısız olmuş olabilir.`)
+    } else {
+      console.log(`✅ Başarılı: ${limitedData.length} coin çekildi (500 hedeflendi)`)
+    }
     
     console.log(`📊 Final coin sayısı: ${limitedData.length} coin (500 hedeflendi)`)
 

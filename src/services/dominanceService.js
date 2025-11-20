@@ -77,10 +77,79 @@ class DominanceService extends BaseService {
   }
 
   /**
-   * Dominance verilerini CoinGecko API'den direkt çek (Backend olmadan)
-   * Home sayfası gibi direkt API çağrısı yapıyor
+   * Dominance verilerini çek
+   * NOT: Artık sadece MongoDB'den çeker, direkt API çağrısı yapmaz
+   * API çağrıları backend scheduler tarafından yapılıyor
    */
   async fetchDominanceData(retryCount = 0, forceUpdate = false) {
+    const apiStatuses = []
+    try {
+      // Sadece MongoDB'den çek (backend scheduler zaten güncelliyor)
+      const MONGO_API_URL = import.meta.env.VITE_MONGO_API_URL || import.meta.env.VITE_API_ENDPOINT || 'http://localhost:3000'
+      const mongoResponse = await fetch(`${MONGO_API_URL}/api/cache/dominance_data`)
+      
+      if (mongoResponse.ok) {
+        const mongoResult = await mongoResponse.json()
+        if (mongoResult.success && mongoResult.data) {
+          apiStatuses.push({ name: 'MongoDB Dominance', success: true })
+          return { data: mongoResult.data, apiStatuses }
+        }
+      }
+      
+      // MongoDB'de veri yoksa, backend scheduler'ın güncellemesini bekle
+      apiStatuses.push({ name: 'Backend Scheduler', success: true, message: 'Veri backend scheduler tarafından güncellenecek' })
+      
+      // Cache'den fallback yap - SADECE gerçek veri varsa
+      const cached = this.getCachedData()
+      if (cached && cached.global && cached.dominanceData && cached.dominanceData.length > 0) {
+        // Cache'deki verinin geçerli olduğunu kontrol et
+        const btcDom = cached.dominanceData.find(d => d.name === 'BTC')?.value
+        const ethDom = cached.dominanceData.find(d => d.name === 'ETH')?.value
+        if (btcDom !== undefined && btcDom !== null && !isNaN(btcDom) && 
+            ethDom !== undefined && ethDom !== null && !isNaN(ethDom) &&
+            cached.global.total_market_cap?.usd && cached.global.total_volume?.usd) {
+          window.dispatchEvent(new CustomEvent('dominanceDataUpdated', { detail: cached }))
+          return { data: cached, apiStatuses: [{ name: 'Cache Fallback', success: true }] }
+        }
+      }
+      
+      return { data: null, apiStatuses }
+    } catch (error) {
+      // Cache'den fallback yap - SADECE gerçek veri varsa
+      const cached = this.getCachedData()
+      if (cached && cached.global && cached.dominanceData && cached.dominanceData.length > 0) {
+        // Cache'deki verinin geçerli olduğunu kontrol et
+        const btcDom = cached.dominanceData.find(d => d.name === 'BTC')?.value
+        const ethDom = cached.dominanceData.find(d => d.name === 'ETH')?.value
+        if (btcDom !== undefined && btcDom !== null && !isNaN(btcDom) && 
+            ethDom !== undefined && ethDom !== null && !isNaN(ethDom) &&
+            cached.global.total_market_cap?.usd && cached.global.total_volume?.usd) {
+          window.dispatchEvent(new CustomEvent('dominanceDataUpdated', { detail: cached }))
+          return { data: cached, apiStatuses: [{ name: 'Cache Fallback', success: true }] }
+        }
+      }
+      
+      return { data: null, apiStatuses: [{ name: 'Error', success: false, error: error.message }] }
+    }
+  }
+  
+  /**
+   * Historical data'yı localStorage'dan al
+   */
+  getHistoricalData() {
+    try {
+      const stored = localStorage.getItem('dominance_historical_data')
+      if (stored) {
+        return JSON.parse(stored)
+      }
+    } catch (error) {
+      // Sessiz devam et
+    }
+    return []
+  }
+  
+  // Eski kod - artık kullanılmıyor (backend scheduler tarafından yapılıyor)
+  async fetchDominanceData_OLD() {
     const apiStatuses = []
     try {
       const COINGECKO_API = 'https://api.coingecko.com/api/v3'

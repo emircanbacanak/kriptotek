@@ -684,7 +684,6 @@ class GlobalDataManager {
               this.coins = coins.length > 500 ? coins.slice(0, 500) : coins
               this.topMovers = this.calculateTopMovers(this.coins)
               this.lastCryptoUpdate = new Date()
-              dataUpdated = true
               
               console.log(`✅ [${timeStr}] Crypto verisi MongoDB'den yüklendi (${this.coins.length} coin)`)
               
@@ -694,7 +693,12 @@ class GlobalDataManager {
           }
         }
       } catch (error) {
-        console.warn(`⚠️ [${timeStr}] Crypto verisi yüklenemedi:`, error.message)
+        // Hata mesajını daha detaylı logla
+        const errorMsg = error?.message || error?.toString() || 'Bilinmeyen hata'
+        console.warn(`⚠️ [${timeStr}] Crypto verisi yüklenemedi:`, errorMsg)
+        if (error?.stack) {
+          console.warn(`⚠️ [${timeStr}] Hata stack:`, error.stack)
+        }
       }
       
       // 2. Dominance verileri

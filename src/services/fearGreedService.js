@@ -98,29 +98,22 @@ class FearGreedService extends BaseService {
 
   /**
    * Fear & Greed Index verilerini çek
+   * NOT: Artık sadece MongoDB'den çeker, direkt API çağrısı yapmaz
+   * API çağrıları backend scheduler tarafından yapılıyor
    */
   async fetchFearGreedData() {
     const apiStatuses = []
     try {
-      // Önce MongoDB'den çek
+      // Sadece MongoDB'den çek (backend scheduler zaten güncelliyor)
       const mongoResult = await this.loadFromMongoDB()
       let fearGreedData = mongoResult.data
       if (mongoResult.apiStatus) {
         apiStatuses.push(mongoResult.apiStatus)
       }
       
-      // Eğer MongoDB'de veri yoksa veya eski ise, API'den çek
+      // MongoDB'de veri yoksa, backend scheduler'ın güncellemesini bekle
       if (!fearGreedData || !fearGreedData.value || !fearGreedData.timestamp) {
-        const apiResult = await this.fetchFromAPI()
-        if (apiResult.apiStatus) {
-          apiStatuses.push(apiResult.apiStatus)
-        }
-        fearGreedData = apiResult.data
-        
-        // API'den veri çekildiyse MongoDB'ye kaydet
-        if (fearGreedData && fearGreedData.value !== null && fearGreedData.value !== undefined) {
-          await this.saveToMongoDB(fearGreedData)
-        }
+        apiStatuses.push({ name: 'Backend Scheduler', success: true, message: 'Veri backend scheduler tarafından güncellenecek' })
       }
       
       if (fearGreedData && fearGreedData.value !== undefined && fearGreedData.value !== null) {
