@@ -160,70 +160,115 @@ function News() {
   useEffect(() => {
     // 1. İlk yüklemede MongoDB WebSocket realtime dinleme başlat
     console.log('🎧 MongoDB WebSocket realtime dinleme başlatılıyor...')
-    unsubscribeRef.current = subscribeToNews((newsData) => {
-      // Yeni haber sayısını hesapla
-      const currentIds = new Set(newsData.map(n => n.id))
-      const newIds = [...currentIds].filter(id => !previousNewsIdsRef.current.has(id))
-      
-      if (newIds.length > 0 && previousNewsIdsRef.current.size > 0) {
-        setNewNewsCount(newIds.length)
-        console.log(`✨ ${newIds.length} yeni haber geldi!`)
-        
-        // 3 saniye sonra badge'i temizle
-        setTimeout(() => setNewNewsCount(0), 3000)
-      }
-      
-      // Tekilleştir (id+timestamp)
-      const seen = new Set()
-      const deduped = []
-      for (const item of newsData) {
-        const time = new Date(item.publishedAt || item.published_at || item.pubDate || item.date || 0).getTime()
-        const key = `${item.id || item.url || item.link || item.title}-${time}`
-        if (seen.has(key)) continue
-        seen.add(key)
-        deduped.push(item)
-      }
-
-      previousNewsIdsRef.current = new Set(deduped.map(n => n.id))
-      
-      // Son 24 saat içindeki haberleri filtrele (26 saat tampon uygula - fetchKriptofoniNews ile tutarlı olmak için)
-      const now = new Date()
-      // fetchKriptofoniNews'te 26 saat tampon var, bu yüzden burada da aynı tamponu kullan
-      const effectiveHours = 26 // 24 saat + 2 saat tampon (timezone/farklar için)
-      const cutoff = new Date(now.getTime() - (effectiveHours * 60 * 60 * 1000))
-      const recentNews = deduped.filter(item => {
-        const pubDate = new Date(item.publishedAt || item.published_at || item.pubDate || item.date || 0)
-        return pubDate >= cutoff
-      })
-      
-      // Şimdi tekrar 24 saat içine filtrele (gösterim için)
-      const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000))
-      const within24Hours = recentNews.filter(item => {
-        const pubDate = new Date(item.publishedAt || item.published_at || item.pubDate || item.date || 0)
-        return pubDate >= twentyFourHoursAgo
-      })
-      
-      // Eğer 24 saat içinde haber varsa onları göster, yoksa 26 saat içindekileri göster
-      const finalNews = within24Hours.length > 0 ? within24Hours : recentNews
-      
-      // Haberleri en yeni önce sırala (publishedAt'a göre azalan sırada)
-      finalNews.sort((a, b) => {
-        const dateA = new Date(a.publishedAt || a.published_at || a.pubDate || a.date || 0).getTime()
-        const dateB = new Date(b.publishedAt || b.published_at || b.pubDate || b.date || 0).getTime()
-        return dateB - dateA // Azalan sıra (en yeni önce)
-      })
     
-      setNews(finalNews)
-      setFilteredNews(finalNews)
-      setLoading(false)
-      console.log(`📰 ${finalNews.length} haber yüklendi (realtime) [deduped, son 24 saat${within24Hours.length < recentNews.length ? ` (${recentNews.length - within24Hours.length} haber 24-26 saat aralığında)` : ''}]`)
-    })
+    let retryCount = 0
+    const maxRetries = 3
+    
+    const initializeNews = async () => {
+      try {
+        unsubscribeRef.current = subscribeToNews(
+          (newsData) => {
+            // Hata durumunu temizle
+            setError(null)
+          
+          // Yeni haber sayısını hesapla
+          const currentIds = new Set(newsData.map(n => n.id))
+          const newIds = [...currentIds].filter(id => !previousNewsIdsRef.current.has(id))
+          
+          if (newIds.length > 0 && previousNewsIdsRef.current.size > 0) {
+            setNewNewsCount(newIds.length)
+            console.log(`✨ ${newIds.length} yeni haber geldi!`)
+            
+            // 3 saniye sonra badge'i temizle
+            setTimeout(() => setNewNewsCount(0), 3000)
+          }
+          
+          // Tekilleştir (id+timestamp)
+          const seen = new Set()
+          const deduped = []
+          for (const item of newsData) {
+            const time = new Date(item.publishedAt || item.published_at || item.pubDate || item.date || 0).getTime()
+            const key = `${item.id || item.url || item.link || item.title}-${time}`
+            if (seen.has(key)) continue
+            seen.add(key)
+            deduped.push(item)
+          }
+
+          previousNewsIdsRef.current = new Set(deduped.map(n => n.id))
+          
+          // Son 24 saat içindeki haberleri filtrele (26 saat tampon uygula - fetchKriptofoniNews ile tutarlı olmak için)
+          const now = new Date()
+          // fetchKriptofoniNews'te 26 saat tampon var, bu yüzden burada da aynı tamponu kullan
+          const effectiveHours = 26 // 24 saat + 2 saat tampon (timezone/farklar için)
+          const cutoff = new Date(now.getTime() - (effectiveHours * 60 * 60 * 1000))
+          const recentNews = deduped.filter(item => {
+            const pubDate = new Date(item.publishedAt || item.published_at || item.pubDate || item.date || 0)
+            return pubDate >= cutoff
+          })
+          
+          // Şimdi tekrar 24 saat içine filtrele (gösterim için)
+          const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000))
+          const within24Hours = recentNews.filter(item => {
+            const pubDate = new Date(item.publishedAt || item.published_at || item.pubDate || item.date || 0)
+            return pubDate >= twentyFourHoursAgo
+          })
+          
+          // Eğer 24 saat içinde haber varsa onları göster, yoksa 26 saat içindekileri göster
+          const finalNews = within24Hours.length > 0 ? within24Hours : recentNews
+          
+          // Haberleri en yeni önce sırala (publishedAt'a göre azalan sırada)
+          finalNews.sort((a, b) => {
+            const dateA = new Date(a.publishedAt || a.published_at || a.pubDate || a.date || 0).getTime()
+            const dateB = new Date(b.publishedAt || b.published_at || b.pubDate || b.date || 0).getTime()
+            return dateB - dateA // Azalan sıra (en yeni önce)
+          })
+        
+          setNews(finalNews)
+          setFilteredNews(finalNews)
+          setLoading(false)
+          console.log(`📰 ${finalNews.length} haber yüklendi (realtime) [deduped, son 24 saat${within24Hours.length < recentNews.length ? ` (${recentNews.length - within24Hours.length} haber 24-26 saat aralığında)` : ''}]`)
+          },
+          100, // limitCount
+          (error) => {
+            // Hata callback
+            console.error('❌ News subscription hatası:', error)
+            setError(error?.message || 'Haberler yüklenirken bir hata oluştu')
+            setLoading(false)
+            
+            // Retry mekanizması
+            if (retryCount < maxRetries) {
+              retryCount++
+              console.log(`🔄 News yükleme tekrar denenecek (${retryCount}/${maxRetries})...`)
+              setTimeout(() => {
+                initializeNews()
+              }, 3000 * retryCount) // Exponential backoff
+            }
+          }
+        )
+      } catch (error) {
+        console.error('❌ News initialization hatası:', error)
+        setError(error.message || 'Haberler yüklenirken bir hata oluştu')
+        setLoading(false)
+        
+        // Retry mekanizması
+        if (retryCount < maxRetries) {
+          retryCount++
+          console.log(`🔄 News yükleme tekrar denenecek (${retryCount}/${maxRetries})...`)
+          setTimeout(() => {
+            initializeNews()
+          }, 3000 * retryCount) // Exponential backoff
+        }
+      }
+    }
+    
+    // İlk yükleme
+    initializeNews()
 
     // Cleanup
     return () => {
       if (unsubscribeRef.current) {
         unsubscribeRef.current()
-        console.log('🔇 Firestore listener kapatıldı')
+        console.log('🔇 News listener kapatıldı')
       }
     }
   }, [])

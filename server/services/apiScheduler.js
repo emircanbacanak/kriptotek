@@ -1,9 +1,30 @@
 /**
  * API Scheduler
- * Her 5 dakikada bir dominance ve fear & greed verilerini günceller
+ * Merkezi veri çekme yönetimi - Tüm sayfalar için veri güncellemelerini yönetir
+ * - Crypto List: 5 dakikada bir
+ * - Dominance: 5 dakikada bir
+ * - Currency Rates: 5 dakikada bir
+ * - Fear & Greed: 10 dakikada bir
+ * - News: 10 dakikada bir
+ * - Trending: Crypto list güncellendiğinde otomatik hesaplanır
  */
 
-const MONGO_API_URL = process.env.MONGO_API_URL || 'http://localhost:3000'
+// Server tarafında kendi API'sine istek atıyor
+// Production'da Heroku PORT kullan, development'ta localhost
+const PORT = process.env.PORT || 3000
+const getMongoApiUrl = () => {
+  // Environment variable varsa onu kullan
+  if (process.env.MONGO_API_URL) {
+    return process.env.MONGO_API_URL
+  }
+  // Production'da (Heroku) localhost kullan (aynı server)
+  if (process.env.NODE_ENV === 'production') {
+    return `http://localhost:${PORT}`
+  }
+  // Development'ta localhost
+  return `http://localhost:${PORT}`
+}
+const MONGO_API_URL = getMongoApiUrl()
 
 let schedulerInterval = null
 let isRunning = false

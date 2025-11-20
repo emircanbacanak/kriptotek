@@ -205,7 +205,7 @@ export async function cleanOldNews() {
 /**
  * MongoDB veya Firestore'dan haberleri realtime dinle (MongoDB için WebSocket)
  */
-export function subscribeToNews(callback, limitCount = 100) {
+export function subscribeToNews(callback, limitCount = 100, errorCallback = null) {
   if (USE_MONGO) {
     // MongoDB için WebSocket realtime dinleme kullan
     let allNews = []
@@ -239,6 +239,10 @@ export function subscribeToNews(callback, limitCount = 100) {
         }
       } catch (error) {
         console.error('❌ İlk haber yükleme hatası:', error)
+        if (errorCallback) {
+          errorCallback(error)
+        }
+        // Hata durumunda boş array gönder (sayfa boş kalmasın)
         callback([])
       }
     }
