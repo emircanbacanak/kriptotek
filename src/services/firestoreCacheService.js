@@ -35,6 +35,15 @@ class FirestoreCacheService {
   }
 
   /**
+   * Cache'den veri al (TTL kontrolü yapmadan)
+   */
+  getIgnoringExpiry(key) {
+    const cached = this.cache.get(key)
+    if (!cached) return null
+    return cached.data
+  }
+
+  /**
    * Cache'i temizle
    */
   clearCache(key) {

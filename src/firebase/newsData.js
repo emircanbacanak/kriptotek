@@ -207,7 +207,6 @@ export async function cleanOldNews() {
  */
 export function subscribeToNews(callback, limitCount = 100, errorCallback = null) {
   if (USE_MONGO) {
-    // MongoDB için WebSocket realtime dinleme kullan
     let allNews = []
     let isInitialized = false
     

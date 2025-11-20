@@ -11,6 +11,8 @@ import Settings from './pages/Settings'
 import Trending from './pages/Trending'
 import Favorites from './pages/Favorites'
 import News from './pages/News'
+import FedRate from './pages/FedRate'
+import SupplyTracking from './pages/SupplyTracking'
 import NotFound from './pages/NotFound'
 import PremiumRoute from './components/PremiumRoute'
 import { useAuth } from './contexts/AuthContext'
@@ -85,10 +87,7 @@ const App = () => {
           path="supply-tracking"
           element={
             <PremiumRoute>
-              <div className="p-8">
-                <h1 className="text-2xl font-bold">Supply Tracking</h1>
-                <p className="mt-4">Premium özellik - Yakında...</p>
-              </div>
+              <SupplyTracking />
             </PremiumRoute>
           }
         />
@@ -96,10 +95,7 @@ const App = () => {
           path="fed-rate"
           element={
             <PremiumRoute>
-              <div className="p-8">
-                <h1 className="text-2xl font-bold">Fed Rate Tracking</h1>
-                <p className="mt-4">Premium özellik - Yakında...</p>
-              </div>
+              <FedRate />
             </PremiumRoute>
           }
         />

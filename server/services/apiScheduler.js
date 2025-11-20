@@ -1,16 +1,3 @@
-/**
- * API Scheduler
- * Merkezi veri çekme yönetimi - Tüm sayfalar için veri güncellemelerini yönetir
- * - Crypto List: 5 dakikada bir
- * - Dominance: 5 dakikada bir
- * - Currency Rates: 5 dakikada bir
- * - Fear & Greed: 10 dakikada bir
- * - News: 10 dakikada bir
- * - Trending: Crypto list güncellendiğinde otomatik hesaplanır
- */
-
-// Server tarafında kendi API'sine istek atıyor
-// Production'da Heroku PORT kullan, development'ta localhost
 const PORT = process.env.PORT || 3000
 const getMongoApiUrl = () => {
   // Environment variable varsa onu kullan
@@ -29,11 +16,6 @@ const MONGO_API_URL = getMongoApiUrl()
 let schedulerInterval = null
 let isRunning = false
 
-/**
- * Sonraki güncelleme zamanını hesapla
- * Dominance: 5 dakikalık sabit aralıklar (00:05, 00:10, 00:15, ...)
- * Fear & Greed: 10 dakikalık sabit aralıklar (00:10, 00:20, 00:30, ...)
- */
 function getNextUpdateTime(intervalMinutes = 5) {
   const now = new Date()
   const currentMinutes = now.getMinutes()
@@ -286,6 +268,34 @@ async function updateCurrencyRates() {
 }
 
 /**
+ * Fed Rate verilerini güncelle (günde bir kez veya karar zamanı yaklaşınca)
+ */
+async function updateFedRate() {
+  try {
+    const response = await fetch(`${MONGO_API_URL}/api/fed-rate/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+    
+    if (response.ok) {
+      const result = await response.json()
+      const timeStr = new Date().toLocaleTimeString('tr-TR')
+      console.log(`✅ [${timeStr}] Fed rate verisi güncellendi`)
+      return true
+    } else {
+      const error = await response.text()
+      const timeStr = new Date().toLocaleTimeString('tr-TR')
+      console.error(`❌ [${timeStr}] Fed rate güncelleme hatası: ${error}`)
+      return false
+    }
+  } catch (error) {
+    const timeStr = new Date().toLocaleTimeString('tr-TR')
+    console.error(`❌ [${timeStr}] Fed rate güncelleme hatası:`, error.message)
+    return false
+  }
+}
+
+/**
  * News verilerini güncelle (10 dakikada bir)
  */
 async function updateNews() {
@@ -380,12 +390,13 @@ async function updateAll() {
   const startTime = Date.now()
 
   try {
-    // Crypto, Dominance ve Currency Rates güncelle (PARALEL - farklı endpoint'ler)
+    // Crypto, Dominance, Currency Rates ve Fed Rate güncelle (PARALEL - farklı endpoint'ler)
     // Fear & Greed ve News ayrı scheduler'larda (10 dakikada bir)
-    const [cryptoSuccess, dominanceSuccess, currencySuccess] = await Promise.all([
+    const [cryptoSuccess, dominanceSuccess, currencySuccess, fedRateSuccess] = await Promise.all([
       updateCrypto(),
       updateDominance(),
-      updateCurrencyRates()
+      updateCurrencyRates(),
+      updateFedRate()
     ])
     
     // Crypto listesi güncellendiğinde trending'i de otomatik güncelle
@@ -396,6 +407,15 @@ async function updateAll() {
       // Crypto başarısız olsa bile trending'i güncellemeyi dene (MongoDB'deki mevcut veri ile)
       trendingSuccess = await updateTrending()
     }
+    
+    // Supply Tracking güncelle (Crypto listesi güncellendiğinde)
+    let supplyTrackingSuccess = false
+    if (cryptoSuccess) {
+      supplyTrackingSuccess = await updateSupplyTracking()
+    } else {
+      // Crypto başarısız olsa bile supply tracking'i güncellemeyi dene (MongoDB'deki mevcut veri ile)
+      supplyTrackingSuccess = await updateSupplyTracking()
+    }
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2)
     console.log(`\n🔄 [${timeStr}] ========== API Scheduler Güncelleme Tamamlandı ==========`)
@@ -403,7 +423,9 @@ async function updateAll() {
     console.log(`📈 [${timeStr}] Crypto: ${cryptoSuccess ? '✅ Başarılı' : '❌ Başarısız'}`)
     console.log(`📊 [${timeStr}] Dominance: ${dominanceSuccess ? '✅ Başarılı' : '❌ Başarısız'}`)
     console.log(`💱 [${timeStr}] Currency Rates: ${currencySuccess ? '✅ Başarılı' : '❌ Başarısız'}`)
+    console.log(`🏦 [${timeStr}] Fed Rate: ${fedRateSuccess ? '✅ Başarılı' : '❌ Başarısız'}`)
     console.log(`🔥 [${timeStr}] Trending: ${trendingSuccess ? '✅ Başarılı' : '❌ Başarısız'}`)
+    console.log(`📊 [${timeStr}] Supply Tracking: ${supplyTrackingSuccess ? '✅ Başarılı' : '❌ Başarısız'}`)
     console.log(`⏰ [${timeStr}] Bir sonraki güncelleme: ${nextUpdateTime}`)
     console.log(`═══════════════════════════════════════════════════════════\n`)
   } catch (error) {
@@ -443,8 +465,8 @@ function start() {
 
   console.log('🚀 API Scheduler başlatıldı')
   
-  // İlk güncellemeyi hemen yap (Dominance)
-  updateAll()
+  // İlk güncellemeyi hemen yapma, sadece sonraki güncellemeyi planla (sabit zamanlarda)
+  scheduleNext()
   
   // Fear & Greed scheduler'ı başlat (10 dakikada bir)
   if (!fearGreedSchedulerInterval) {
@@ -476,5 +498,41 @@ function stop() {
   }
 }
 
-export { start, stop, updateAll }
+/**
+ * Supply Tracking verilerini güncelle (5 dakikada bir)
+ */
+async function updateSupplyTracking() {
+  try {
+    // Supply tracking handler'ı import et
+    const { updateSupplyTracking: updateSupplyTrackingHandler } = await import('./apiHandlers/supplyTracking.js')
+    
+    // db instance'ını almak için server.js'den import et
+    // Not: Bu fonksiyon sadece updateAll() içinde çağrılır, db instance'ı parametre olarak geçilir
+    // Şimdilik HTTP isteği yapıyoruz, daha sonra db instance'ı geçilebilir
+    const response = await fetch(`${MONGO_API_URL}/api/supply-tracking/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+    
+    if (response.ok) {
+      const result = await response.json()
+      const timeStr = new Date().toLocaleTimeString('tr-TR')
+      if (result.success) {
+        console.log(`✅ [${timeStr}] Supply tracking verisi güncellendi`)
+        return true
+      }
+    }
+    
+    const error = await response.text()
+    const timeStr = new Date().toLocaleTimeString('tr-TR')
+    console.error(`❌ [${timeStr}] Supply tracking güncelleme hatası: ${error}`)
+    return false
+  } catch (error) {
+    const timeStr = new Date().toLocaleTimeString('tr-TR')
+    console.error(`❌ [${timeStr}] Supply tracking güncelleme hatası:`, error.message)
+    return false
+  }
+}
+
+export { start, stop, updateAll, updateSupplyTracking }
 

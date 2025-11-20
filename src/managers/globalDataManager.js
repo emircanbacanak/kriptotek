@@ -6,6 +6,7 @@
 import cryptoService from '../services/cryptoService'
 import dominanceService from '../services/dominanceService'
 import fearGreedService from '../services/fearGreedService'
+import realtimeService from '../services/realtimeService'
 // currencyService artık backend scheduler tarafından yönetiliyor, sadece MongoDB'den okuyoruz
 
 class GlobalDataManager {
@@ -27,6 +28,14 @@ class GlobalDataManager {
     // Currency rates (Settings sayfası için)
     this.currencyRates = null
     this.lastCurrencyUpdate = null
+    
+    // Fed Rate verileri (FedRate sayfası için)
+    this.fedRateData = null
+    this.lastFedRateUpdate = null
+    
+    // Supply Tracking verileri (SupplyTracking sayfası için)
+    this.supplyTrackingData = null
+    this.lastSupplyTrackingUpdate = null
     
     // Güncelleme kontrolü
     this.updateTimeout = null
@@ -135,7 +144,9 @@ class GlobalDataManager {
       dominance: { success: false, duration: 0, apiStatuses: [] },
       fearGreed: { success: false, duration: 0, apiStatuses: [] },
       trending: { success: false, duration: 0, apiStatuses: [] },
-      currency: { success: false, duration: 0, apiStatuses: [] }
+      currency: { success: false, duration: 0, apiStatuses: [] },
+      fedRate: { success: false, duration: 0, apiStatuses: [] },
+      supplyTracking: { success: false, duration: 0, apiStatuses: [] }
     }
 
     try {
@@ -160,6 +171,11 @@ class GlobalDataManager {
               // Backend'den gelen veri formatı: { _id: 'crypto_list', coins: [...], ... }
               const coins = mongoResult.data.coins || mongoResult.data.data?.coins || []
               if (Array.isArray(coins) && coins.length > 0) {
+                // Debug: total_supply ve max_supply kontrolü
+                const sampleCoin = coins[0]
+                const coinsWithTotalSupply = coins.filter(c => c.total_supply !== null && c.total_supply !== undefined).length
+                const coinsWithMaxSupply = coins.filter(c => c.max_supply !== null && c.max_supply !== undefined).length
+                
                 cryptoList = coins
                 cryptoApiStatuses.push({ name: 'MongoDB Cache', success: true })
                 fromMongoDB = true
@@ -397,6 +413,112 @@ class GlobalDataManager {
         console.error(`❌ [${timeStr}] Currency rates hatası:`, error.message || error)
       }
 
+      // ========== 6. FED RATE VERİLERİ (FedRate sayfası için) ==========
+      const fedRateStartTime = Date.now()
+      try {
+        const MONGO_API_URL = this.MONGO_API_URL
+        let fedRateResult = null
+        let fedRateApiStatuses = []
+        
+        try {
+          const mongoResponse = await fetch(`${MONGO_API_URL}/api/fed-rate`, {
+            headers: { 'Accept': 'application/json' },
+            signal: AbortSignal.timeout(10000) // 10 saniye timeout
+          })
+          
+          if (mongoResponse.ok) {
+            const mongoResult = await mongoResponse.json()
+            if (mongoResult.success && mongoResult.data) {
+              fedRateResult = mongoResult.data
+              fedRateApiStatuses.push({ name: 'MongoDB Fed Rate', success: true })
+            }
+          } else if (mongoResponse.status === 404) {
+            // Cache yoksa veya geçersizse, backend'e update isteği gönder
+            const updateResponse = await fetch(`${MONGO_API_URL}/api/fed-rate/update`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+            })
+            
+            if (updateResponse.ok) {
+              const updateResult = await updateResponse.json()
+              if (updateResult.success && updateResult.data) {
+                fedRateResult = updateResult.data
+                fedRateApiStatuses.push({ name: 'Backend Fed Rate Update', success: true })
+              }
+            } else {
+              fedRateApiStatuses.push({ name: 'Backend Fed Rate Update', success: false, error: `HTTP ${updateResponse.status}` })
+            }
+          }
+        } catch (mongoError) {
+          fedRateApiStatuses.push({ name: 'MongoDB Fed Rate', success: false, error: mongoError.message })
+        }
+        
+        // MongoDB'den gelen veriyi kullan
+        if (fedRateResult) {
+          this.fedRateData = fedRateResult
+          this.lastFedRateUpdate = Date.now()
+          results.fedRate.success = true
+        }
+        
+        results.fedRate.duration = ((Date.now() - fedRateStartTime) / 1000).toFixed(2)
+        results.fedRate.apiStatuses = fedRateApiStatuses
+      } catch (error) {
+        results.fedRate.duration = ((Date.now() - fedRateStartTime) / 1000).toFixed(2)
+        if (error.apiStatuses) {
+          results.fedRate.apiStatuses = error.apiStatuses
+        }
+        console.error(`❌ [${timeStr}] Fed Rate hatası:`, error.message || error)
+      }
+
+      // ========== 7. SUPPLY TRACKING VERİLERİ (SupplyTracking sayfası için) ==========
+      const supplyTrackingStartTime = Date.now()
+      try {
+        const MONGO_API_URL = this.MONGO_API_URL
+        let supplyTrackingResult = null
+        let supplyTrackingApiStatuses = []
+        
+        try {
+          const mongoResponse = await fetch(`${MONGO_API_URL}/cache/supply_tracking`, {
+            headers: { 'Accept': 'application/json' },
+            signal: AbortSignal.timeout(10000) // 10 saniye timeout
+          })
+          
+          if (mongoResponse.ok) {
+            const mongoResult = await mongoResponse.json()
+            if (mongoResult.success && mongoResult.data) {
+              // Backend'den gelen formatı kontrol et
+              supplyTrackingResult = mongoResult.data.data || mongoResult.data
+              supplyTrackingApiStatuses.push({ name: 'MongoDB Supply Tracking', success: true })
+            }
+          } else if (mongoResponse.status === 404) {
+            supplyTrackingApiStatuses.push({ name: 'MongoDB Supply Tracking', success: false, error: 'Not found (404)' })
+          }
+        } catch (mongoError) {
+          supplyTrackingApiStatuses.push({ name: 'MongoDB Supply Tracking', success: false, error: mongoError.message })
+        }
+        
+        // MongoDB'den veri yoksa, backend scheduler zaten güncelliyor
+        if (!supplyTrackingResult || Object.keys(supplyTrackingResult).length === 0) {
+          supplyTrackingApiStatuses.push({ name: 'Backend Scheduler', success: true, message: 'Veri backend scheduler tarafından güncellenecek' })
+        }
+        
+        // MongoDB'den gelen veriyi kullan
+        if (supplyTrackingResult && Object.keys(supplyTrackingResult).length > 0) {
+          this.supplyTrackingData = supplyTrackingResult
+          this.lastSupplyTrackingUpdate = Date.now()
+          results.supplyTracking.success = true
+        }
+        
+        results.supplyTracking.duration = ((Date.now() - supplyTrackingStartTime) / 1000).toFixed(2)
+        results.supplyTracking.apiStatuses = supplyTrackingApiStatuses
+      } catch (error) {
+        results.supplyTracking.duration = ((Date.now() - supplyTrackingStartTime) / 1000).toFixed(2)
+        if (error.apiStatuses) {
+          results.supplyTracking.apiStatuses = error.apiStatuses
+        }
+        console.error(`❌ [${timeStr}] Supply Tracking hatası:`, error.message || error)
+      }
+
       // ========== ÖZET ==========
       const totalDuration = ((Date.now() - updateStartTime) / 1000).toFixed(2)
       console.log(`\n🌐 [${timeStr}] ========== Global Veri Güncelleme Tamamlandı ==========`)
@@ -441,6 +563,24 @@ class GlobalDataManager {
       console.log(`💱 [${timeStr}] Currency: ${results.currency.success ? '✅ Başarılı' : '❌ Başarısız'} (${results.currency.duration}s)`)
       if (results.currency.apiStatuses && results.currency.apiStatuses.length > 0) {
         results.currency.apiStatuses.forEach(status => {
+          const icon = status.success ? '✅' : '❌'
+          const errorText = status.error ? ` - ${status.error}` : ''
+          console.log(`   ${icon} ${status.name}${errorText}`)
+        })
+      }
+      
+      console.log(`🏦 [${timeStr}] Fed Rate: ${results.fedRate.success ? '✅ Başarılı' : '❌ Başarısız'} (${results.fedRate.duration}s)`)
+      if (results.fedRate.apiStatuses && results.fedRate.apiStatuses.length > 0) {
+        results.fedRate.apiStatuses.forEach(status => {
+          const icon = status.success ? '✅' : '❌'
+          const errorText = status.error ? ` - ${status.error}` : ''
+          console.log(`   ${icon} ${status.name}${errorText}`)
+        })
+      }
+      
+      console.log(`📊 [${timeStr}] Supply Tracking: ${results.supplyTracking.success ? '✅ Başarılı' : '❌ Başarısız'} (${results.supplyTracking.duration}s)`)
+      if (results.supplyTracking.apiStatuses && results.supplyTracking.apiStatuses.length > 0) {
+        results.supplyTracking.apiStatuses.forEach(status => {
           const icon = status.success ? '✅' : '❌'
           const errorText = status.error ? ` - ${status.error}` : ''
           console.log(`   ${icon} ${status.name}${errorText}`)
@@ -498,8 +638,11 @@ class GlobalDataManager {
       return
     }
     
-    // İlk güncellemeyi hemen yap
-    this.updateAllData().catch(() => {})
+    // WebSocket ile real-time güncellemeleri dinle
+    this.setupRealtimeListeners()
+    
+    // İlk başlatmada sadece MongoDB'den mevcut veriyi yükle (API çağrısı yapma)
+    this.loadFromMongoDBOnly().catch(() => {})
     
     // Recursive setTimeout kullanarak 5 dakikalık sabit zaman dilimlerinde güncelle
     const scheduleNextUpdate = () => {
@@ -512,6 +655,221 @@ class GlobalDataManager {
     }
     
     scheduleNextUpdate()
+  }
+  
+  // Sadece MongoDB'den mevcut veriyi yükle (API çağrısı yapmadan)
+  async loadFromMongoDBOnly() {
+    const timeStr = new Date().toLocaleTimeString('tr-TR')
+    console.log(`📥 [${timeStr}] MongoDB'den mevcut veriler yükleniyor...`)
+    
+    try {
+      const MONGO_API_URL = this.MONGO_API_URL
+      
+      // 1. Crypto verileri
+      try {
+        const mongoResponse = await fetch(`${MONGO_API_URL}/cache/crypto_list`, {
+          headers: { 'Accept': 'application/json' },
+          signal: AbortSignal.timeout(5000)
+        })
+        if (mongoResponse.ok) {
+          const mongoResult = await mongoResponse.json()
+          if (mongoResult.success && mongoResult.data) {
+            const coins = mongoResult.data.coins || mongoResult.data.data?.coins || []
+            if (Array.isArray(coins) && coins.length > 0) {
+              // Debug: total_supply ve max_supply kontrolü
+              const sampleCoin = coins[0]
+              const coinsWithTotalSupply = coins.filter(c => c.total_supply !== null && c.total_supply !== undefined).length
+              const coinsWithMaxSupply = coins.filter(c => c.max_supply !== null && c.max_supply !== undefined).length
+              
+              this.coins = coins.length > 500 ? coins.slice(0, 500) : coins
+              this.topMovers = this.calculateTopMovers(this.coins)
+              this.lastCryptoUpdate = new Date()
+              dataUpdated = true
+              
+              console.log(`✅ [${timeStr}] Crypto verisi MongoDB'den yüklendi (${this.coins.length} coin)`)
+              
+              // Debug: Set edildikten sonra kontrol
+              const sampleCoinAfter = this.coins[0]
+            }
+          }
+        }
+      } catch (error) {
+        console.warn(`⚠️ [${timeStr}] Crypto verisi yüklenemedi:`, error.message)
+      }
+      
+      // 2. Dominance verileri
+      try {
+        const mongoResponse = await fetch(`${MONGO_API_URL}/api/cache/dominance_data`)
+        if (mongoResponse.ok) {
+          const mongoResult = await mongoResponse.json()
+          if (mongoResult.success && mongoResult.data) {
+            this.dominanceData = mongoResult.data
+            this.lastDominanceUpdate = Date.now()
+          }
+        }
+      } catch (error) {
+        console.warn(`⚠️ [${timeStr}] Dominance verisi yüklenemedi:`, error.message)
+      }
+      
+      // 3. Fear & Greed
+      try {
+        const mongoResponse = await fetch(`${MONGO_API_URL}/api/cache/fear_greed`)
+        if (mongoResponse.ok) {
+          const mongoResult = await mongoResponse.json()
+          if (mongoResult.success && mongoResult.data) {
+            this.fearGreedIndex = mongoResult.data
+          }
+        }
+      } catch (error) {
+        console.warn(`⚠️ [${timeStr}] Fear & Greed verisi yüklenemedi:`, error.message)
+      }
+      
+      // 4. Trending verileri
+      try {
+        const trendingResponse = await fetch(`${MONGO_API_URL}/api/trending`)
+        if (trendingResponse.ok) {
+          const trendingResult = await trendingResponse.json()
+          if (trendingResult.success && trendingResult.data) {
+            this.trendingCoins = trendingResult.data.coins || []
+            this.lastTrendingUpdate = trendingResult.data.updatedAt || Date.now()
+          }
+        }
+      } catch (error) {
+        console.warn(`⚠️ [${timeStr}] Trending verisi yüklenemedi:`, error.message)
+      }
+      
+      // 5. Currency rates
+      try {
+        const mongoResponse = await fetch(`${MONGO_API_URL}/api/cache/currency_rates`)
+        if (mongoResponse.ok) {
+          const mongoResult = await mongoResponse.json()
+          if (mongoResult.success && mongoResult.data) {
+            this.currencyRates = mongoResult.data
+            this.lastCurrencyUpdate = Date.now()
+            if (typeof window !== 'undefined') {
+              window.__exchangeRates = this.currencyRates
+            }
+          }
+        }
+      } catch (error) {
+        console.warn(`⚠️ [${timeStr}] Currency rates yüklenemedi:`, error.message)
+      }
+      
+      // 6. Fed Rate
+      try {
+        const mongoResponse = await fetch(`${MONGO_API_URL}/api/fed-rate`, {
+          headers: { 'Accept': 'application/json' },
+          signal: AbortSignal.timeout(10000)
+        })
+        if (mongoResponse.ok) {
+          const mongoResult = await mongoResponse.json()
+          if (mongoResult.success && mongoResult.data) {
+            this.fedRateData = mongoResult.data
+            this.lastFedRateUpdate = Date.now()
+            console.log(`✅ [${timeStr}] Fed Rate verisi MongoDB'den yüklendi`)
+          } else {
+            console.warn(`⚠️ [${timeStr}] Fed Rate verisi MongoDB'de bulunamadı (success: ${mongoResult.success})`)
+          }
+        } else if (mongoResponse.status === 404) {
+          // Cache yoksa, backend'den çekmeyi dene (sayfa bozulmasın)
+          console.log(`⚠️ [${timeStr}] Fed Rate verisi MongoDB'de yok (404), backend'den çekiliyor...`)
+          try {
+            const updateResponse = await fetch(`${MONGO_API_URL}/api/fed-rate/update`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              signal: AbortSignal.timeout(15000)
+            })
+            if (updateResponse.ok) {
+              const updateResult = await updateResponse.json()
+              if (updateResult.success && updateResult.data) {
+                this.fedRateData = updateResult.data
+                this.lastFedRateUpdate = Date.now()
+                console.log(`✅ [${timeStr}] Fed Rate verisi backend'den çekildi`)
+              } else {
+                console.warn(`⚠️ [${timeStr}] Fed Rate backend güncelleme başarısız (success: ${updateResult.success})`)
+              }
+            } else {
+              console.warn(`⚠️ [${timeStr}] Fed Rate backend güncelleme hatası: HTTP ${updateResponse.status}`)
+            }
+          } catch (updateError) {
+            console.warn(`⚠️ [${timeStr}] Fed Rate backend güncelleme hatası:`, updateError.message)
+          }
+        } else {
+          console.warn(`⚠️ [${timeStr}] Fed Rate verisi yüklenemedi: HTTP ${mongoResponse.status}`)
+        }
+      } catch (error) {
+        console.warn(`⚠️ [${timeStr}] Fed Rate verisi yüklenemedi:`, error.message)
+      }
+      
+      // 7. Supply Tracking
+      try {
+        const mongoResponse = await fetch(`${MONGO_API_URL}/cache/supply_tracking`, {
+          headers: { 'Accept': 'application/json' },
+          signal: AbortSignal.timeout(10000)
+        })
+        if (mongoResponse.ok) {
+          const mongoResult = await mongoResponse.json()
+          if (mongoResult.success && mongoResult.data) {
+            this.supplyTrackingData = mongoResult.data.data || mongoResult.data
+            this.lastSupplyTrackingUpdate = Date.now()
+          }
+        }
+      } catch (error) {
+        console.warn(`⚠️ [${timeStr}] Supply Tracking verisi yüklenemedi:`, error.message)
+      }
+      
+      // Abonelere bildir
+      this.notifySubscribers()
+      
+      const nextUpdateTime = new Date(Date.now() + this.getNextUpdateTime()).toLocaleTimeString('tr-TR')
+      console.log(`✅ [${timeStr}] MongoDB'den mevcut veriler yüklendi`)
+      console.log(`⏰ Bir sonraki güncelleme: ${nextUpdateTime}`)
+    } catch (error) {
+      console.error(`❌ [${timeStr}] MongoDB yükleme hatası:`, error.message || error)
+    }
+  }
+
+  // WebSocket ile real-time güncellemeleri dinle
+  setupRealtimeListeners() {
+    // api_cache collection'ındaki crypto_list güncellemelerini dinle
+    realtimeService.subscribe('api_cache', (message) => {
+      if (message.operationType === 'update' || message.operationType === 'replace') {
+        const documentId = message.documentId || message.fullDocument?._id
+        if (documentId === 'crypto_list') {
+          const data = message.fullDocument || message.data
+          if (data && data.coins) {
+            const coins = Array.isArray(data.coins) ? data.coins : []
+            if (coins.length > 0) {
+              console.log(`🔄 [WebSocket] Crypto list güncellendi (${coins.length} coin)`)
+              this.coins = coins.length > 500 ? coins.slice(0, 500) : coins
+              this.topMovers = this.calculateTopMovers(this.coins)
+              this.lastCryptoUpdate = new Date()
+              this.notifySubscribers()
+            }
+          }
+        }
+      }
+    })
+    
+    // Custom event'leri de dinle (geriye dönük uyumluluk için)
+    if (typeof window !== 'undefined') {
+      const handleCryptoUpdate = (event) => {
+        const { documentId, data } = event.detail || {}
+        if (documentId === 'crypto_list' && data && data.coins) {
+          const coins = Array.isArray(data.coins) ? data.coins : []
+          if (coins.length > 0) {
+            console.log(`🔄 [Event] Crypto list güncellendi (${coins.length} coin)`)
+            this.coins = coins.length > 500 ? coins.slice(0, 500) : coins
+            this.topMovers = this.calculateTopMovers(this.coins)
+            this.lastCryptoUpdate = new Date()
+            this.notifySubscribers()
+          }
+        }
+      }
+      
+      window.addEventListener('mongodb:api_cache:update', handleCryptoUpdate)
+      window.addEventListener('mongodb:api_cache:replace', handleCryptoUpdate)
+    }
   }
 
   // Otomatik güncellemeyi durdur
@@ -547,6 +905,14 @@ class GlobalDataManager {
       // Currency rates
       currencyRates: this.currencyRates,
       lastCurrencyUpdate: this.lastCurrencyUpdate,
+      
+      // Fed Rate verileri
+      fedRateData: this.fedRateData,
+      lastFedRateUpdate: this.lastFedRateUpdate,
+      
+      // Supply Tracking verileri
+      supplyTrackingData: this.supplyTrackingData,
+      lastSupplyTrackingUpdate: this.lastSupplyTrackingUpdate,
       
       // Genel durum
       isUpdating: this.isUpdating

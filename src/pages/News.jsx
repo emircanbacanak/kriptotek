@@ -3,6 +3,7 @@ import { ExternalLink, Clock, Calendar, Search, Newspaper, TrendingUp } from 'lu
 import { useLanguage } from '../contexts/LanguageContext'
 import { subscribeToNews } from '../firebase/newsData'
 import { useTheme } from '../contexts/ThemeContext'
+import { updatePageSEO } from '../utils/seoMetaTags'
 
 // CSS Animasyonları için style tag
 const styles = `
@@ -36,7 +37,7 @@ const styles = `
 `
 
 function News() {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const { theme } = useTheme()
   const [news, setNews] = useState([])
   const [loading, setLoading] = useState(true)
@@ -47,6 +48,10 @@ function News() {
   const unsubscribeRef = useRef(null)
   const previousNewsIdsRef = useRef(new Set())
   const [nowTick, setNowTick] = useState(Date.now())
+
+  useEffect(() => {
+    updatePageSEO('news', language)
+  }, [language])
 
   // Header gradients: Light mavi→indigo, Dark sarı→turuncu
   const headerIconGradient = theme === 'dark' ? 'from-yellow-600 to-orange-600' : 'from-blue-500 to-indigo-500'
@@ -157,10 +162,7 @@ function News() {
   }, [])
 
 
-  useEffect(() => {
-    // 1. İlk yüklemede MongoDB WebSocket realtime dinleme başlat
-    console.log('🎧 MongoDB WebSocket realtime dinleme başlatılıyor...')
-    
+  useEffect(() => {   
     let retryCount = 0
     const maxRetries = 3
     
@@ -226,7 +228,6 @@ function News() {
           setNews(finalNews)
           setFilteredNews(finalNews)
           setLoading(false)
-          console.log(`📰 ${finalNews.length} haber yüklendi (realtime) [deduped, son 24 saat${within24Hours.length < recentNews.length ? ` (${recentNews.length - within24Hours.length} haber 24-26 saat aralığında)` : ''}]`)
           },
           100, // limitCount
           (error) => {
@@ -268,7 +269,6 @@ function News() {
     return () => {
       if (unsubscribeRef.current) {
         unsubscribeRef.current()
-        console.log('🔇 News listener kapatıldı')
       }
     }
   }, [])
@@ -480,7 +480,7 @@ function News() {
                        }}
                        onLoad={(e) => {
                          if (item.image !== '/kriptotek.jpg' && !item.image?.includes('kriptotek.jpg')) {
-                           console.log(`✅ Resim yüklendi: ${item.title.substring(0, 30)}...`)
+                           
                          }
                        }}
                      />

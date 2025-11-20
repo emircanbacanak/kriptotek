@@ -20,9 +20,20 @@ const rootEnvPath = join(__dirname, '..', '.env')
 
 if (existsSync(rootEnvPath)) {
   dotenv.config({ path: rootEnvPath })
+  console.log(`✅ .env dosyası yüklendi: ${rootEnvPath}`)
 } else {
   // Heroku'da environment variables otomatik yüklenir
   dotenv.config() // Varsayılan olarak process.cwd()'den yükle
+  console.log(`⚠️ Root .env dosyası bulunamadı, varsayılan konum kullanılıyor`)
+}
+
+// Debug: FRED_API_KEY kontrolü
+if (process.env.FRED_API_KEY) {
+  console.log(`✅ FRED_API_KEY yüklendi (uzunluk: ${process.env.FRED_API_KEY.length} karakter)`)
+} else {
+  console.warn(`⚠️ FRED_API_KEY environment variable bulunamadı!`)
+  console.warn(`   Kontrol edin: .env dosyasında FRED_API_KEY=... var mı?`)
+  console.warn(`   .env dosyası yolu: ${rootEnvPath}`)
 }
 
 // Firebase Admin SDK initialization
@@ -588,10 +599,15 @@ app.get('/cache/crypto_list', async (req, res) => {
     const cacheDoc = await collection.findOne({ _id: 'crypto_list' })
     
     if (cacheDoc && cacheDoc.data && Array.isArray(cacheDoc.data) && cacheDoc.data.length > 0) {
+      // Debug: MongoDB'den okunurken total_supply ve max_supply kontrolü
+      const sampleCoin = cacheDoc.data[0];
+      const coinsWithTotalSupply = cacheDoc.data.filter(c => c.total_supply !== null && c.total_supply !== undefined).length;
+      const coinsWithMaxSupply = cacheDoc.data.filter(c => c.max_supply !== null && c.max_supply !== undefined).length;
+
       return res.json({
         success: true,
         data: {
-          coins: cacheDoc.data,
+          coins: cacheDoc.data, // Her coin'de total_supply, max_supply, circulating_supply var
           lastUpdate: cacheDoc.updatedAt || cacheDoc.lastUpdate || null
         }
       })
@@ -1290,6 +1306,15 @@ app.get('/api/crypto/list', async (req, res) => {
       const cacheAge = now - (cacheDoc.updatedAt || cacheDoc.lastUpdate || 0)
       
       if (cacheAge < CACHE_DURATION) {
+        // Debug: İlk coin için total_supply ve max_supply kontrolü
+        if (cacheDoc.data.length > 0) {
+          const sampleCoin = cacheDoc.data[0];
+          console.log(`🔍 [GET /api/crypto/list] MongoDB'den örnek coin (${sampleCoin.id}): total_supply=${sampleCoin.total_supply}, max_supply=${sampleCoin.max_supply}`);
+          const coinsWithTotalSupply = cacheDoc.data.filter(c => c.total_supply !== null && c.total_supply !== undefined).length;
+          const coinsWithMaxSupply = cacheDoc.data.filter(c => c.max_supply !== null && c.max_supply !== undefined).length;
+          console.log(`📊 [GET /api/crypto/list] MongoDB'de: ${coinsWithTotalSupply} coin'de total_supply, ${coinsWithMaxSupply} coin'de max_supply var (toplam ${cacheDoc.data.length} coin)`);
+        }
+        
         // Cache taze, MongoDB'den döndür
         return res.json({
           success: true,
@@ -1308,6 +1333,15 @@ app.get('/api/crypto/list', async (req, res) => {
       const result = await fetchCryptoList()
       
       if (result.data && result.data.length > 0) {
+        // Debug: Kaydedilmeden önce total_supply ve max_supply kontrolü
+        if (result.data.length > 0) {
+          const sampleCoin = result.data[0];
+          console.log(`🔍 [GET /api/crypto/list] API'den örnek coin (${sampleCoin.id}): total_supply=${sampleCoin.total_supply}, max_supply=${sampleCoin.max_supply}`);
+          const coinsWithTotalSupply = result.data.filter(c => c.total_supply !== null && c.total_supply !== undefined).length;
+          const coinsWithMaxSupply = result.data.filter(c => c.max_supply !== null && c.max_supply !== undefined).length;
+          console.log(`📊 [GET /api/crypto/list] API'den: ${coinsWithTotalSupply} coin'de total_supply, ${coinsWithMaxSupply} coin'de max_supply var (toplam ${result.data.length} coin)`);
+        }
+        
         // MongoDB'ye kaydet
         await collection.updateOne(
           { _id: 'crypto_list' },
@@ -1320,6 +1354,13 @@ app.get('/api/crypto/list', async (req, res) => {
           },
           { upsert: true }
         )
+        
+        // Debug: Kaydedildikten sonra MongoDB'den kontrol
+        const savedDoc = await collection.findOne({ _id: 'crypto_list' });
+        if (savedDoc && savedDoc.data && savedDoc.data.length > 0) {
+          const sampleCoin = savedDoc.data[0];
+          console.log(`🔍 [GET /api/crypto/list] MongoDB'ye kaydedildikten sonra örnek coin (${sampleCoin.id}): total_supply=${sampleCoin.total_supply}, max_supply=${sampleCoin.max_supply}`);
+        }
         
         console.log(`✅ Crypto list MongoDB'ye kaydedildi: ${result.data.length} coin`)
         
@@ -1390,6 +1431,8 @@ app.get('/api/crypto/list', async (req, res) => {
 // POST /api/crypto/update - CoinGecko API'den kripto para listesi çek ve MongoDB'ye kaydet
 app.post('/api/crypto/update', async (req, res) => {
   try {
+    const timeStr = new Date().toLocaleTimeString('tr-TR')
+    
     if (!db) {
       return res.status(503).json({ 
         success: false, 
@@ -1409,11 +1452,19 @@ app.post('/api/crypto/update', async (req, res) => {
     
     // MongoDB'ye kaydet
     const collection = db.collection('api_cache')
+    
+    // Debug: Kaydedilmeden önce total_supply ve max_supply kontrolü
+    if (result.data && result.data.length > 0) {
+      const sampleCoin = result.data[0];
+      const coinsWithTotalSupply = result.data.filter(c => c.total_supply !== null && c.total_supply !== undefined).length;
+      const coinsWithMaxSupply = result.data.filter(c => c.max_supply !== null && c.max_supply !== undefined).length;
+    }
+    
     await collection.updateOne(
       { _id: 'crypto_list' },
       { 
         $set: {
-          data: result.data,
+          data: result.data, // Bu array içinde her coin'de total_supply, max_supply, circulating_supply var
           updatedAt: Date.now(),
           lastUpdate: Date.now()
         }
@@ -1421,8 +1472,13 @@ app.post('/api/crypto/update', async (req, res) => {
       { upsert: true }
     )
     
-    const timeStr = new Date().toLocaleTimeString('tr-TR')
-    console.log(`✅ [${timeStr}] Crypto list verisi güncellendi (${result.data.length} coin)`)
+    // Debug: Kaydedildikten sonra MongoDB'den kontrol
+    const savedDoc = await collection.findOne({ _id: 'crypto_list' });
+    if (savedDoc && savedDoc.data && savedDoc.data.length > 0) {
+      const sampleCoin = savedDoc.data[0];
+      const coinsWithTotalSupply = savedDoc.data.filter(c => c.total_supply !== null && c.total_supply !== undefined).length;
+      const coinsWithMaxSupply = savedDoc.data.filter(c => c.max_supply !== null && c.max_supply !== undefined).length;
+    }
     
     // Crypto listesi güncellendiğinde trending'i de otomatik güncelle
     try {
@@ -1898,6 +1954,207 @@ app.post('/api/news/update', async (req, res) => {
     })
   } catch (error) {
     console.error('❌ POST /api/news/update error:', error)
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    })
+  }
+})
+
+// ========== SUPPLY TRACKING ENDPOINT ==========
+// GET /cache/supply_tracking - MongoDB'den supply tracking verilerini çek
+app.get('/cache/supply_tracking', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const collection = db.collection('api_cache')
+    const cacheDoc = await collection.findOne({ _id: 'supply_tracking' })
+    
+    if (cacheDoc && cacheDoc.data) {
+      return res.json({
+        ok: true,
+        success: true,
+        data: {
+          data: cacheDoc.data,
+          lastUpdate: cacheDoc.lastUpdate || cacheDoc.updatedAt || null
+        }
+      })
+    }
+    
+    return res.status(404).json({
+      ok: false,
+      success: false,
+      error: 'Supply tracking verisi bulunamadı'
+    })
+  } catch (error) {
+    console.error('❌ GET /cache/supply_tracking error:', error)
+    return res.status(500).json({
+      ok: false,
+      success: false,
+      error: error.message
+    })
+  }
+})
+
+// ========== FED RATE ENDPOINT ==========
+// GET /api/fed-rate - MongoDB'den Fed rate verilerini çek
+app.get('/api/fed-rate', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const collection = db.collection('api_cache')
+    const cacheDoc = await collection.findOne({ _id: 'fed_rate' })
+    
+    if (cacheDoc && cacheDoc.data) {
+      // Cache'de nextDecisionDate varsa kontrol et
+      if (cacheDoc.data.nextDecisionDate) {
+        const nextDecisionTime = new Date(cacheDoc.data.nextDecisionDate).getTime()
+        const now = Date.now()
+        const diff = nextDecisionTime - now
+        
+        // Sonraki karar tarihine kadar cache geçerli
+        if (diff > 0) {
+          return res.json({
+            success: true,
+            data: cacheDoc.data,
+            lastUpdate: cacheDoc.updatedAt || cacheDoc.lastUpdate || null
+          })
+        }
+      }
+      
+      // Fallback: 30 dakika içindeki cache'i kabul et (nextDecisionDate null olsa bile)
+      const age = Date.now() - (cacheDoc.updatedAt || cacheDoc.lastUpdate || 0)
+      if (age < 30 * 60 * 1000) {
+        return res.json({
+          success: true,
+          data: cacheDoc.data,
+          lastUpdate: cacheDoc.updatedAt || cacheDoc.lastUpdate || null
+        })
+      }
+    }
+    
+    // Cache yok veya geçersiz - otomatik güncelleme yap
+    try {
+      console.log('⚠️ GET /api/fed-rate: Cache yok veya geçersiz, otomatik güncelleme yapılıyor...')
+      const { fetchFedRateData } = await import('./services/apiHandlers/fedRate.js')
+      const fedRateData = await fetchFedRateData()
+      
+      // MongoDB'ye kaydet
+      await collection.updateOne(
+        { _id: 'fed_rate' },
+        { 
+          $set: {
+            data: fedRateData,
+            updatedAt: Date.now(),
+            lastUpdate: Date.now()
+          }
+        },
+        { upsert: true }
+      )
+      
+      return res.json({
+        success: true,
+        data: fedRateData,
+        lastUpdate: Date.now()
+      })
+    } catch (updateError) {
+      console.error('❌ GET /api/fed-rate: Otomatik güncelleme hatası:', updateError)
+      return res.status(500).json({
+        success: false,
+        error: updateError.message || 'Fed rate verisi güncellenemedi'
+      })
+    }
+  } catch (error) {
+    console.error('❌ GET /api/fed-rate error:', error)
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    })
+  }
+})
+
+// POST /api/fed-rate/update - Tüm Fed rate verilerini çek ve MongoDB'ye kaydet
+app.post('/api/fed-rate/update', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    // FRED_API_KEY artık gerekli değil - yeni kaynaklar eklenecek
+    const { fetchFedRateData } = await import('./services/apiHandlers/fedRate.js')
+    const fedRateData = await fetchFedRateData()
+
+    // MongoDB'ye kaydet
+    const collection = db.collection('api_cache')
+    await collection.updateOne(
+      { _id: 'fed_rate' },
+      { 
+        $set: {
+          data: fedRateData,
+          updatedAt: Date.now(),
+          lastUpdate: Date.now()
+        }
+      },
+      { upsert: true }
+    )
+
+    const timeStr = new Date().toLocaleTimeString('tr-TR')
+    console.log(`✅ [${timeStr}] Fed rate verisi güncellendi`)
+
+    return res.json({
+      success: true,
+      data: fedRateData,
+      message: 'Fed rate data updated'
+    })
+  } catch (error) {
+    console.error('❌ POST /api/fed-rate/update error:', error)
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    })
+  }
+})
+
+// ========== SUPPLY TRACKING ENDPOINT ==========
+// POST /api/supply-tracking/update - Supply tracking verilerini güncelle
+app.post('/api/supply-tracking/update', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const { updateSupplyTracking } = await import('./services/apiHandlers/supplyTracking.js')
+    const success = await updateSupplyTracking(db)
+    
+    if (success) {
+      return res.json({
+        success: true,
+        message: 'Supply tracking data updated'
+      })
+    } else {
+      return res.status(500).json({
+        success: false,
+        error: 'Supply tracking update failed'
+      })
+    }
+  } catch (error) {
+    console.error('❌ POST /api/supply-tracking/update error:', error)
     return res.status(500).json({
       success: false,
       error: error.message

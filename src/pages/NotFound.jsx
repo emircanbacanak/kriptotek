@@ -1,9 +1,14 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useLanguage } from '../contexts/LanguageContext'
+import { updatePageSEO } from '../utils/seoMetaTags'
 
 function NotFound() {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
+
+  useEffect(() => {
+    updatePageSEO('notFound', language)
+  }, [language])
 
   const starField = [
     { id: 's1', top: '8%', left: '12%', size: '15px', opacity: 0.45, duration: '6s', delay: '0s', spinDuration: '10s' },

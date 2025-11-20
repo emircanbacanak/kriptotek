@@ -329,8 +329,9 @@ function isStablecoin(coin) {
  */
 async function fetchCryptoList() {
   try {
-    // 5 sayfa sıralı çek (500 coin için - her sayfa 100 coin)
-    const pages = [
+    // İlk 5 sayfa çek (500 coin için - her sayfa 100 coin)
+    // Stablecoin'ler filtreleneceği için daha fazla sayfa çekmek gerekebilir
+    let pages = [
       { url: `${COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=true&price_change_percentage=24h`, name: 'CoinGecko Page 1' },
       { url: `${COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=2&sparkline=true&price_change_percentage=24h`, name: 'CoinGecko Page 2' },
       { url: `${COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=3&sparkline=true&price_change_percentage=24h`, name: 'CoinGecko Page 3' },
@@ -365,7 +366,6 @@ async function fetchCryptoList() {
         // Her batch için farklı proxy seç
         const proxyUrl = await getWorkingProxyForBatch(i, pages.length)
         const proxyInfo = proxyUrl ? ` (Proxy: ${proxyUrl.split('@').pop() || proxyUrl})` : ' (No Proxy)'
-        console.log(`📡 [Batch ${i + 1}/${pages.length}] Fetching ${page.name}${proxyInfo}`)
         
         try {
           const controller = new AbortController()
@@ -446,7 +446,6 @@ async function fetchCryptoList() {
             failedProxies.delete(proxyUrl)
           }
           results.push({ status: 'fulfilled', value: data })
-          console.log(`✅ [Batch ${i + 1}/${pages.length}] ${page.name} başarılı${proxyInfo}`)
         } catch (error) {
           // Proxy başarısız olarak işaretle
           if (proxyUrl) {
@@ -496,29 +495,273 @@ async function fetchCryptoList() {
         uniqueCoinsMap.set(coin.id, coin)
       }
     })
-    const uniqueData = Array.from(uniqueCoinsMap.values())
+    let uniqueData = Array.from(uniqueCoinsMap.values())
 
     // Stablecoin'leri filtrele
-    const filteredData = uniqueData.filter(coin => !isStablecoin(coin))
+    let filteredData = uniqueData.filter(coin => !isStablecoin(coin))
+    
+    console.log(`📊 İlk 5 sayfa sonrası: ${uniqueData.length} unique coin, ${filteredData.length} coin (stablecoin'ler filtrelendi)`)
+    
+    // Eğer 500'den az coin varsa, daha fazla sayfa çek
+    if (filteredData.length < 500) {
+      const needed = 500 - filteredData.length
+      const additionalPages = Math.ceil(needed / 100) + 2 // Biraz fazla çek (stablecoin'ler için buffer)
+      const maxPage = Math.min(6 + additionalPages, 10) // Maksimum 10 sayfa
+      
+      console.log(`⚠️ Stablecoin filtrelemesinden sonra sadece ${filteredData.length} coin kaldı, ${maxPage - 5} ek sayfa çekiliyor...`)
+      
+      // Ek sayfaları çek
+      for (let pageNum = 6; pageNum <= maxPage; pageNum++) {
+        try {
+          const pageUrl = `${COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=${pageNum}&sparkline=true&price_change_percentage=24h`
+          const proxyUrl = await getWorkingProxyForBatch(pageNum - 1, 10)
+          const proxyInfo = proxyUrl ? ` (Proxy: ${proxyUrl.split('@').pop() || proxyUrl})` : ' (No Proxy)'
+          
+          console.log(`📡 [Ek Sayfa ${pageNum}] Fetching CoinGecko Page ${pageNum}${proxyInfo}`)
+          
+          // Sayfalar arası delay
+          if (pageNum > 6) {
+            await new Promise(resolve => setTimeout(resolve, 2000))
+          }
+          
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 30000)
+          
+          const response = await fetchWithProxy(pageUrl, {
+            headers: {
+              'Accept': 'application/json',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            signal: controller.signal
+          }, proxyUrl)
+          
+          clearTimeout(timeoutId)
+          
+          if (response.ok) {
+            const pageData = await response.json()
+            if (Array.isArray(pageData) && pageData.length > 0) {
+              // Yeni coin'leri ekle (duplicate kontrolü)
+              pageData.forEach(coin => {
+                if (!uniqueCoinsMap.has(coin.id)) {
+                  uniqueCoinsMap.set(coin.id, coin)
+                }
+              })
+              
+              // Güncellenmiş verileri al
+              uniqueData = Array.from(uniqueCoinsMap.values())
+              filteredData = uniqueData.filter(coin => !isStablecoin(coin))
+              
+              console.log(`✅ [Ek Sayfa ${pageNum}] ${pageData.length} coin çekildi, toplam ${filteredData.length} coin (stablecoin'ler filtrelendi)`)
+              
+              // 500'e ulaştıysak dur
+              if (filteredData.length >= 500) {
+                console.log(`✅ 500 coin'e ulaşıldı, ek sayfa çekme durduruldu`)
+                break
+              }
+            }
+          } else {
+            console.warn(`⚠️ [Ek Sayfa ${pageNum}] HTTP ${response.status}, atlanıyor`)
+          }
+        } catch (error) {
+          console.warn(`⚠️ [Ek Sayfa ${pageNum}] Hata: ${error.message}, atlanıyor`)
+          // Hata durumunda devam et
+        }
+      }
+    }
 
     // 500 coin'e sınırla ve market_cap_rank'i düzelt
     const limitedData = filteredData.slice(0, 500)
+    
+    console.log(`📊 Final coin sayısı: ${limitedData.length} coin (500 hedeflendi)`)
+
+    // Tüm 500 coin için detaylı bilgi çek (total_supply ve max_supply için)
+    const allCoinIds = limitedData.map(coin => coin.id)
+    
+    let supplyDataMap = new Map()
+    
+    // Önce mevcut API response'undan gelen verileri kontrol et
+    // CoinGecko /coins/markets endpoint'i total_supply ve max_supply döndürebilir
+    let foundInMarkets = 0
+    allCoins.forEach(coin => {
+      // total_supply veya max_supply varsa kullan
+      if ((coin.total_supply !== null && coin.total_supply !== undefined) || 
+          (coin.max_supply !== null && coin.max_supply !== undefined)) {
+        supplyDataMap.set(coin.id, {
+          total_supply: coin.total_supply !== null && coin.total_supply !== undefined ? coin.total_supply : null,
+          max_supply: coin.max_supply !== null && coin.max_supply !== undefined ? coin.max_supply : null
+        })
+        foundInMarkets++
+      }
+    })
+    
+    console.log(`📊 Mevcut API response'undan ${foundInMarkets} coin için supply bilgisi bulundu (toplam ${allCoins.length} coin)`)
+    
+    // İlk birkaç coin için debug
+    if (allCoins.length > 0) {
+      const sampleCoin = allCoins[0]
+      console.log(`📊 Örnek coin (${sampleCoin.id}): total_supply=${sampleCoin.total_supply}, max_supply=${sampleCoin.max_supply}`)
+    }
+    
+    // Eğer hiç supply bilgisi yoksa, tüm coin'ler için detaylı bilgi çek
+    if (supplyDataMap.size === 0) {
+      console.log(`⚠️ Mevcut API response'unda supply bilgisi yok, tüm coin'ler için detaylı bilgi çekilecek`)
+    }
+    
+    // Eksik olan coin'ler için /coins/{id} endpoint'ini kullan
+    // NOT: 500 coin için hepsini çekmek çok uzun sürdüğü için sadece top 200 coin için çekiyoruz
+    const missingCoins = allCoinIds.filter(id => !supplyDataMap.has(id))
+    const coinsToFetch = missingCoins.slice(0, 200) // Sadece ilk 200 coin (top 200)
+    
+    if (coinsToFetch.length > 0) {
+      console.log(`📊 ${coinsToFetch.length} coin için supply bilgisi eksik (top ${coinsToFetch.length} coin), detaylı bilgi çekiliyor...`)
+      
+      try {
+        // Batch'ler halinde çek (rate limit için)
+        const batchSize = 20 // Daha küçük batch'ler (rate limit için)
+        const batches = []
+        for (let i = 0; i < coinsToFetch.length; i += batchSize) {
+          batches.push(coinsToFetch.slice(i, i + batchSize))
+        }
+        
+        // Timeout'u artır (toplam 2 dakika)
+        const maxTime = 120000 // 2 dakika
+        const startTime = Date.now()
+        
+        for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+          // Timeout kontrolü
+          if (Date.now() - startTime > maxTime) {
+            console.warn(`⚠️ Supply bilgileri çekme işlemi timeout oldu (${batchIndex}/${batches.length} batch tamamlandı)`)
+            break
+          }
+          
+          const batch = batches[batchIndex]
+          
+          // Her batch arasında 2 saniye bekle (rate limit için)
+          if (batchIndex > 0) {
+            await new Promise(resolve => setTimeout(resolve, 2000))
+          }
+          
+          // /coins/{id} endpoint'i ile her coin için detaylı bilgi çek
+          const proxyUrl = await getWorkingProxyForBatch(batchIndex % 5, 5)
+          
+          for (let coinIndex = 0; coinIndex < batch.length; coinIndex++) {
+            const coinId = batch[coinIndex]
+            try {
+              const supplyUrl = `${COINGECKO_API}/coins/${coinId}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false`
+              
+              const controller = new AbortController()
+              const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 saniye timeout
+              
+              const supplyResponse = await fetchWithProxy(supplyUrl, {
+                headers: {
+                  'Accept': 'application/json',
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                },
+                signal: controller.signal
+              }, proxyUrl)
+              
+              clearTimeout(timeoutId)
+              
+              if (supplyResponse.ok) {
+                const coinData = await supplyResponse.json()
+                if (coinData && coinData.market_data) {
+                  const marketData = coinData.market_data
+                  const totalSupply = marketData.total_supply !== null && marketData.total_supply !== undefined ? marketData.total_supply : null
+                  const maxSupply = marketData.max_supply !== null && marketData.max_supply !== undefined ? marketData.max_supply : null
+                  
+                  // Sadece null değilse kaydet (0 değerleri de geçerli)
+                  if (totalSupply !== null || maxSupply !== null) {
+                    supplyDataMap.set(coinId, {
+                      total_supply: totalSupply,
+                      max_supply: maxSupply
+                    })
+                    
+                    // İlk birkaç coin için debug log
+                    if (coinIndex < 3) {
+                      console.log(`✅ ${coinId}: total_supply=${totalSupply}, max_supply=${maxSupply}`)
+                    }
+                  } else {
+                    // İlk birkaç coin için debug log
+                    if (coinIndex < 3) {
+                      console.log(`⚠️ ${coinId}: supply bilgisi yok`)
+                    }
+                  }
+                } else {
+                  if (coinIndex < 3) {
+                    console.warn(`⚠️ ${coinId}: market_data bulunamadı`)
+                  }
+                }
+              } else {
+                console.warn(`⚠️ ${coinId} için HTTP ${supplyResponse.status} hatası`)
+              }
+              
+              // Her coin arasında kısa bir bekleme (rate limit için)
+              await new Promise(resolve => setTimeout(resolve, 200)) // 200ms bekleme
+            } catch (error) {
+              // Hata durumunda devam et
+              if (error.name !== 'AbortError') {
+                console.warn(`⚠️ ${coinId} için supply bilgisi çekilemedi: ${error.message}`)
+              }
+            }
+          }
+          
+          console.log(`✅ Batch ${batchIndex + 1}/${batches.length} tamamlandı (${supplyDataMap.size}/${coinsToFetch.length} coin)`)
+        }
+        
+        if (supplyDataMap.size > 0) {
+          console.log(`✅ Toplam ${supplyDataMap.size} coin için supply bilgileri çekildi`)
+        }
+      } catch (error) {
+        console.warn(`⚠️ Supply bilgileri çekilirken genel hata: ${error.message}`)
+      }
+    } else {
+      console.log(`✅ Tüm coin'ler için supply bilgileri mevcut (${supplyDataMap.size} coin)`)
+    }
+    
+    if (missingCoins.length > 200) {
+      console.log(`ℹ️ ${missingCoins.length - 200} coin için supply bilgisi çekilmedi (sadece top 200 coin çekildi)`)
+    }
 
     // Normalize et ve market_cap_rank'i düzelt (1'den başlayarak)
-    const normalizedData = limitedData.map((coin, index) => ({
-      id: coin.id,
-      name: coin.name,
-      symbol: coin.symbol,
-      image: coin.image,
-      current_price: coin.current_price || 0,
-      price_change_percentage_24h: coin.price_change_percentage_24h || 0,
-      market_cap: coin.market_cap || 0,
-      market_cap_rank: index + 1, // Yeniden numaralandır
-      circulating_supply: coin.circulating_supply || 0,
-      total_volume: coin.total_volume || 0,
-      sparkline_in_7d: coin.sparkline_in_7d?.price || [],
-      supply_absolute_change_24h: coin.circulating_supply ? (coin.circulating_supply * 0.01) : 0
-    }))
+    const normalizedData = limitedData.map((coin, index) => {
+      const supplyInfo = supplyDataMap.get(coin.id)
+      
+      // Supply bilgilerini öncelik sırasına göre belirle
+      let totalSupply = null
+      let maxSupply = null
+      
+      if (supplyInfo) {
+        // supplyDataMap'ten gelen bilgiyi kullan
+        totalSupply = supplyInfo.total_supply !== undefined ? supplyInfo.total_supply : null
+        maxSupply = supplyInfo.max_supply !== undefined ? supplyInfo.max_supply : null
+      } else {
+        // Fallback: coin objesinden gelen bilgiyi kullan
+        totalSupply = coin.total_supply !== null && coin.total_supply !== undefined ? coin.total_supply : null
+        maxSupply = coin.max_supply !== null && coin.max_supply !== undefined ? coin.max_supply : null
+      }
+      
+      return {
+        id: coin.id,
+        name: coin.name,
+        symbol: coin.symbol,
+        image: coin.image,
+        current_price: coin.current_price || 0,
+        price_change_percentage_24h: coin.price_change_percentage_24h || 0,
+        market_cap: coin.market_cap || 0,
+        market_cap_rank: index + 1, // Yeniden numaralandır
+        circulating_supply: coin.circulating_supply || 0,
+        total_supply: totalSupply,
+        max_supply: maxSupply,
+        total_volume: coin.total_volume || 0,
+        sparkline_in_7d: coin.sparkline_in_7d?.price || [],
+        supply_absolute_change_24h: coin.circulating_supply ? (coin.circulating_supply * 0.01) : 0
+      }
+    })
+    
+    // Debug: Kaç coin'de supply bilgisi var?
+    const coinsWithTotalSupply = normalizedData.filter(c => c.total_supply !== null && c.total_supply !== undefined).length
+    const coinsWithMaxSupply = normalizedData.filter(c => c.max_supply !== null && c.max_supply !== undefined).length
+    console.log(`📊 Normalize edildi: ${coinsWithTotalSupply} coin'de total_supply, ${coinsWithMaxSupply} coin'de max_supply var`)
 
     return {
       data: normalizedData,

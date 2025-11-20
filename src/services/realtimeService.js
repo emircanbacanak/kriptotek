@@ -30,22 +30,34 @@ class RealtimeService {
         return import.meta.env.VITE_API_ENDPOINT
       }
       // Production'da (localhost değilse) window.location.origin kullan
-      if (typeof window !== 'undefined' && window.location.origin !== 'http://localhost:5173') {
-        return window.location.origin
+      if (typeof window !== 'undefined') {
+        const origin = window.location.origin
+        // localhost veya 127.0.0.1 değilse production kabul et
+        if (!origin.includes('localhost') && !origin.includes('127.0.0.1')) {
+          return origin
+        }
+        // localhost:5173 ise backend localhost:3000 kullan
+        if (origin === 'http://localhost:5173' || origin === 'http://127.0.0.1:5173') {
+          return 'http://localhost:3000'
+        }
+        // Diğer localhost portları için de window.location.origin kullan (development)
+        return origin.replace(/:\d+$/, ':3000') // Port'u 3000'e çevir
       }
       return 'http://localhost:3000'
     }
     const mongoApiUrl = getApiUrl()
-    const wsUrl = mongoApiUrl.replace(/^http/, 'ws') + '/ws'
+    const wsUrl = mongoApiUrl.replace(/^http/, 'ws').replace(/^https/, 'wss') + '/ws'
+    
+    console.log(`🔌 WebSocket bağlantısı: ${wsUrl}`)
     
     try {
       this.ws = new WebSocket(wsUrl)
       
       this.ws.onopen = () => {
-        console.log('✅ WebSocket bağlantısı kuruldu')
+        console.log(`✅ WebSocket bağlantısı kuruldu: ${wsUrl}`)
         this.isConnected = true
         this.reconnectAttempts = 0
-        this.dispatchEvent('connected', {})
+        this.dispatchEvent('connected', { url: wsUrl })
       }
       
       this.ws.onmessage = (event) => {
@@ -58,18 +70,48 @@ class RealtimeService {
       }
       
       this.ws.onerror = (error) => {
-        console.error('❌ WebSocket hatası:', error)
-        this.dispatchEvent('error', { error })
+        // WebSocket error event'i detaylı bilgi içermez, readyState kontrolü yap
+        const state = this.ws?.readyState
+        const stateText = state === WebSocket.CONNECTING ? 'CONNECTING' 
+          : state === WebSocket.OPEN ? 'OPEN'
+          : state === WebSocket.CLOSING ? 'CLOSING'
+          : state === WebSocket.CLOSED ? 'CLOSED'
+          : 'UNKNOWN'
+        
+        // Sadece gerçek hataları log'la (CONNECTING durumundaki geçici hatalar normal)
+        if (state !== WebSocket.CONNECTING) {
+          console.error(`❌ WebSocket hatası (${stateText}):`, {
+            url: wsUrl,
+            readyState: state,
+            error: error?.message || error?.type || 'Unknown error',
+            timestamp: new Date().toISOString()
+          })
+        } else {
+          console.warn(`⚠️ WebSocket bağlantı denemesi (${stateText}): ${wsUrl}`)
+        }
+        this.dispatchEvent('error', { error, url: wsUrl, readyState: state })
       }
       
-      this.ws.onclose = () => {
-        console.log('📡 WebSocket bağlantısı kapatıldı')
+      this.ws.onclose = (event) => {
+        const wasClean = event?.wasClean || false
+        const code = event?.code || 0
+        const reason = event?.reason || 'Unknown'
+        
+        console.log(`📡 WebSocket bağlantısı kapatıldı (code: ${code}, clean: ${wasClean}, reason: ${reason})`)
         this.isConnected = false
-        this.dispatchEvent('disconnected', {})
-        this.attemptReconnect()
+        this.dispatchEvent('disconnected', { code, reason, wasClean })
+        
+        // Sadece beklenmeyen kapanmalarda yeniden bağlan
+        if (!wasClean && code !== 1000) {
+          this.attemptReconnect()
+        }
       }
     } catch (error) {
-      console.error('❌ WebSocket bağlantı hatası:', error)
+      console.error('❌ WebSocket bağlantı hatası:', {
+        url: wsUrl,
+        error: error.message,
+        stack: error.stack
+      })
       this.attemptReconnect()
     }
   }

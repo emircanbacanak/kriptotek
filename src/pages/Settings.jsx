@@ -7,6 +7,7 @@ import { loadUserSettings, saveUserSettings, resetUserSettings } from '../servic
 import { changePassword } from '../firebase/auth'
 import { Moon, Sun, Save, Check, AlertCircle, Eye, EyeOff, Shield, User, Settings as SettingsIcon } from 'lucide-react'
 import globalDataManager from '../managers/globalDataManager'
+import { updatePageSEO } from '../utils/seoMetaTags'
 
 const Settings = () => {
   const { toggleTheme, isDark } = useTheme()
@@ -17,6 +18,10 @@ const Settings = () => {
   const [saveMessage, setSaveMessage] = useState({ type: '', text: '' })
   const [hasChanges, setHasChanges] = useState(false)
   const [originalSettings, setOriginalSettings] = useState(null)
+
+  useEffect(() => {
+    updatePageSEO('settings', language)
+  }, [language])
   
   const [passwords, setPasswords] = useState({ current: '', new: '', confirm: '' })
   const [showPasswords, setShowPasswords] = useState({ current: false, new: false, confirm: false })
