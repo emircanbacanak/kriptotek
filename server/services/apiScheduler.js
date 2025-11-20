@@ -314,6 +314,55 @@ async function updateNews() {
 }
 
 /**
+ * Trending verilerini güncelle
+ * Crypto listesi güncellendiğinde otomatik çağrılır
+ */
+async function updateTrending() {
+  try {
+    // Önce MongoDB'den crypto listesini çek
+    const cryptoResponse = await fetch(`${MONGO_API_URL}/cache/crypto_list`, {
+      headers: { 'Accept': 'application/json' }
+    })
+    
+    if (!cryptoResponse.ok) {
+      const timeStr = new Date().toLocaleTimeString('tr-TR')
+      console.error(`❌ [${timeStr}] Trending güncelleme hatası: Crypto listesi çekilemedi (HTTP ${cryptoResponse.status})`)
+      return false
+    }
+    
+    const cryptoResult = await cryptoResponse.json()
+    if (!cryptoResult.success || !cryptoResult.data || !cryptoResult.data.coins || cryptoResult.data.coins.length === 0) {
+      const timeStr = new Date().toLocaleTimeString('tr-TR')
+      console.error(`❌ [${timeStr}] Trending güncelleme hatası: Crypto listesi boş`)
+      return false
+    }
+    
+    // Trending'i güncelle (crypto listesi ile)
+    const trendingResponse = await fetch(`${MONGO_API_URL}/api/trending/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ coins: cryptoResult.data.coins })
+    })
+    
+    if (trendingResponse.ok) {
+      const result = await trendingResponse.json()
+      const timeStr = new Date().toLocaleTimeString('tr-TR')
+      console.log(`✅ [${timeStr}] Trending verisi güncellendi (${result.data?.coins?.length || 0} coin)`)
+      return true
+    } else {
+      const error = await trendingResponse.text()
+      const timeStr = new Date().toLocaleTimeString('tr-TR')
+      console.error(`❌ [${timeStr}] Trending güncelleme hatası: ${error}`)
+      return false
+    }
+  } catch (error) {
+    const timeStr = new Date().toLocaleTimeString('tr-TR')
+    console.error(`❌ [${timeStr}] Trending güncelleme hatası:`, error.message)
+    return false
+  }
+}
+
+/**
  * Tüm verileri güncelle (Crypto: 5 dakika, Dominance: 5 dakika, Currency Rates: 5 dakika, Fear & Greed: 10 dakika)
  */
 async function updateAll() {
@@ -338,6 +387,15 @@ async function updateAll() {
       updateDominance(),
       updateCurrencyRates()
     ])
+    
+    // Crypto listesi güncellendiğinde trending'i de otomatik güncelle
+    let trendingSuccess = false
+    if (cryptoSuccess) {
+      trendingSuccess = await updateTrending()
+    } else {
+      // Crypto başarısız olsa bile trending'i güncellemeyi dene (MongoDB'deki mevcut veri ile)
+      trendingSuccess = await updateTrending()
+    }
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2)
     console.log(`\n🔄 [${timeStr}] ========== API Scheduler Güncelleme Tamamlandı ==========`)
@@ -345,6 +403,7 @@ async function updateAll() {
     console.log(`📈 [${timeStr}] Crypto: ${cryptoSuccess ? '✅ Başarılı' : '❌ Başarısız'}`)
     console.log(`📊 [${timeStr}] Dominance: ${dominanceSuccess ? '✅ Başarılı' : '❌ Başarısız'}`)
     console.log(`💱 [${timeStr}] Currency Rates: ${currencySuccess ? '✅ Başarılı' : '❌ Başarısız'}`)
+    console.log(`🔥 [${timeStr}] Trending: ${trendingSuccess ? '✅ Başarılı' : '❌ Başarısız'}`)
     console.log(`⏰ [${timeStr}] Bir sonraki güncelleme: ${nextUpdateTime}`)
     console.log(`═══════════════════════════════════════════════════════════\n`)
   } catch (error) {
