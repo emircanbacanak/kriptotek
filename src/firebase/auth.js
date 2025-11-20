@@ -16,10 +16,19 @@ import { auth, googleProvider } from './firebaseConfig'
 
 export const loginWithEmailPassword = async (email, password) => {
   try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password)
+    // Email ve password validasyonu
+    if (!email || !email.trim()) {
+      return { success: false, error: 'Email is required', code: 'auth/invalid-email' }
+    }
+    if (!password || password.length < 6) {
+      return { success: false, error: 'Password must be at least 6 characters', code: 'auth/weak-password' }
+    }
+    
+    const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password)
     return { success: true, user: userCredential.user }
   } catch (error) {
-    return { success: false, error: error.message }
+    console.error('❌ Firebase login error:', error.code, error.message)
+    return { success: false, error: error.message, code: error.code }
   }
 }
 
