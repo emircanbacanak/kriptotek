@@ -13,7 +13,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint src --ext jsx,js --report-unused-disable-directives --max-warnings 0",
-    "start:heroku": "npm run build && npm start --prefix server",
+    "start:heroku": "npm start --prefix server",
     "postinstall": "npm install --prefix server"
   },
   "dependencies": {
