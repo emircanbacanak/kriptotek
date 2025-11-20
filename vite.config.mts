@@ -12,6 +12,7 @@ export default defineConfig({
     assetsDir: 'assets',
     sourcemap: false,
     minify: 'terser',
+    chunkSizeWarningLimit: 1000, // 1MB limit (chart kütüphaneleri büyük olduğu için)
     rollupOptions: {
       output: {
         manualChunks: (id) => {
@@ -20,6 +21,7 @@ export default defineConfig({
               return 'firebase-vendor'
             }
             // Chart kütüphaneleri React'e bağımlı, bu yüzden react-vendor'a dahil et
+            // Chunk size büyük olacak ama React bağımlılık sorunu olmayacak
             if (id.includes('apexcharts') || id.includes('recharts') || id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
               return 'react-vendor'
             }
