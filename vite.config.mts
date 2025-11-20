@@ -12,7 +12,7 @@ export default defineConfig({
     assetsDir: 'assets',
     sourcemap: false,
     minify: 'terser',
-    chunkSizeWarningLimit: 1000, // 1MB limit (chart kütüphaneleri büyük olduğu için)
+    chunkSizeWarningLimit: 1200, // 1.2MB limit (react-vendor + chart kütüphaneleri büyük olduğu için)
     rollupOptions: {
       output: {
         manualChunks: (id) => {
