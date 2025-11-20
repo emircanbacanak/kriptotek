@@ -19,11 +19,9 @@ export default defineConfig({
             if (id.includes('firebase')) {
               return 'firebase-vendor'
             }
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+            // Chart kütüphaneleri React'e bağımlı, bu yüzden react-vendor'a dahil et
+            if (id.includes('apexcharts') || id.includes('recharts') || id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
               return 'react-vendor'
-            }
-            if (id.includes('apexcharts') || id.includes('recharts')) {
-              return 'chart-vendor'
             }
           }
         }
