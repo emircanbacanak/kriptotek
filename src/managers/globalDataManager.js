@@ -33,8 +33,21 @@ class GlobalDataManager {
     this.subscribers = new Set()
     this.isUpdating = false
     
-    // API URL
-    this.MONGO_API_URL = import.meta.env.VITE_MONGO_API_URL || import.meta.env.VITE_API_ENDPOINT || 'http://localhost:3000'
+    // API URL - Production'da otomatik tespit
+    const getApiUrl = () => {
+      if (import.meta.env.VITE_MONGO_API_URL) {
+        return import.meta.env.VITE_MONGO_API_URL
+      }
+      if (import.meta.env.VITE_API_ENDPOINT) {
+        return import.meta.env.VITE_API_ENDPOINT
+      }
+      // Production'da (localhost değilse) window.location.origin kullan
+      if (typeof window !== 'undefined' && window.location.origin !== 'http://localhost:5173') {
+        return window.location.origin
+      }
+      return 'http://localhost:3000'
+    }
+    this.MONGO_API_URL = getApiUrl()
   }
 
   // Abone ol (sayfalar veri değişikliklerini dinleyebilir)
@@ -130,7 +143,7 @@ class GlobalDataManager {
       const cryptoStartTime = Date.now()
       try {
         // ÖNCE MongoDB'den çek (hızlı, cache'den)
-        const MONGO_API_URL = import.meta.env.VITE_MONGO_API_URL || import.meta.env.VITE_API_ENDPOINT || 'http://localhost:3000'
+        const MONGO_API_URL = this.MONGO_API_URL
         let cryptoList = []
         let cryptoApiStatuses = []
         let fromMongoDB = false
@@ -197,7 +210,7 @@ class GlobalDataManager {
       const dominanceStartTime = Date.now()
       try {
         // Önce MongoDB'den veri çek
-        const MONGO_API_URL = import.meta.env.VITE_MONGO_API_URL || import.meta.env.VITE_API_ENDPOINT || 'http://localhost:3000'
+        const MONGO_API_URL = this.MONGO_API_URL
         let dominanceResult = null
         let dominanceApiStatuses = []
         
@@ -335,7 +348,7 @@ class GlobalDataManager {
       const currencyStartTime = Date.now()
       try {
         // MongoDB'den currency rates çek
-        const MONGO_API_URL = import.meta.env.VITE_MONGO_API_URL || import.meta.env.VITE_API_ENDPOINT || 'http://localhost:3000'
+        const MONGO_API_URL = this.MONGO_API_URL
         let currencyResult = null
         let currencyApiStatuses = []
         

@@ -1,5 +1,18 @@
-// Geliştirme için varsayılanı yerel backend'e yönlendir
-const BASE_URL = import.meta.env.VITE_MONGO_API_URL || import.meta.env.VITE_API_ENDPOINT || 'http://localhost:3000'
+// Production'da otomatik tespit: environment variable yoksa window.location.origin kullan
+const getApiUrl = () => {
+  if (import.meta.env.VITE_MONGO_API_URL) {
+    return import.meta.env.VITE_MONGO_API_URL
+  }
+  if (import.meta.env.VITE_API_ENDPOINT) {
+    return import.meta.env.VITE_API_ENDPOINT
+  }
+  // Production'da (localhost değilse) window.location.origin kullan
+  if (typeof window !== 'undefined' && window.location.origin !== 'http://localhost:5173') {
+    return window.location.origin
+  }
+  return 'http://localhost:3000'
+}
+const BASE_URL = getApiUrl()
 
 async function httpGet(path) {
   const res = await fetch(`${BASE_URL}${path}`, { method: 'GET' })
