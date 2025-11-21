@@ -39,8 +39,6 @@ export function startChangeStreams(db, wss) {
 
       changeStreams.set(collectionName, changeStream)
 
-      console.log(`👂 Change stream başlatıldı: ${collectionName}`)
-
       // Değişiklikleri dinle
       changeStream.on('change', (change) => {
         // Tüm client'lara yayınla
@@ -70,7 +68,6 @@ export function startChangeStreams(db, wss) {
     }
   })
 
-  console.log(`✅ ${collectionsToWatch.length} change stream başlatıldı`)
 }
 
 export function stopChangeStreams() {

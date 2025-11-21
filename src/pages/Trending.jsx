@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { loadUserFavorites, addFavorite, removeFavorite } from '../services/userFavorites'
 import useTrendingData from '../hooks/useTrendingData'
+import useCryptoData from '../hooks/useCryptoData'
 import { convertCurrency, formatCurrency, formatLargeNumber } from '../utils/currencyConverter'
 import { Star, TrendingUp, TrendingDown, Search, Sparkles, Activity, ExternalLink } from 'lucide-react'
 import { updatePageSEO } from '../utils/seoMetaTags'
@@ -15,8 +16,11 @@ const Trending = () => {
   const { user } = useAuth()
   const { isDark } = useTheme()
   
-  // Merkezi veri yönetim sisteminden trending verilerini al
+  // Merkezi veri yönetim sisteminden trending verilerini al (tahmin verileri için)
   const { trendingCoins, loading, isUpdating } = useTrendingData()
+  
+  // Anasayfadaki gerçek coin verilerini al (fiyat, market_cap, volume, vs. için)
+  const { coins: realCoins } = useCryptoData()
   
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState('trend_score')
@@ -136,33 +140,121 @@ const Trending = () => {
     return t('positionBadgeNeutral')
   }, [t])
 
-  // Process coins - Backend'den gelen verileri doğrudan kullan, sadece eksik olanları hesapla
+  // Process coins - Anasayfadaki gerçek verilerle trending tahmin verilerini merge et
   const processedCoins = useMemo(() => {
-    return (trendingCoins || []).map((coin) => {
-      const trendScore = coin.trend_score || 0
-      const aiPrediction = parseFloat(coin.ai_prediction || 0)
+    // Anasayfadaki gerçek coin verilerini ID'ye göre map'le (hızlı erişim için)
+    const realCoinsMap = new Map()
+    if (realCoins && Array.isArray(realCoins)) {
+      realCoins.forEach(realCoin => {
+        if (realCoin.id) {
+          realCoinsMap.set(realCoin.id, realCoin)
+        }
+      })
+    }
+    
+    return (trendingCoins || []).map((trendingCoin) => {
+      // Anasayfadaki gerçek coin verisini bul
+      const realCoin = realCoinsMap.get(trendingCoin.id) || null
+      
+      const trendScore = trendingCoin.trend_score || 0
+      const aiPrediction = parseFloat(trendingCoin.ai_prediction || 0)
       
       // Backend'den gelen verileri kullan, yoksa frontend'de hesapla (fallback)
-      const trendInfo = coin.trend_level ? {
-        level: coin.trend_level,
-        emoji: coin.trend_emoji || '📊',
-        color: coin.trend_color || 'orange'
+      const trendInfo = trendingCoin.trend_level ? {
+        level: trendingCoin.trend_level,
+        emoji: trendingCoin.trend_emoji || '📊',
+        color: trendingCoin.trend_color || 'orange'
       } : getTrendLevel(trendScore)
       
-      const aiInfo = coin.ai_direction ? {
-        direction: coin.ai_direction,
-        emoji: coin.ai_emoji || '➖',
-        color: coin.ai_color || 'gray',
-        position: coin.position_type || 'neutral'
+      const aiInfo = trendingCoin.ai_direction ? {
+        direction: trendingCoin.ai_direction,
+        emoji: trendingCoin.ai_emoji || '➖',
+        color: trendingCoin.ai_color || 'gray',
+        position: trendingCoin.position_type || 'neutral'
       } : getAIDirection(aiPrediction)
       
-      const predictedPrice = coin.predicted_price || (coin.current_price || coin.price) * (1 + (aiPrediction / 100))
-      const predictionBasePrice = coin.prediction_base_price || coin.current_price || coin.price
+      // prediction_base_price sadece backend'den gelmeli, fallback kullanma (sürekli güncellenmesin)
+      const predictionBasePrice = trendingCoin.prediction_base_price || null
+      const predictedPrice = trendingCoin.predicted_price || (predictionBasePrice ? predictionBasePrice * (1 + (aiPrediction / 100)) : null)
 
+      // Gerçek rank'ı al (anasayfadan)
+      const realRank = realCoin?.market_cap_rank || trendingCoin.market_cap_rank || 0
+      
+      // Market Cap Score'u gerçek rank'a göre yeniden hesapla (500 coin için)
+      // Daha gerçekçi dağılım: Logaritmik ölçek kullan
+      // Rank 1 = 100, Rank 10 = 90, Rank 50 = 70, Rank 100 = 50, Rank 200 = 30, Rank 500 = 0
+      let recalculatedMarketCapScore = 0
+      if (realRank > 0) {
+        if (realRank === 1) {
+          recalculatedMarketCapScore = 100
+        } else if (realRank <= 10) {
+          // Rank 1-10: 100-90 (linear)
+          recalculatedMarketCapScore = Math.round(100 - ((realRank - 1) * (10 / 9)))
+        } else if (realRank <= 50) {
+          // Rank 11-50: 90-70 (logaritmik)
+          const normalized = (Math.log10(realRank) - Math.log10(10)) / (Math.log10(50) - Math.log10(10))
+          recalculatedMarketCapScore = Math.round(90 - (normalized * 20))
+        } else if (realRank <= 100) {
+          // Rank 51-100: 70-50 (logaritmik)
+          const normalized = (Math.log10(realRank) - Math.log10(50)) / (Math.log10(100) - Math.log10(50))
+          recalculatedMarketCapScore = Math.round(70 - (normalized * 20))
+        } else if (realRank <= 200) {
+          // Rank 101-200: 50-30 (logaritmik)
+          const normalized = (Math.log10(realRank) - Math.log10(100)) / (Math.log10(200) - Math.log10(100))
+          recalculatedMarketCapScore = Math.round(50 - (normalized * 20))
+        } else if (realRank <= 300) {
+          // Rank 201-300: 30-15 (logaritmik)
+          const normalized = (Math.log10(realRank) - Math.log10(200)) / (Math.log10(300) - Math.log10(200))
+          recalculatedMarketCapScore = Math.round(30 - (normalized * 15))
+        } else if (realRank <= 400) {
+          // Rank 301-400: 15-5 (logaritmik)
+          const normalized = (Math.log10(realRank) - Math.log10(300)) / (Math.log10(400) - Math.log10(300))
+          recalculatedMarketCapScore = Math.round(15 - (normalized * 10))
+        } else {
+          // Rank 401-500: 5-0 (linear)
+          recalculatedMarketCapScore = Math.round(Math.max(0, 5 - ((realRank - 400) * (5 / 100))))
+        }
+      } else {
+        recalculatedMarketCapScore = Math.round(trendingCoin.market_cap_score || 0)
+      }
+      
+      // Gerçek verilerle skorları yeniden hesapla (backend cache eski olabilir)
+      const realVolume = realCoin?.total_volume || realCoin?.volume_24h || trendingCoin.total_volume || trendingCoin.volume_24h || 0
+      const realMarketCap = realCoin?.market_cap || trendingCoin.market_cap || 0
+      const realPriceChange = realCoin?.price_change_percentage_24h || realCoin?.change_24h || trendingCoin.price_change_percentage_24h || trendingCoin.change_24h || 0
+      
+      // Likidite Skoru: Volume/Market Cap Ratio
+      const realVolumeRatio = realMarketCap > 0 ? realVolume / realMarketCap : 0
+      const recalculatedLiquidityScore = Math.round(Math.min(100, Math.max(0, realVolumeRatio * 100)))
+      
+      // Fiyat Momentumu: 24 saatlik değişim
+      const recalculatedMomentumScore = Math.round(Math.min(100, Math.max(0, 50 + (realPriceChange * (50 / 60)))))
+      
+      // Volatilite Skoru: Mutlak değişim
+      const recalculatedVolatilityScore = Math.round(Math.min(100, Math.abs(realPriceChange) * (100 / 60)))
+      
+      // Hacim Trendi: Logaritmik ölçek (backend'den gelen değeri kullan, yuvarla)
+      const recalculatedVolumeTrendScore = Math.round(trendingCoin.volume_trend_score || 0)
+      
+      // Gerçek verileri anasayfadan al, yoksa trending'den fallback kullan
       return {
-        ...coin,
-        price: coin.current_price || coin.price || 0,
-        change_24h: coin.price_change_percentage_24h || coin.change_24h || 0,
+        ...trendingCoin,
+        // GERÇEK VERİLER (anasayfadan)
+        price: realCoin?.current_price || realCoin?.price || trendingCoin.current_price || trendingCoin.price || 0,
+        current_price: realCoin?.current_price || realCoin?.price || trendingCoin.current_price || trendingCoin.price || 0,
+        change_24h: realCoin?.price_change_percentage_24h || realCoin?.change_24h || trendingCoin.price_change_percentage_24h || trendingCoin.change_24h || 0,
+        price_change_percentage_24h: realCoin?.price_change_percentage_24h || realCoin?.change_24h || trendingCoin.price_change_percentage_24h || trendingCoin.change_24h || 0,
+        market_cap: realCoin?.market_cap || trendingCoin.market_cap || 0,
+        total_volume: realCoin?.total_volume || realCoin?.volume_24h || trendingCoin.total_volume || trendingCoin.volume_24h || 0,
+        volume_24h: realCoin?.total_volume || realCoin?.volume_24h || trendingCoin.total_volume || trendingCoin.volume_24h || 0,
+        market_cap_rank: realRank, // Gerçek rank
+        circulating_supply: realCoin?.circulating_supply || trendingCoin.circulating_supply || null,
+        image: realCoin?.image || trendingCoin.image || '',
+        name: realCoin?.name || trendingCoin.name || '',
+        symbol: realCoin?.symbol || trendingCoin.symbol || '',
+        sparkline_in_7d: realCoin?.sparkline_in_7d || trendingCoin.sparkline_in_7d || null,
+        
+        // TAHMİN VERİLERİ (trending'den - sadece bunlar tahmin)
         trend_score: trendScore,
         trend_level: trendInfo.level,
         trend_emoji: trendInfo.emoji,
@@ -173,15 +265,15 @@ const Trending = () => {
         ai_color: aiInfo.color,
         position_type: aiInfo.position,
         predicted_price: predictedPrice,
-        prediction_base_price: predictionBasePrice,
-        liquidity_score: coin.liquidity_score || 0,
-        momentum_score: coin.momentum_score || 0,
-        market_cap_score: coin.market_cap_score || 0,
-        volume_trend_score: coin.volume_trend_score || 0,
-        volatility_score: coin.volatility_score || 0,
+        prediction_base_price: predictionBasePrice, // SADECE BU TAHMİN
+        liquidity_score: recalculatedLiquidityScore, // Gerçek verilerle yeniden hesaplanmış
+        momentum_score: recalculatedMomentumScore, // Gerçek verilerle yeniden hesaplanmış
+        market_cap_score: recalculatedMarketCapScore, // Gerçek rank'a göre yeniden hesaplanmış (yuvarlanmış)
+        volume_trend_score: recalculatedVolumeTrendScore, // Yuvarlanmış
+        volatility_score: recalculatedVolatilityScore, // Gerçek verilerle yeniden hesaplanmış
       }
     })
-  }, [trendingCoins, getTrendLevel, getAIDirection])
+  }, [trendingCoins, realCoins, getTrendLevel, getAIDirection])
 
   // Filtreleme ve sıralama
   const filteredAndSortedCoins = useMemo(() => {
@@ -379,7 +471,7 @@ const Trending = () => {
       </div>
 
       {/* Search and Filter */}
-      <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row gap-2 sm:gap-3 md:gap-4">
+      <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row gap-2 sm:gap-3 md:gap-4 pl-6">
         <div className="relative flex-1">
           <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
           <input
@@ -413,10 +505,10 @@ const Trending = () => {
 
       {/* Trending Coins Grid */}
       <div className="space-y-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4 lg:gap-6 max-h-[600px] sm:max-h-[700px] lg:max-h-[800px] overflow-y-auto overflow-x-hidden pr-2 crypto-list-scrollbar">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4 lg:gap-6 max-h-[600px] sm:max-h-[700px] lg:max-h-[800px] overflow-y-auto overflow-x-hidden p-4 sm:p-5 lg:p-6 crypto-list-scrollbar">
           {filteredAndSortedCoins.map((coin, index) => (
             <div key={coin.id || index} className="group/card relative animate-fade-in" style={{ animationDelay: `${index * 50}ms` }}>
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-2xl opacity-0 group-hover/card:opacity-100 blur-xl transition-opacity duration-300"></div>
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-2xl opacity-0 group-hover/card:opacity-50 blur-lg transition-opacity duration-300"></div>
               <div className="relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700 rounded-lg sm:rounded-xl lg:rounded-2xl p-2 sm:p-3 md:p-4 lg:p-5 shadow-lg transform transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 flex flex-col">
                 <div className="flex items-center justify-between mb-1.5 sm:mb-2 md:mb-3 lg:mb-4">
                   {/* Left Side: Icon and Symbol */}
@@ -533,13 +625,13 @@ const Trending = () => {
                         <div className="flex justify-between items-center text-xs sm:text-sm">
                           <span className="text-[9px] sm:text-xs text-gray-600 dark:text-gray-400">{t('predictionBasePrice')}:</span>
                           <span className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white">
-                            {formatPrice(coin.prediction_base_price)}
+                            {coin.prediction_base_price ? formatPrice(coin.prediction_base_price) : '-'}
                           </span>
                         </div>
                         <div className="flex justify-between items-center text-xs sm:text-sm">
                           <span className="text-[9px] sm:text-xs text-gray-600 dark:text-gray-400">{t('estimatedPrice')}:</span>
                           <span className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white">
-                            {formatEstimatedPrice(coin.predicted_price, coin.prediction_base_price)}
+                            {coin.prediction_base_price ? formatEstimatedPrice(coin.predicted_price, coin.prediction_base_price) : '-'}
                           </span>
                         </div>
                       </div>
@@ -648,7 +740,7 @@ const Trending = () => {
                     <div className={`bg-white/10 backdrop-blur-sm p-1.5 sm:p-2 rounded ${isDark ? '' : ''}`}>
                       <div className={`text-[8px] sm:text-xs opacity-80 mb-0.5 ${isDark ? 'text-white' : 'text-white'}`}>{t('estimatedPrice')}</div>
                       <div className={`text-xs sm:text-sm font-bold truncate ${isDark ? 'text-white' : 'text-white'}`}>
-                        {formatEstimatedPrice(selectedCoin.predicted_price, selectedCoin.prediction_base_price)}
+                        {selectedCoin.prediction_base_price ? formatEstimatedPrice(selectedCoin.predicted_price, selectedCoin.prediction_base_price) : '-'}
                       </div>
                     </div>
                   </div>

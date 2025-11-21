@@ -37,6 +37,50 @@ const styles = `
 `
 
 /**
+ * URL'yi temizle (CDATA, HTML entity'leri, vb.)
+ */
+function cleanUrl(url) {
+  if (!url || typeof url !== 'string') return url
+  
+  let cleaned = url.trim()
+  
+  // CDATA kalıntılarını temizle
+  cleaned = cleaned
+    .replace(/<!\[CDATA\[/gi, '')      // CDATA başlangıcı
+    .replace(/\]\]>/g, '')             // CDATA bitişi
+    .replace(/<\!\[CDATA\[/gi, '')    // Alternatif CDATA formatı
+    .replace(/%3C!%5BCDATA%5B/gi, '') // URL encoded CDATA
+    .replace(/%5D%5D%3E/g, '')        // URL encoded CDATA bitişi
+  
+  // HTML entity'lerini decode et
+  cleaned = cleaned
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+  
+  // Boşlukları ve gereksiz karakterleri temizle
+  cleaned = cleaned.trim()
+  
+  // Geçerli URL kontrolü
+  if (!cleaned.startsWith('http://') && !cleaned.startsWith('https://')) {
+    // Eğer URL http/https ile başlamıyorsa, https ekle
+    if (cleaned.startsWith('//')) {
+      cleaned = 'https:' + cleaned
+    } else if (cleaned.includes('://')) {
+      // Zaten bir protokol var, olduğu gibi bırak
+    } else {
+      // Protokol yok, https ekle
+      cleaned = 'https://' + cleaned
+    }
+  }
+  
+  return cleaned
+}
+
+/**
  * HTML entity'leri decode et (&#8217; -> ', &quot; -> ", vb.)
  */
 function decodeHtmlEntities(text) {
@@ -57,8 +101,8 @@ function decodeHtmlEntities(text) {
     .replace(/&#8222;/g, '"')      // Double low-9 quotation mark
     .replace(/&#39;/g, "'")        // Apostrophe
     .replace(/&#x27;/g, "'")       // Apostrophe (hex)
-    .replace(/&apos;/g, "'")       // Apostrophe (named)
-    .replace(/&quot;/g, '"')       // Quotation mark
+    .replace(/&apos;/g, "'")        // Apostrophe (named)
+    .replace(/&quot;/g, '"')        // Quotation mark
     .replace(/&amp;/g, '&')        // Ampersand
     .replace(/&lt;/g, '<')          // Less than
     .replace(/&gt;/g, '>')         // Greater than
@@ -87,6 +131,11 @@ function News() {
   const previousNewsIdsRef = useRef(new Set())
   const [nowTick, setNowTick] = useState(Date.now())
   const [filterType, setFilterType] = useState('all') // 'all', 'important', 'positive', 'negative', 'neutral'
+
+  // localStorage cache keys
+  const NEWS_CACHE_KEY = 'news_cache'
+  const NEWS_CACHE_TIME_KEY = 'news_cache_time'
+  const NEWS_CACHE_EXPIRY = 5 * 60 * 1000 // 5 dakika
 
   useEffect(() => {
     updatePageSEO('news', language)
@@ -201,9 +250,47 @@ function News() {
   }, [])
 
 
+  // localStorage'dan cache oku
+  const loadCachedNews = useCallback(() => {
+    try {
+      const cachedData = localStorage.getItem(NEWS_CACHE_KEY)
+      const cacheTime = localStorage.getItem(NEWS_CACHE_TIME_KEY)
+      
+      if (cachedData && cacheTime) {
+        const age = Date.now() - parseInt(cacheTime, 10)
+        if (age < NEWS_CACHE_EXPIRY) {
+          const parsed = JSON.parse(cachedData)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setNews(parsed)
+            setFilteredNews(parsed)
+            setLoading(false)
+            previousNewsIdsRef.current = new Set(parsed.map(n => n.id))
+            return true
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('News cache okuma hatası:', error)
+    }
+    return false
+  }, [])
+
+  // localStorage'a cache kaydet
+  const saveCachedNews = useCallback((newsData) => {
+    try {
+      localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify(newsData))
+      localStorage.setItem(NEWS_CACHE_TIME_KEY, Date.now().toString())
+    } catch (error) {
+      console.warn('News cache yazma hatası:', error)
+    }
+  }, [])
+
   useEffect(() => {   
     let retryCount = 0
     const maxRetries = 3
+    
+    // Önce cache'den yükle
+    const hasCache = loadCachedNews()
     
     const initializeNews = async () => {
       try {
@@ -267,6 +354,9 @@ function News() {
           setNews(finalNews)
           setFilteredNews(finalNews)
           setLoading(false)
+          
+          // Cache'e kaydet
+          saveCachedNews(finalNews)
           },
           100, // limitCount
           (error) => {
@@ -301,8 +391,13 @@ function News() {
       }
     }
     
-    // İlk yükleme
-    initializeNews()
+    // İlk yükleme (cache yoksa veya eskiyse)
+    if (!hasCache) {
+      initializeNews()
+    } else {
+      // Cache varsa arka planda güncelle
+      initializeNews()
+    }
 
     // Cleanup
     return () => {
@@ -310,7 +405,7 @@ function News() {
         unsubscribeRef.current()
       }
     }
-  }, [])
+  }, [loadCachedNews, saveCachedNews])
 
   // Haber sentiment analizi helper
   const getNewsSentiment = useCallback((item) => {
@@ -441,7 +536,7 @@ function News() {
     // 1-23 saat arası
     if (hours < 24) return `${hours} ${t('hoursAgo')}`
     // 24+ saat
-    return date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })
+    return parsedDate.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })
   }
 
   if (loading) {
@@ -577,10 +672,10 @@ function News() {
             const isImportant = isImportantNews(item)
             return (
             <div key={k} className="group relative animate-fade-in" style={{ animationDelay: `${index * 50}ms` }}>
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-2xl opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-300"></div>
-              <article className={`relative bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-lg shadow-sm border border-gray-200/50 dark:border-gray-700/50 overflow-hidden transform transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 hover:scale-[1.005] flex flex-col h-full min-h-[480px] sm:min-h-[400px] group/article ${isImportant ? 'important-news-card' : ''}`}>
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-2xl opacity-0 group-hover:opacity-30 blur-xl transition-opacity"></div>
+              <article className={`relative bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-lg shadow-sm border border-gray-200/50 dark:border-gray-700/50 overflow-hidden transform transition-all duration-300 hover:shadow-lg hover:-translate-y-1 hover:scale-[1.01] flex flex-col h-full min-h-[480px] sm:min-h-[400px] group/article ${isImportant ? 'important-news-card' : ''}`}>
                 {/* Image */}
-                <div className="relative bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 overflow-hidden group-hover/article:scale-105 transition-transform duration-300 aspect-[16/10]">
+                <div className="relative bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 overflow-hidden group-hover/article:scale-105 transition-transform duration-100 aspect-[16/10]">
                  {item.image?.includes('kriptotek.jpg') || item.image === '/kriptotek.jpg' ? (
                    <div className="w-full h-full flex items-center justify-center">
                      <img
@@ -618,11 +713,11 @@ function News() {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                 
                 {/* Badges - Top Right */}
-                <div className="absolute top-2 right-2 flex flex-col items-end gap-1.5 z-10">
+                <div className="absolute top-4 right-4 flex flex-col items-end gap-1.5 z-10">
                   {/* Importance Badge - Sadece gerçekten önemli haberler için */}
                   {isImportant && (
                     <div className="group/importance relative">
-                      <div className="px-2 py-1 bg-gradient-to-r from-red-500 to-orange-500 rounded-md shadow-md animate-pulse cursor-help">
+                      <div className="px-3 py-1.5 bg-gradient-to-r from-red-500 to-orange-500 rounded-md shadow-md animate-pulse cursor-help">
                         <div className="flex items-center space-x-0.5">
                           <span className="text-xs">🔥</span>
                           <span className="text-[10px] font-bold text-white">{t('important') || 'Önemli'}</span>
@@ -640,10 +735,10 @@ function News() {
                 </div>
                 
                 {/* Sentiment & Category - Bottom with Glass Effect */}
-                <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between z-10">
+                <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between z-10">
                   {/* Sentiment Badge - Her zaman göster */}
                   <div className="group/sentiment relative">
-                    <div className={`px-2 py-1 backdrop-blur-md rounded-md border shadow-md cursor-help ${
+                    <div className={`px-3 py-1.5 backdrop-blur-md rounded-md border shadow-md cursor-help ${
                       (() => {
                         // Sentiment analizi: title ve description'a göre
                         const text = (item.title + ' ' + (item.description || '')).toLowerCase()
@@ -718,7 +813,7 @@ function News() {
                   
                   {/* Category Badge - Her zaman göster (coin analizi ile) */}
                   <div className="group/category relative">
-                      <div className="px-2 py-1 bg-white/10 backdrop-blur-md rounded-md border border-white/20 shadow-md cursor-help">
+                      <div className="px-3 py-1.5 bg-white/10 backdrop-blur-md rounded-md border border-white/20 shadow-md cursor-help">
                         <span className="text-[10px] font-semibold text-white">
                           {(() => {
                             // Category analizi: title ve description'a göre
@@ -853,21 +948,26 @@ function News() {
                 </div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-between pt-1.5 sm:pt-2 border-t border-gray-100 dark:border-gray-700">
+                <div className="flex items-center justify-between pt-1.5 sm:pt-2 border-t border-gray-100 dark:border-gray-700 mt-auto">
                   <div className="flex items-center space-x-1.5 text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
                     <Clock className="w-3 h-3" />
                     <span>{formatTimeAgo(item.publishedAt, item.source)}</span>
                   </div>
 
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center space-x-1 text-[10px] sm:text-xs font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors"
-                  >
-                    <span>{t('readMore') || 'Devamı'}</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
+                  {(item.url || item.link) && (() => {
+                    const cleanUrlValue = cleanUrl(item.url || item.link)
+                    return cleanUrlValue ? (
+                      <a
+                        href={cleanUrlValue}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center space-x-1 text-[10px] sm:text-xs font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors hover:underline"
+                      >
+                        <span>{t('readMore') || 'Devamı'}</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    ) : null
+                  })()}
                 </div>
               </div>
               </article>

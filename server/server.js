@@ -20,7 +20,6 @@ const rootEnvPath = join(__dirname, '..', '.env')
 
 if (existsSync(rootEnvPath)) {
   dotenv.config({ path: rootEnvPath })
-  console.log(`✅ .env dosyası yüklendi: ${rootEnvPath}`)
 } else {
   // Heroku'da environment variables otomatik yüklenir
   dotenv.config() // Varsayılan olarak process.cwd()'den yükle
@@ -29,7 +28,6 @@ if (existsSync(rootEnvPath)) {
 
 // Debug: FRED_API_KEY kontrolü
 if (process.env.FRED_API_KEY) {
-  console.log(`✅ FRED_API_KEY yüklendi (uzunluk: ${process.env.FRED_API_KEY.length} karakter)`)
 } else {
   console.warn(`⚠️ FRED_API_KEY environment variable bulunamadı!`)
   console.warn(`   Kontrol edin: .env dosyasında FRED_API_KEY=... var mı?`)
@@ -50,7 +48,6 @@ try {
         credential: admin.credential.cert(serviceAccountJson)
       })
       firebaseAdmin = admin
-      console.log('✅ Firebase Admin SDK başlatıldı (JSON string)')
     } catch (parseError) {
       console.warn('⚠️ Firebase Service Account JSON parse hatası:', parseError.message)
     }
@@ -74,7 +71,6 @@ try {
         )
         if (firebaseAdminFile) {
           serviceAccountFile = join(__dirname, firebaseAdminFile)
-          console.log(`ℹ️ Firebase Service Account dosyası otomatik bulundu: ${firebaseAdminFile}`)
         }
       } catch (dirError) {
         // Klasör okunamadı, devam et
@@ -88,7 +84,6 @@ try {
           credential: admin.credential.cert(serviceAccountJson)
         })
         firebaseAdmin = admin
-        console.log('✅ Firebase Admin SDK başlatıldı (dosya yolu)')
       } catch (fileError) {
         console.warn('⚠️ Firebase Service Account dosyası okunamadı:', fileError.message)
       }
@@ -332,10 +327,8 @@ app.patch('/api/admin/users/:userId/premium', async (req, res) => {
     if (!existingUser) {
       if (firebaseAdmin) {
         try {
-          console.log(`🔍 [Premium Toggle] Firebase'den kullanıcı aranıyor: ${userId}`)
           const fbUser = await firebaseAdmin.auth().getUser(userId)
           if (fbUser) {
-            console.log(`✅ [Premium Toggle] Firebase kullanıcısı bulundu: ${fbUser.email || 'No email'}`)
             // Firebase'den gelen kullanıcı için MongoDB'de settings oluştur
             const defaultSettings = {
               userId: userId,
@@ -442,7 +435,6 @@ app.patch('/api/admin/users/:userId/admin', async (req, res) => {
           
           await collection.insertOne(defaultSettings)
           existingUser = defaultSettings
-          console.log(`✅ Firebase kullanıcısı MongoDB'ye eklendi: ${userId}`)
         }
       } catch (fbError) {
         console.warn(`⚠️ Firebase kullanıcısı bulunamadı: ${userId}`, fbError.message)
@@ -745,7 +737,6 @@ app.post('/api/currency/update', async (req, res) => {
     )
     
     const timeStr = new Date().toLocaleTimeString('tr-TR')
-    console.log(`✅ [${timeStr}] Currency rates verisi güncellendi`)
     
     return res.json({
       success: true,
@@ -1313,14 +1304,6 @@ app.get('/api/crypto/list', async (req, res) => {
       const cacheAge = now - (cacheDoc.updatedAt || cacheDoc.lastUpdate || 0)
       
       if (cacheAge < CACHE_DURATION) {
-        // Debug: İlk coin için total_supply ve max_supply kontrolü
-        if (cacheDoc.data.length > 0) {
-          const sampleCoin = cacheDoc.data[0];
-          console.log(`🔍 [GET /api/crypto/list] MongoDB'den örnek coin (${sampleCoin.id}): total_supply=${sampleCoin.total_supply}, max_supply=${sampleCoin.max_supply}`);
-          const coinsWithTotalSupply = cacheDoc.data.filter(c => c.total_supply !== null && c.total_supply !== undefined).length;
-          const coinsWithMaxSupply = cacheDoc.data.filter(c => c.max_supply !== null && c.max_supply !== undefined).length;
-          console.log(`📊 [GET /api/crypto/list] MongoDB'de: ${coinsWithTotalSupply} coin'de total_supply, ${coinsWithMaxSupply} coin'de max_supply var (toplam ${cacheDoc.data.length} coin)`);
-        }
         
         // Cache taze, MongoDB'den döndür
         return res.json({
@@ -1343,10 +1326,8 @@ app.get('/api/crypto/list', async (req, res) => {
         // Debug: Kaydedilmeden önce total_supply ve max_supply kontrolü
         if (result.data.length > 0) {
           const sampleCoin = result.data[0];
-          console.log(`🔍 [GET /api/crypto/list] API'den örnek coin (${sampleCoin.id}): total_supply=${sampleCoin.total_supply}, max_supply=${sampleCoin.max_supply}`);
           const coinsWithTotalSupply = result.data.filter(c => c.total_supply !== null && c.total_supply !== undefined).length;
           const coinsWithMaxSupply = result.data.filter(c => c.max_supply !== null && c.max_supply !== undefined).length;
-          console.log(`📊 [GET /api/crypto/list] API'den: ${coinsWithTotalSupply} coin'de total_supply, ${coinsWithMaxSupply} coin'de max_supply var (toplam ${result.data.length} coin)`);
         }
         
         // MongoDB'ye kaydet
@@ -1366,10 +1347,8 @@ app.get('/api/crypto/list', async (req, res) => {
         const savedDoc = await collection.findOne({ _id: 'crypto_list' });
         if (savedDoc && savedDoc.data && savedDoc.data.length > 0) {
           const sampleCoin = savedDoc.data[0];
-          console.log(`🔍 [GET /api/crypto/list] MongoDB'ye kaydedildikten sonra örnek coin (${sampleCoin.id}): total_supply=${sampleCoin.total_supply}, max_supply=${sampleCoin.max_supply}`);
         }
         
-        console.log(`✅ Crypto list MongoDB'ye kaydedildi: ${result.data.length} coin`)
         
         return res.json({
           success: true,
@@ -1659,24 +1638,77 @@ function calculateTrendingScores(coins) {
       const marketCap = coin.market_cap || 0
       const rank = coin.market_cap_rank || index + 1
       
-      // ============ TREND SCORE HESAPLAMALARI ============
+      // ============ TREND SCORE HESAPLAMALARI (500 coin için optimize edildi - çok sıkı) ============
+      // NOT: 100/100 = Maksimum performans (en iyi durum), nadiren ulaşılır
       
       // 1. Volume/Market Cap Ratio (Likidite Skoru) - %30 ağırlık
+      // Volume ratio: Hacim / Piyasa Değeri oranı
+      // Çok sıkı: 1.0+ = 100 (çok nadir, sadece aşırı pump coinlerde)
+      // 0.5 = 50, 0.3 = 30, 0.1 = 10
       const volumeRatio = marketCap > 0 ? volume / marketCap : 0
-      const liquidityScore = Math.min(100, Math.max(0, volumeRatio * 500)) // 0.2 = 100
+      const liquidityScore = Math.min(100, Math.max(0, volumeRatio * 100))
       
       // 2. Price Momentum (Fiyat Momentumu) - %25 ağırlık
-      const momentumScore = Math.min(100, Math.max(0, 50 + (priceChange * 2))) // -25% = 0, +25% = 100
+      // 24 saatlik fiyat değişimi
+      // Çok sıkı: -60% = 0, +60% = 100 (sadece aşırı hareketler 100 alır)
+      // +30% = 50, +15% = 25, 0% = 0
+      const momentumScore = Math.min(100, Math.max(0, 50 + (priceChange * (50 / 60))))
       
       // 3. Market Cap Position (Piyasa Değeri Pozisyonu) - %20 ağırlık
-      const marketCapScore = Math.max(0, 100 - (rank * 2)) // Rank 1 = 100, Rank 50 = 0
+      // Piyasa değeri sıralaması (500 coin için - logaritmik ölçek)
+      // Rank 1 = 100, Rank 10 = 90, Rank 50 = 70, Rank 100 = 50, Rank 200 = 30, Rank 500 = 0
+      let marketCapScore = 0
+      if (rank === 1) {
+        marketCapScore = 100
+      } else if (rank <= 10) {
+        // Rank 1-10: 100-90 (linear)
+        marketCapScore = 100 - ((rank - 1) * (10 / 9))
+      } else if (rank <= 50) {
+        // Rank 11-50: 90-70 (logaritmik)
+        const normalized = (Math.log10(rank) - Math.log10(10)) / (Math.log10(50) - Math.log10(10))
+        marketCapScore = 90 - (normalized * 20)
+      } else if (rank <= 100) {
+        // Rank 51-100: 70-50 (logaritmik)
+        const normalized = (Math.log10(rank) - Math.log10(50)) / (Math.log10(100) - Math.log10(50))
+        marketCapScore = 70 - (normalized * 20)
+      } else if (rank <= 200) {
+        // Rank 101-200: 50-30 (logaritmik)
+        const normalized = (Math.log10(rank) - Math.log10(100)) / (Math.log10(200) - Math.log10(100))
+        marketCapScore = 50 - (normalized * 20)
+      } else if (rank <= 300) {
+        // Rank 201-300: 30-15 (logaritmik)
+        const normalized = (Math.log10(rank) - Math.log10(200)) / (Math.log10(300) - Math.log10(200))
+        marketCapScore = 30 - (normalized * 15)
+      } else if (rank <= 400) {
+        // Rank 301-400: 15-5 (logaritmik)
+        const normalized = (Math.log10(rank) - Math.log10(300)) / (Math.log10(400) - Math.log10(300))
+        marketCapScore = 15 - (normalized * 10)
+      } else {
+        // Rank 401-500: 5-0 (linear)
+        marketCapScore = Math.max(0, 5 - ((rank - 400) * (5 / 100)))
+      }
+      marketCapScore = Math.round(marketCapScore)
       
       // 4. Volume Trend (Hacim Trendi) - %15 ağırlık
-      const avgVolume = 50000000 // Ortalama hacim benchmark (50M USD)
-      const volumeTrendScore = Math.min(100, (volume / avgVolume) * 50)
+      // İşlem hacmi aktivitesi (logaritmik ölçek, çok sıkı)
+      // 1M = 0, 50M = 25, 500M = 50, 5B = 75, 50B = 100 (çok nadir)
+      const minVolume = 1000000 // 1M USD
+      const maxVolume = 50000000000 // 50B USD (çok nadir, sadece top coinler)
+      let volumeTrendScore = 0
+      if (volume > 0) {
+        const logVolume = Math.log10(volume + 1)
+        const logMin = Math.log10(minVolume + 1)
+        const logMax = Math.log10(maxVolume + 1)
+        // Çok sıkı: logaritmik ölçeği daha da sıkıştır
+        const normalized = (logVolume - logMin) / (logMax - logMin)
+        volumeTrendScore = Math.min(100, Math.max(0, Math.pow(normalized, 0.7) * 100))
+      }
       
       // 5. Volatility (Volatilite/Oynaklık) - %10 ağırlık
-      const volatilityScore = Math.min(100, Math.abs(priceChange) * 5)
+      // Fiyat volatilitesi (mutlak değişim)
+      // Çok sıkı: %60 değişim = 100 skor (sadece aşırı volatilite 100 alır)
+      // %30 = 50, %15 = 25, %0 = 0
+      const volatilityScore = Math.min(100, Math.abs(priceChange) * (100 / 60))
       
       // TOPLAM TREND SKORU (Ağırlıklı Ortalama)
       const trendScore = Math.round(
@@ -1754,27 +1786,30 @@ function calculateTrendingScores(coins) {
       const aiPrediction = momentumFactor + reversionFactor + liquidityImpact + stabilityFactor + volatilityFactor + marketCapFactor
       
       // ============ POZİSYON BELİRLEME ============
+      // Sınırlanmış tahmin'i kullan
+      const finalPrediction = clampedPrediction
+      
       let predictionDirection = 'neutral'
       let predictionEmoji = '➖'
       let predictionColor = 'gray'
       let positionType = 'neutral'
       
-      if (aiPrediction > 3) {
+      if (finalPrediction > 5) {
         predictionDirection = 'strongBullish'
         predictionEmoji = '🚀'
         predictionColor = 'green'
         positionType = 'long'
-      } else if (aiPrediction > 1) {
+      } else if (finalPrediction > 2) {
         predictionDirection = 'bullish'
         predictionEmoji = '📈'
         predictionColor = 'lime'
         positionType = 'long'
-      } else if (aiPrediction < -3) {
+      } else if (finalPrediction < -5) {
         predictionDirection = 'strongBearish'
         predictionEmoji = '⚠️'
         predictionColor = 'red'
         positionType = 'short'
-      } else if (aiPrediction < -1) {
+      } else if (finalPrediction < -2) {
         predictionDirection = 'bearish'
         predictionEmoji = '📉'
         predictionColor = 'orange'
@@ -1809,8 +1844,11 @@ function calculateTrendingScores(coins) {
       }
       
       // ============ TAHMİN EDİLEN FİYAT ============
-      const predictedPrice = coin.current_price * (1 + (aiPrediction / 100))
-      const predictionBasePrice = coin.current_price
+      // prediction_base_price: Tahmin yapılırkenki gerçek fiyat (güncel fiyat)
+      // Bu fiyat, tahmin yapıldığı anda MongoDB'deki güncel fiyat olmalı
+      const predictionBasePrice = coin.current_price || coin.price || 0
+      // Sınırlanmış tahmin'i kullan
+      const predictedPrice = predictionBasePrice * (1 + (clampedPrediction / 100))
       
       // ============ CONFIDENCE SCORE ============
       const confidenceScore = Math.min(100, Math.abs(aiPrediction) * 10)
@@ -1861,8 +1899,8 @@ function calculateTrendingScores(coins) {
         volume_ratio: parseFloat(volumeRatio.toFixed(4)),
         volume_ratio_percentage: parseFloat((volumeRatio * 100).toFixed(2)),
         
-        // AI Prediction
-        ai_prediction: parseFloat(aiPrediction.toFixed(2)),
+        // AI Prediction (sınırlanmış)
+        ai_prediction: parseFloat(clampedPrediction.toFixed(2)),
         ai_direction: predictionDirection,
         ai_emoji: predictionEmoji,
         ai_color: predictionColor,
@@ -1896,6 +1934,9 @@ function calculateTrendingScores(coins) {
     })
     .slice(0, 50) // En iyi 50 coin (referans kodda 45 ama kullanıcı 50 istedi)
 }
+
+// calculateTrendingScores'u export et (apiScheduler.js için)
+export { calculateTrendingScores }
 
 // ========== NEWS ENDPOINTS ==========
 // GET /api/news - MongoDB'den haberleri çek
@@ -2528,13 +2569,17 @@ async function startServer() {
   try {
     const { startChangeStreams } = await import('./services/changeStreams.js')
     startChangeStreams(db, wss)
-    console.log('✅ Change Streams başlatıldı')
   } catch (error) {
     console.warn('⚠️ Change Streams başlatılamadı:', error.message)
   }
   
   // API Scheduler'ı import et
-  const { start } = await import('./services/apiScheduler.js')
+  const { start, setDbInstance } = await import('./services/apiScheduler.js')
+  
+  // MongoDB db instance'ını scheduler'a geç
+  if (db) {
+    setDbInstance(db)
+  }
   
   httpServer.listen(PORT, () => {
     console.log(`✅ Backend API çalışıyor: http://localhost:${PORT}`)

@@ -307,9 +307,9 @@ function SupplyTracking() {
       </div>
 
       {/* Data Table - Modern Card Grid */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
-        <div className="relative w-full sm:max-w-xs">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 ">
+        <div className="relative w-full sm:max-w-xs pl-6 sm:pl-6">
+          <SearchIcon className="absolute left-9 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 " />
           <input
             type="text"
             value={searchTerm}
@@ -319,7 +319,7 @@ function SupplyTracking() {
           />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:pr-12">
           <label htmlFor="supply-sort" className="text-sm font-medium text-gray-600 dark:text-gray-300">
             {t('supplySortLabel')}:
           </label>
@@ -352,8 +352,8 @@ function SupplyTracking() {
       ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 max-h-[720px] overflow-y-auto overflow-x-hidden px-4 sm:px-6 pt-8 sm:pt-10 pb-6 crypto-list-scrollbar">
         {filteredSupplyData.map((coin, index) => (
-          <div key={coin.id} className="group/card relative animate-fade-in" style={{ animationDelay: `${Math.min(index * 20, 500)}ms` }}>
-            <div className="absolute inset-0 bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl opacity-0 group-hover/card:opacity-100 blur-xl transition-opacity duration-500"></div>
+          <div key={coin.id} className="group/card relative animate-fade-in" style={{ animationDelay: `${Math.min(index * 10, 250)}ms` }}>
+            <div className="absolute inset-0 bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl opacity-0 group-hover/card:opacity-50 blur-lg transition-opacity duration-500"></div>
             <div className="relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700 rounded-2xl p-4 sm:p-5 shadow-lg transform transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.02]">
               {/* Header: Icon, Name, Rank */}
               <div className="flex items-center justify-between mb-4">

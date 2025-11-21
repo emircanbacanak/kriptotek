@@ -16,6 +16,16 @@ const MONGO_API_URL = getMongoApiUrl()
 let schedulerInterval = null
 let isRunning = false
 
+// MongoDB db instance (server.js'den set edilecek)
+let dbInstance = null
+
+/**
+ * MongoDB db instance'ını set et
+ */
+function setDbInstance(db) {
+  dbInstance = db
+}
+
 function getNextUpdateTime(intervalMinutes = 5) {
   const now = new Date()
   const currentMinutes = now.getMinutes()
@@ -380,46 +390,94 @@ async function updateNews() {
 
 /**
  * Trending verilerini güncelle
- * Crypto listesi güncellendiğinde otomatik çağrılır
+ * MongoDB'den direkt crypto listesini çeker (ayrı API isteği yapmaz)
  */
 async function updateTrending() {
   try {
-    // Önce MongoDB'den crypto listesini çek (doğru endpoint)
-    const cryptoResponse = await fetch(`${MONGO_API_URL}/api/crypto/list`, {
-      headers: { 'Accept': 'application/json' }
-    })
-    
-    if (!cryptoResponse.ok) {
+    if (!dbInstance) {
       const timeStr = new Date().toLocaleTimeString('tr-TR')
-      console.error(`❌ [${timeStr}] Trending güncelleme hatası: Crypto listesi çekilemedi (HTTP ${cryptoResponse.status})`)
+      console.error(`❌ [${timeStr}] Trending güncelleme hatası: MongoDB bağlantısı yok`)
+      return false
+    }
+
+    // MongoDB'den direkt crypto listesini çek (home ekranında zaten çekilip kaydedilmiş)
+    const collection = dbInstance.collection('api_cache')
+    const cryptoDoc = await collection.findOne({ _id: 'crypto_list' })
+    
+    if (!cryptoDoc || !cryptoDoc.data || !Array.isArray(cryptoDoc.data) || cryptoDoc.data.length === 0) {
+      const timeStr = new Date().toLocaleTimeString('tr-TR')
+      console.error(`❌ [${timeStr}] Trending güncelleme hatası: Crypto listesi MongoDB'de bulunamadı`)
       return false
     }
     
-    const cryptoResult = await cryptoResponse.json()
-    if (!cryptoResult.success || !cryptoResult.data || !Array.isArray(cryptoResult.data) || cryptoResult.data.length === 0) {
+    const coins = cryptoDoc.data
+    
+    // calculateTrendingScores fonksiyonunu import et (server.js'den dinamik import)
+    const serverModule = await import('../server.js')
+    const calculateTrendingScores = serverModule.calculateTrendingScores
+    
+    if (!calculateTrendingScores) {
       const timeStr = new Date().toLocaleTimeString('tr-TR')
-      console.error(`❌ [${timeStr}] Trending güncelleme hatası: Crypto listesi boş`)
+      console.error(`❌ [${timeStr}] Trending güncelleme hatası: calculateTrendingScores fonksiyonu bulunamadı`)
       return false
     }
     
-    // Trending'i güncelle (crypto listesi ile)
-    const trendingResponse = await fetch(`${MONGO_API_URL}/api/trending/update`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ coins: cryptoResult.data })
+    // Trending'i güncelle (crypto listesi ile) - SADECE AI TAHMİNLEME YAP
+    const trendingCoins = calculateTrendingScores(coins)
+    
+    // Mevcut trending verilerini al (fiyat verilerini korumak için)
+    const trendingCollection = dbInstance.collection('trending_data')
+    const existingTrending = await trendingCollection.findOne({ _id: 'trending_coins' })
+    
+    // Yeni AI tahminleme verilerini mevcut verilerle birleştir
+    // ÖNEMLİ: prediction_base_price her zaman güncel fiyattan alınmalı (tahmin yapılırkenki fiyat)
+    const mergedCoins = trendingCoins.map(newCoin => {
+      if (existingTrending?.coins) {
+        const existingCoin = existingTrending.coins.find(c => c.id === newCoin.id)
+        if (existingCoin) {
+          // Mevcut coin'in fiyat verilerini koru, sadece AI tahminleme verilerini güncelle
+          // prediction_base_price: Tahmin yapılırkenki güncel fiyat (her zaman güncellenmeli)
+          return {
+            ...existingCoin,
+            // Fiyat verilerini güncelle (güncel fiyat)
+            current_price: newCoin.current_price || existingCoin.current_price,
+            price: newCoin.price || existingCoin.price,
+            // AI tahminleme verilerini güncelle
+            ai_prediction: newCoin.ai_prediction,
+            ai_direction: newCoin.ai_direction,
+            ai_emoji: newCoin.ai_emoji,
+            ai_color: newCoin.ai_color,
+            position_type: newCoin.position_type,
+            predicted_price: newCoin.predicted_price,
+            prediction_base_price: newCoin.prediction_base_price, // Güncel fiyattan alınmalı
+            ai_confidence: newCoin.ai_confidence,
+            // Trend skorlarını da güncelle
+            trend_score: newCoin.trend_score,
+            trend_level: newCoin.trend_level,
+            trend_emoji: newCoin.trend_emoji,
+            trend_color: newCoin.trend_color
+          }
+        }
+      }
+      return newCoin
     })
     
-    if (trendingResponse.ok) {
-      const result = await trendingResponse.json()
+    // MongoDB'ye kaydet
+    await trendingCollection.updateOne(
+      { _id: 'trending_coins' },
+      { 
+        $set: {
+          coins: mergedCoins,
+          updatedAt: Date.now(),
+          lastUpdate: Date.now()
+        }
+      },
+      { upsert: true }
+    )
+    
       const timeStr = new Date().toLocaleTimeString('tr-TR')
-      console.log(`✅ [${timeStr}] Trending verisi güncellendi (${result.data?.coins?.length || 0} coin)`)
+    console.log(`✅ [${timeStr}] Trending AI tahminleme güncellendi (${mergedCoins.length} coin) - MongoDB'den direkt çekildi`)
       return true
-    } else {
-      const error = await trendingResponse.text()
-      const timeStr = new Date().toLocaleTimeString('tr-TR')
-      console.error(`❌ [${timeStr}] Trending güncelleme hatası: ${error}`)
-      return false
-    }
   } catch (error) {
     const timeStr = new Date().toLocaleTimeString('tr-TR')
     console.error(`❌ [${timeStr}] Trending güncelleme hatası:`, error.message)
@@ -561,34 +619,31 @@ function stop() {
 }
 
 /**
- * Supply Tracking verilerini güncelle (5 dakikada bir)
+ * Supply Tracking verilerini güncelle (30 dakikada bir)
+ * MongoDB'den direkt çeker (ayrı API isteği yapmaz)
  */
 async function updateSupplyTracking() {
   try {
+    if (!dbInstance) {
+      const timeStr = new Date().toLocaleTimeString('tr-TR')
+      console.error(`❌ [${timeStr}] Supply tracking güncelleme hatası: MongoDB bağlantısı yok`)
+      return false
+    }
+
     // Supply tracking handler'ı import et
     const { updateSupplyTracking: updateSupplyTrackingHandler } = await import('./apiHandlers/supplyTracking.js')
     
-    // db instance'ını almak için server.js'den import et
-    // Not: Bu fonksiyon sadece updateAll() içinde çağrılır, db instance'ı parametre olarak geçilir
-    // Şimdilik HTTP isteği yapıyoruz, daha sonra db instance'ı geçilebilir
-    const response = await fetch(`${MONGO_API_URL}/api/supply-tracking/update`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    })
+    // MongoDB'den direkt çek (ayrı API isteği yapmadan)
+    const success = await updateSupplyTrackingHandler(dbInstance)
     
-    if (response.ok) {
-      const result = await response.json()
       const timeStr = new Date().toLocaleTimeString('tr-TR')
-      if (result.success) {
-        console.log(`✅ [${timeStr}] Supply tracking verisi güncellendi`)
+    if (success) {
+      console.log(`✅ [${timeStr}] Supply tracking verisi güncellendi - MongoDB'den direkt çekildi`)
         return true
-      }
+    } else {
+      console.error(`❌ [${timeStr}] Supply tracking güncelleme hatası`)
+      return false
     }
-    
-    const error = await response.text()
-    const timeStr = new Date().toLocaleTimeString('tr-TR')
-    console.error(`❌ [${timeStr}] Supply tracking güncelleme hatası: ${error}`)
-    return false
   } catch (error) {
     const timeStr = new Date().toLocaleTimeString('tr-TR')
     console.error(`❌ [${timeStr}] Supply tracking güncelleme hatası:`, error.message)
@@ -596,5 +651,5 @@ async function updateSupplyTracking() {
   }
 }
 
-export { start, stop, updateAll, updateSupplyTracking }
+export { start, stop, updateAll, updateSupplyTracking, setDbInstance }
 

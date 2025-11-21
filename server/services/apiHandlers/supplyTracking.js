@@ -257,7 +257,6 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
     const newest7dTime = newest7d.timestamp instanceof Date ? newest7d.timestamp.getTime() : newest7d.timestamp
     const diff7d = newest7dTime - oldest7dTime
     const diff7dDays = diff7d / (24 * 60 * 60 * 1000)
-    console.log(`  7d: oldest=${new Date(oldest7dTime).toLocaleString('tr-TR')} (${oldest7d._id}), newest=${new Date(newest7dTime).toLocaleString('tr-TR')} (${newest7d._id}), fark=${diff7dDays.toFixed(2)} gün`)
   } else {
     console.warn(`  ⚠️ 7d: oldest veya newest bulunamadı (oldest7d=${!!oldest7d}, newest7d=${!!newest7d})`)
   }
@@ -267,7 +266,6 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
     const newest1mTime = newest1m.timestamp instanceof Date ? newest1m.timestamp.getTime() : newest1m.timestamp
     const diff1m = newest1mTime - oldest1mTime
     const diff1mDays = diff1m / (24 * 60 * 60 * 1000)
-    console.log(`  1m: oldest=${new Date(oldest1mTime).toLocaleString('tr-TR')} (${oldest1m._id}), newest=${new Date(newest1mTime).toLocaleString('tr-TR')} (${newest1m._id}), fark=${diff1mDays.toFixed(2)} gün`)
   } else {
     console.warn(`  ⚠️ 1m: oldest veya newest bulunamadı (oldest1m=${!!oldest1m}, newest1m=${!!newest1m})`)
   }
