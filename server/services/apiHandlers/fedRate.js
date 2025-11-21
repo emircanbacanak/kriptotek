@@ -106,11 +106,14 @@ export async function fetchFedRateData() {
     console.log('📰 RSS feed\'den veri çekiliyor...')
     const rssUrl = 'https://www.federalreserve.gov/feeds/press_monetary.xml'
     
-    // Proxy URL'leri dene
+    // Daha fazla proxy URL'leri dene (daha güvenilir servisler)
     const proxyUrls = [
       `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`,
       `https://api.allorigins.win/raw?url=${encodeURIComponent(rssUrl)}`,
-      rssUrl // Direkt dene
+      `https://corsproxy.io/?${encodeURIComponent(rssUrl)}`,
+      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(rssUrl)}`,
+      `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(rssUrl)}`,
+      rssUrl // Direkt dene (son çare)
     ]
     
     let rssText = null
@@ -118,38 +121,59 @@ export async function fetchFedRateData() {
     
     for (const proxyUrl of proxyUrls) {
       try {
-        rssResponse = await fetch(proxyUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-          },
-          signal: AbortSignal.timeout(10000) // 10 saniye timeout
-        })
+        // Timeout'u artır ve daha fazla retry yap
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 saniye timeout
         
-        if (rssResponse.ok) {
-          if (proxyUrl.includes('rss2json.com')) {
-            // JSON format
-            const json = await rssResponse.json()
-            if (json.items && json.items.length > 0) {
-              const impl = json.items.find(item => 
-                (item.title || '').toLowerCase().includes('implementation note')
-              ) || json.items[0]
-              
-              if (impl.pubDate) {
-                const date = new Date(impl.pubDate)
-                if (!isNaN(date.getTime())) {
-                  lastAnnounceDate = date.toISOString()
-                  break
+        try {
+          rssResponse = await fetch(proxyUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept': 'application/xml, application/rss+xml, text/xml, */*',
+              'Accept-Language': 'en-US,en;q=0.9'
+            },
+            signal: controller.signal
+          })
+          
+          clearTimeout(timeoutId)
+          
+          if (rssResponse.ok) {
+            if (proxyUrl.includes('rss2json.com')) {
+              // JSON format
+              const json = await rssResponse.json()
+              if (json.items && json.items.length > 0) {
+                const impl = json.items.find(item => 
+                  (item.title || '').toLowerCase().includes('implementation note')
+                ) || json.items[0]
+                
+                if (impl.pubDate) {
+                  const date = new Date(impl.pubDate)
+                  if (!isNaN(date.getTime())) {
+                    lastAnnounceDate = date.toISOString()
+                    console.log(`✅ RSS feed başarıyla çekildi (${proxyUrl.includes('rss2json') ? 'rss2json' : 'proxy'})`)
+                    break
+                  }
                 }
               }
+            } else {
+              // XML format
+              rssText = await rssResponse.text()
+              if (rssText && rssText.length > 0) {
+                console.log(`✅ RSS feed başarıyla çekildi (${proxyUrl === rssUrl ? 'direkt' : 'proxy'})`)
+                break
+              }
             }
-          } else {
-            // XML format
-            rssText = await rssResponse.text()
-            break
           }
+        } catch (fetchError) {
+          clearTimeout(timeoutId)
+          throw fetchError
         }
       } catch (proxyError) {
-        console.warn(`⚠️ Proxy hatası (${proxyUrl}):`, proxyError.message)
+        // Sessizce devam et, bir sonraki proxy'yi dene
+        if (proxyUrl === rssUrl) {
+          // Son proxy (direkt) başarısız olduysa uyar
+          console.warn(`⚠️ RSS feed hatası (${proxyUrl}):`, proxyError.message)
+        }
         continue
       }
     }
@@ -174,11 +198,30 @@ export async function fetchFedRateData() {
       
       if (latestDate) {
         lastAnnounceDate = latestDate.toISOString()
+        console.log(`✅ RSS feed'den Implementation Note tarihi bulundu: ${latestDate.toISOString()}`)
       } else {
-        console.warn('⚠️ RSS (XML): Implementation Note bulunamadı')
+        // Implementation Note bulunamadıysa, en son haberin tarihini al
+        const allItemsRegex = /<item>[\s\S]*?<pubDate>([\s\S]*?)<\/pubDate>[\s\S]*?<\/item>/gi
+        let allMatches = []
+        let allMatch
+        while ((allMatch = allItemsRegex.exec(rssText))) {
+          const pubDate = allMatch[1] || ''
+          const date = new Date(pubDate)
+          if (!isNaN(date.getTime())) {
+            allMatches.push(date)
+          }
+        }
+        if (allMatches.length > 0) {
+          allMatches.sort((a, b) => b - a) // En yeni önce
+          lastAnnounceDate = allMatches[0].toISOString()
+          console.log(`✅ RSS feed'den en son haber tarihi alındı: ${allMatches[0].toISOString()}`)
+        } else {
+          console.warn('⚠️ RSS (XML): Hiçbir tarih bulunamadı')
+        }
       }
     } else {
-      console.warn('⚠️ RSS: Hiçbir proxy çalışmadı, RSS verisi alınamadı')
+      // RSS text yoksa, sadece uyar (FRED API'den gelen veriler yeterli olabilir)
+      console.warn('⚠️ RSS: Hiçbir proxy çalışmadı, RSS verisi alınamadı (FRED API verileri kullanılacak)')
     }
   } catch (rssError) {
     console.warn('⚠️ RSS feed hatası:', rssError.message)
@@ -201,19 +244,35 @@ export async function fetchFedRateData() {
     
     for (const proxyUrl of proxyUrls) {
       try {
-        const calendarResponse = await fetch(proxyUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-          },
-          signal: AbortSignal.timeout(10000) // 10 saniye timeout
-        })
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 saniye timeout
         
-        if (calendarResponse.ok) {
-          html = await calendarResponse.text()
-          break
+        try {
+          const calendarResponse = await fetch(proxyUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              'Accept-Language': 'en-US,en;q=0.9'
+            },
+            signal: controller.signal
+          })
+          
+          clearTimeout(timeoutId)
+        
+          if (calendarResponse.ok) {
+            html = await calendarResponse.text()
+            break
+          }
+        } catch (fetchError) {
+          clearTimeout(timeoutId)
+          throw fetchError
         }
       } catch (proxyError) {
-        console.warn(`⚠️ Proxy hatası (${proxyUrl}):`, proxyError.message)
+        // Sessizce devam et, bir sonraki proxy'yi dene
+        if (proxyUrl === calendarUrl) {
+          // Son proxy (direkt) başarısız olduysa uyar
+          console.warn(`⚠️ FOMC Calendar hatası (${proxyUrl}):`, proxyError.message)
+        }
         continue
       }
     }

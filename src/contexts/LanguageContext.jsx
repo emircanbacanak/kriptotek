@@ -61,11 +61,11 @@ const translations = {
     profit: 'Kâr',
     // Header & Footer
     professionalCrypto: 'Profesyonel Kripto Takip',
-    platformTitle: 'Kriptotek',
-    platformTagline: 'Kripto varlıklarınızı profesyonelce takip edin',
-    disclaimer: '⚠️ Yatırım tavsiyesi değildir. Kripto para yatırımları risklidir.',
+    platformTitle: 'Gerçek Zamanlı Kripto Analiz Platformu',
+    platformTagline: 'Profesyonel kripto analizi için ihtiyacınız olan her şey, tek platformda.',
+    disclaimer: 'Kriptotek, eğitim ve bilgilendirme platformudur.',
     allRightsReserved: 'Tüm hakları saklıdır.',
-    madeWith: 'ile yapıldı',
+    madeWith: 'tarafından yapıldı',
     // Navigation
     home: 'Ana Sayfa',
     marketOverview: 'Piyasa Özeti',
@@ -919,11 +919,16 @@ const translations = {
 }
 
 export const LanguageProvider = ({ children }) => {
-  const [language, setLanguage] = useState(() => {
+  // localStorage'dan dil yükle - ANINDA (F5 sonrası hemen uygula)
+  const getInitialLanguage = () => {
+    if (typeof window === 'undefined') return 'tr'
     const saved = localStorage.getItem('language')
     return saved || 'tr'
-  })
+  }
 
+  const [language, setLanguage] = useState(getInitialLanguage)
+
+  // Dil değişikliklerini localStorage'a kaydet - ANINDA
   useEffect(() => {
     localStorage.setItem('language', language)
   }, [language])
@@ -933,13 +938,17 @@ export const LanguageProvider = ({ children }) => {
     const handleLanguageChange = (event) => {
       const newLanguage = event.detail
       setLanguage(newLanguage)
+      localStorage.setItem('language', newLanguage) // localStorage'a da kaydet
     }
     
     window.addEventListener('languageChanged', handleLanguageChange)
     return () => window.removeEventListener('languageChanged', handleLanguageChange)
   }, [])
 
-  const changeLanguage = (lang) => setLanguage(lang)
+  const changeLanguage = (lang) => {
+    setLanguage(lang)
+    localStorage.setItem('language', lang) // Anında localStorage'a kaydet
+  }
 
   const t = (key, params = {}) => {
     const dict = translations[language] || translations.tr

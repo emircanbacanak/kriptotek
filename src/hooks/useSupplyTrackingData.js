@@ -20,6 +20,12 @@ const useSupplyTrackingData = () => {
     }
     setIsUpdating(currentData.isUpdating || false)
 
+    // Veri yoksa bile loading'i kapat (sayfa açılsın)
+    // Timeout durumunda veya hata durumunda sayfa açık kalmalı
+    const timeoutId = setTimeout(() => {
+      setLoading(false)
+    }, 3000) // 3 saniye sonra loading'i kapat
+
     // Abone ol ve güncellemeleri dinle
     const unsubscribe = globalDataManager.subscribe((data) => {
       setSupplyTrackingData(data.supplyTrackingData)
@@ -27,10 +33,14 @@ const useSupplyTrackingData = () => {
       setIsUpdating(data.isUpdating || false)
       if (data.supplyTrackingData) {
         setLoading(false)
+      } else {
+        // Veri yoksa bile loading'i kapat (timeout durumunda)
+        setLoading(false)
       }
     })
 
     return () => {
+      clearTimeout(timeoutId)
       unsubscribe()
     }
   }, [])

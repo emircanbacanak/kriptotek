@@ -120,7 +120,7 @@ const Header = ({ onMenuClick, className }) => {
                 <Menu className="w-5 h-5 text-gray-600 dark:text-gray-400" />
               </button>
               <Link to="/" className="flex items-center space-x-2 sm:space-x-3">
-                <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gradient-to-br from-primary-500 to-primary-700 rounded-md flex items-center justify-center flex-shrink-0">
+                <div className="w-6 h-6 sm:w-8 sm:h-8 bg-primary-500 rounded-md flex items-center justify-center flex-shrink-0">
                   <img src="/kriptotek.jpg" alt="Kriptotek" className="w-7 h-7 rounded object-cover" />
                 </div>
                 <div className="flex flex-col">
@@ -135,18 +135,18 @@ const Header = ({ onMenuClick, className }) => {
             </div>
 
             <div className="flex items-center space-x-1 sm:space-x-3">
-              <div className="hidden lg:flex items-center space-x-2 border-r border-gray-300 dark:border-gray-600 pr-3">
-                <a href="https://youtube.com/@kriptotek" target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors group" title="YouTube">
-                  <Youtube className="w-4 h-4 text-gray-600 dark:text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-500" />
+              <div className="hidden lg:flex items-center space-x-2 border-r border-gray-200 dark:border-gray-700 pr-3">
+                <a href="https://youtube.com/@kriptotek" target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="YouTube">
+                  <Youtube className="w-4 h-4 text-gray-600 dark:text-gray-400" />
                 </a>
-                <a href="https://t.me/oguz8907" target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors group" title="Telegram">
-                  <Send className="w-4 h-4 text-gray-600 dark:text-gray-400 group-hover:text-blue-500 dark:group-hover:text-blue-400" />
+                <a href="https://t.me/oguz8907" target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Telegram">
+                  <Send className="w-4 h-4 text-gray-600 dark:text-gray-400" />
                 </a>
-                <a href="https://x.com/kriptotek8907" target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-lg hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-colors group" title="X (Twitter)">
-                  <Twitter className="w-4 h-4 text-gray-600 dark:text-gray-400 group-hover:text-sky-500 dark:group-hover:text-sky-400" />
+                <a href="https://x.com/kriptotek8907" target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="X (Twitter)">
+                  <Twitter className="w-4 h-4 text-gray-600 dark:text-gray-400" />
                 </a>
-                <a href="https://instagram.com/kriptotek" target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-lg hover:bg-pink-50 dark:hover:bg-pink-900/20 transition-colors group" title="Instagram">
-                  <Instagram className="w-4 h-4 text-gray-600 dark:text-gray-400 group-hover:text-pink-600 dark:group-hover:text-pink-500" />
+                <a href="https://instagram.com/kriptotek" target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Instagram">
+                  <Instagram className="w-4 h-4 text-gray-600 dark:text-gray-400" />
                 </a>
               </div>
 
@@ -200,8 +200,8 @@ const Header = ({ onMenuClick, className }) => {
                       )}
                     </div>
                     {isPremium && (
-                      <div className="absolute -bottom-1 -right-1 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-full p-0.5 shadow-md border-2 border-white dark:border-gray-800 md:hidden">
-                        <Crown className="w-2.5 h-2.5 text-yellow-900" />
+                      <div className="absolute -bottom-1 -right-1 bg-primary-500 rounded-full p-0.5 shadow-md border-2 border-white dark:border-gray-800 md:hidden">
+                        <Crown className="w-2.5 h-2.5 text-white" />
                       </div>
                     )}
                   </div>
@@ -209,9 +209,9 @@ const Header = ({ onMenuClick, className }) => {
                     <div className="flex items-center space-x-2">
                       <p className="text-sm font-medium text-gray-900 dark:text-white truncate max-w-[120px]">{user?.displayName || user?.email?.split('@')[0] || t('user')}</p>
                       {isPremium && (
-                        <div className="flex items-center space-x-1 px-2 py-1 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-full shadow-sm border border-yellow-500/50">
-                          <Crown className="w-3 h-3 text-yellow-900" />
-                          <span className="text-[10px] font-bold text-yellow-900 leading-none">
+                        <div className="flex items-center space-x-1 px-2 py-1 bg-primary-500 rounded-full shadow-sm">
+                          <Crown className="w-3 h-3 text-white" />
+                          <span className="text-[10px] font-bold text-white leading-none">
                             {t('premiumUser')}
                           </span>
                         </div>
@@ -227,12 +227,12 @@ const Header = ({ onMenuClick, className }) => {
                       <div className="flex items-center space-x-2">
                         <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{user?.displayName || user?.email?.split('@')[0] || t('user')}</p>
                         {isPremium && (
-                          <div className="flex items-center space-x-1 px-2 py-1 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-full shadow-sm border border-yellow-500/50">
-                            <Crown className="w-3 h-3 text-yellow-900" />
-                            <span className="text-[10px] font-bold text-yellow-900 leading-none">
-                              {t('premiumUser')}
-                            </span>
-                          </div>
+                        <div className="flex items-center space-x-1 px-2 py-1 bg-primary-500 rounded-full shadow-sm">
+                          <Crown className="w-3 h-3 text-white" />
+                          <span className="text-[10px] font-bold text-white leading-none">
+                            {t('premiumUser')}
+                          </span>
+                        </div>
                         )}
                       </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">{user?.email}</p>

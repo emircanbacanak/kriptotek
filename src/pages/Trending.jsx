@@ -360,12 +360,13 @@ const Trending = () => {
           <div className={`w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 bg-gradient-to-br ${headerIconGradient} rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg transform transition-all duration-300 hover:scale-110`}>
             <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 lg:w-7 lg:h-7 text-white" />
           </div>
-          <div>
+          <div className="flex-1">
             <h1 className={`text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r ${headerTextGradient}`}>
               {t('trendingTitle')}
             </h1>
-            <p className="text-[10px] sm:text-xs md:text-sm lg:text-base text-gray-600 dark:text-gray-300 mt-0.5 sm:mt-1 md:mt-2 hidden sm:block">
-              {t('trendingDescription')}
+            {/* Sistem güncelleme bilgisi - başlığın altında aynı hizada */}
+            <p className="text-xs sm:text-sm font-semibold text-amber-600 dark:text-amber-400 mt-1 animate-pulse">
+              Sistem 30 dk da bir güncellenmektedir ⚡
             </p>
           </div>
         </div>

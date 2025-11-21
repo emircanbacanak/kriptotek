@@ -109,6 +109,10 @@ let fearGreedIsRunning = false
 let newsSchedulerInterval = null
 let newsIsRunning = false
 
+// Trending model tahminleri için ayrı scheduler (30 dakikada bir)
+let trendingModelSchedulerInterval = null
+let trendingModelIsRunning = false
+
 /**
  * Fear & Greed verilerini güncelle (10 dakikada bir)
  */
@@ -208,6 +212,57 @@ function scheduleNewsNext() {
   const delay = getNextUpdateTime(10) // 10 dakika
   newsSchedulerInterval = setTimeout(() => {
     updateNewsScheduled()
+  }, delay)
+}
+
+/**
+ * Trending model tahminlerini güncelle (30 dakikada bir)
+ */
+async function updateTrendingModelScheduled() {
+  if (trendingModelIsRunning) {
+    return
+  }
+
+  trendingModelIsRunning = true
+  const timeStr = new Date().toLocaleTimeString('tr-TR')
+  const nextUpdateTime = new Date(Date.now() + getNextUpdateTime(30)).toLocaleTimeString('tr-TR')
+  
+  console.log(`\n🤖 [${timeStr}] ========== Trending Model Tahmin Güncelleme Başladı ==========`)
+  console.log(`⏰ [${timeStr}] Bir sonraki güncelleme: ${nextUpdateTime}`)
+
+  const startTime = Date.now()
+
+  try {
+    const success = await updateTrending()
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2)
+    console.log(`\n🤖 [${timeStr}] ========== Trending Model Tahmin Güncelleme Tamamlandı ==========`)
+    console.log(`⏱️  [${timeStr}] Toplam süre: ${duration}s`)
+    console.log(`🤖 [${timeStr}] Trending Model: ${success ? '✅ Başarılı' : '❌ Başarısız'}`)
+    console.log(`⏰ [${timeStr}] Bir sonraki güncelleme: ${nextUpdateTime}`)
+    console.log(`═══════════════════════════════════════════════════════════\n`)
+  } catch (error) {
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2)
+    console.error(`\n❌ [${timeStr}] ========== Trending Model Tahmin Güncelleme Hatası ==========`)
+    console.error(`⏱️  [${timeStr}] Toplam süre: ${duration}s`)
+    console.error(`❌ [${timeStr}] Hata:`, error.message || error)
+    console.error(`═══════════════════════════════════════════════════════════\n`)
+  } finally {
+    trendingModelIsRunning = false
+    scheduleTrendingModelNext()
+  }
+}
+
+/**
+ * Trending model tahminleri için sonraki güncellemeyi planla (30 dakika)
+ */
+function scheduleTrendingModelNext() {
+  if (trendingModelSchedulerInterval) {
+    clearTimeout(trendingModelSchedulerInterval)
+  }
+
+  const delay = getNextUpdateTime(30) // 30 dakika
+  trendingModelSchedulerInterval = setTimeout(() => {
+    updateTrendingModelScheduled()
   }, delay)
 }
 
@@ -329,8 +384,8 @@ async function updateNews() {
  */
 async function updateTrending() {
   try {
-    // Önce MongoDB'den crypto listesini çek
-    const cryptoResponse = await fetch(`${MONGO_API_URL}/cache/crypto_list`, {
+    // Önce MongoDB'den crypto listesini çek (doğru endpoint)
+    const cryptoResponse = await fetch(`${MONGO_API_URL}/api/crypto/list`, {
       headers: { 'Accept': 'application/json' }
     })
     
@@ -341,7 +396,7 @@ async function updateTrending() {
     }
     
     const cryptoResult = await cryptoResponse.json()
-    if (!cryptoResult.success || !cryptoResult.data || !cryptoResult.data.coins || cryptoResult.data.coins.length === 0) {
+    if (!cryptoResult.success || !cryptoResult.data || !Array.isArray(cryptoResult.data) || cryptoResult.data.length === 0) {
       const timeStr = new Date().toLocaleTimeString('tr-TR')
       console.error(`❌ [${timeStr}] Trending güncelleme hatası: Crypto listesi boş`)
       return false
@@ -351,7 +406,7 @@ async function updateTrending() {
     const trendingResponse = await fetch(`${MONGO_API_URL}/api/trending/update`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ coins: cryptoResult.data.coins })
+      body: JSON.stringify({ coins: cryptoResult.data })
     })
     
     if (trendingResponse.ok) {
@@ -399,14 +454,9 @@ async function updateAll() {
       updateFedRate()
     ])
     
-    // Crypto listesi güncellendiğinde trending'i de otomatik güncelle
-    let trendingSuccess = false
-    if (cryptoSuccess) {
-      trendingSuccess = await updateTrending()
-    } else {
-      // Crypto başarısız olsa bile trending'i güncellemeyi dene (MongoDB'deki mevcut veri ile)
-      trendingSuccess = await updateTrending()
-    }
+    // Trending model tahminleri artık ayrı scheduler'da yapılıyor (30 dakikada bir)
+    // updateAll içinde trending güncellemesi yapılmıyor
+    // Not: Trending model tahminleri ayrı scheduler'da yapılıyor (updateTrendingModelScheduled)
     
     // Supply Tracking güncelle (Crypto listesi güncellendiğinde)
     let supplyTrackingSuccess = false
@@ -424,8 +474,8 @@ async function updateAll() {
     console.log(`📊 [${timeStr}] Dominance: ${dominanceSuccess ? '✅ Başarılı' : '❌ Başarısız'}`)
     console.log(`💱 [${timeStr}] Currency Rates: ${currencySuccess ? '✅ Başarılı' : '❌ Başarısız'}`)
     console.log(`🏦 [${timeStr}] Fed Rate: ${fedRateSuccess ? '✅ Başarılı' : '❌ Başarısız'}`)
-    console.log(`🔥 [${timeStr}] Trending: ${trendingSuccess ? '✅ Başarılı' : '❌ Başarısız'}`)
     console.log(`📊 [${timeStr}] Supply Tracking: ${supplyTrackingSuccess ? '✅ Başarılı' : '❌ Başarısız'}`)
+    console.log(`🤖 [${timeStr}] Trending Model: Ayrı scheduler'da çalışıyor (30 dakikada bir)`)
     console.log(`⏰ [${timeStr}] Bir sonraki güncelleme: ${nextUpdateTime}`)
     console.log(`═══════════════════════════════════════════════════════════\n`)
   } catch (error) {
@@ -468,16 +518,22 @@ function start() {
   // İlk güncellemeyi hemen yapma, sadece sonraki güncellemeyi planla (sabit zamanlarda)
   scheduleNext()
   
-  // Fear & Greed scheduler'ı başlat (10 dakikada bir)
+  // Fear & Greed scheduler'ı başlat (10 dakikada bir) - SADECE PLANLA, HEMEN ÇALIŞTIRMA
   if (!fearGreedSchedulerInterval) {
     console.log('🚀 Fear & Greed Scheduler başlatıldı (10 dakikada bir)')
-    updateFearGreedScheduled()
+    scheduleFearGreedNext() // Sadece zamanlayıcı kur, hemen çalıştırma
   }
   
-  // News scheduler'ı başlat (10 dakikada bir)
+  // News scheduler'ı başlat (10 dakikada bir) - SADECE PLANLA, HEMEN ÇALIŞTIRMA
   if (!newsSchedulerInterval) {
     console.log('🚀 News Scheduler başlatıldı (10 dakikada bir)')
-    updateNewsScheduled()
+    scheduleNewsNext() // Sadece zamanlayıcı kur, hemen çalıştırma
+  }
+  
+  // Trending model tahminleri scheduler'ı başlat (30 dakikada bir) - SADECE PLANLA, HEMEN ÇALIŞTIRMA
+  if (!trendingModelSchedulerInterval) {
+    console.log('🚀 Trending Model Tahmin Scheduler başlatıldı (30 dakikada bir)')
+    scheduleTrendingModelNext() // Sadece zamanlayıcı kur, hemen çalıştırma
   }
 }
 
@@ -495,6 +551,12 @@ function stop() {
     clearTimeout(fearGreedSchedulerInterval)
     fearGreedSchedulerInterval = null
     console.log('🛑 Fear & Greed Scheduler durduruldu')
+  }
+  
+  if (trendingModelSchedulerInterval) {
+    clearTimeout(trendingModelSchedulerInterval)
+    trendingModelSchedulerInterval = null
+    console.log('🛑 Trending Model Tahmin Scheduler durduruldu')
   }
 }
 

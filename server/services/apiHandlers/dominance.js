@@ -77,11 +77,11 @@ async function fetchDominanceData(apiKey) {
       }
     ]
 
-    // Volume data (top 8 coin, stablecoinler hariç)
+    // Volume data (top 5 coin, stablecoinler hariç)
     const STABLECOIN_SYMBOLS = ['USDT', 'USDC', 'DAI', 'BUSD', 'TUSD', 'FRAX', 'USDD', 'LUSD', 'FEI', 'UST', 'MIM', 'EURS', 'EURT', 'USDE', 'PYUSD', 'USDF', 'FDUSD']
     const volumeData = coins
       .filter(coin => !STABLECOIN_SYMBOLS.includes(coin.symbol))
-      .slice(0, 8)
+      .slice(0, 5)
       .map(coin => ({
         name: coin.symbol,
         volume: coin.quote?.USD?.volume_24h || 0,
@@ -90,16 +90,29 @@ async function fetchDominanceData(apiKey) {
         change: coin.quote?.USD?.percent_change_24h || 0
       }))
 
-    // Top 3 coins
-    const top3Coins = coins.slice(0, 3).map(coin => ({
-      id: coin.id.toString(),
-      name: coin.name,
-      symbol: coin.symbol,
-      image: `https://s2.coinmarketcap.com/static/img/coins/64x64/${coin.id}.png`,
-      total_volume: coin.quote?.USD?.volume_24h || 0,
-      market_cap: coin.quote?.USD?.market_cap || 0,
-      price_change_percentage_24h: coin.quote?.USD?.percent_change_24h || 0
-    }))
+    // Top 3 coins - Volume dominance bilgisi de ekle
+    const totalVolume24h = globalMetrics.quote?.USD?.total_volume_24h || 1
+    const top3Coins = coins.slice(0, 3).map(coin => {
+      const coinVolume = coin.quote?.USD?.volume_24h || 0
+      const volumeDominance = (coinVolume / totalVolume24h) * 100
+      // CoinMarketCap API'den volume değişimi kontrol et
+      // API'de volume_change_24h veya volume_percent_change_24h olabilir
+      const volumeChange24h = coin.quote?.USD?.volume_change_24h || 
+                               coin.quote?.USD?.volume_percent_change_24h || 
+                               null // API'de yoksa null
+      
+      return {
+        id: coin.id.toString(),
+        name: coin.name,
+        symbol: coin.symbol,
+        image: `https://s2.coinmarketcap.com/static/img/coins/64x64/${coin.id}.png`,
+        total_volume: coinVolume,
+        market_cap: coin.quote?.USD?.market_cap || 0,
+        price_change_percentage_24h: coin.quote?.USD?.percent_change_24h || 0,
+        volume_dominance: volumeDominance, // Volume dominance yüzdesi
+        volume_change_24h: volumeChange24h // API'den gelen volume değişimi (varsa)
+      }
+    })
 
     // Dominance table data
     const totalMarketCap = globalMetrics.quote?.USD?.total_market_cap || 0

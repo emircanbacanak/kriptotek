@@ -16,22 +16,26 @@ const Layout = () => {
     // GlobalDataManager'ı başlat (sayfa açık olmasa bile çalışır)
     globalDataManager.startAutoUpdate();
     
-    // RealtimeService WebSocket bağlantısını başlat (News sayfası için)
-    realtimeService.connect();
+    // RealtimeService WebSocket bağlantısını başlat (sadece bir kez)
+    // connect() fonksiyonu zaten bağlıysa veya bağlanıyorsa tekrar bağlanmayacak
+    if (!realtimeService.isConnected && !realtimeService.isConnecting) {
+      realtimeService.connect();
+    }
     
     // Cleanup: Component unmount olduğunda durdur
+    // NOT: disconnect() çağrılmasın, diğer sayfalar da kullanıyor olabilir
     return () => {
       globalDataManager.stopAutoUpdate();
-      realtimeService.disconnect();
+      // realtimeService.disconnect(); // Kaldırıldı - diğer sayfalar da kullanıyor
     };
   }, []);
 
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-blue-900/30 dark:to-indigo-900/30">
+    <div className="flex flex-col h-screen bg-white dark:bg-gray-900">
       <Header onMenuClick={() => setSidebarOpen(!sidebarOpen)} className="flex-shrink-0 z-20" />
 
       <div className="flex flex-1 overflow-hidden">
-        <div className="hidden lg:block w-64 flex-shrink-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border-r border-gray-200 dark:border-gray-700">
+        <div className="hidden lg:block w-64 flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
           <Sidebar />
         </div>
 

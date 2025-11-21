@@ -16,6 +16,7 @@ import SupplyTracking from './pages/SupplyTracking'
 import NotFound from './pages/NotFound'
 import PremiumRoute from './components/PremiumRoute'
 import { useAuth } from './contexts/AuthContext'
+import './services/supplyHistoryService' // Supply history service'i yükle (window'a ekler)
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth()

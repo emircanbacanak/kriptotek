@@ -264,12 +264,25 @@ function SupplyTracking() {
     setSortOption(event.target.value);
   };
 
-  if (loading) {
+  // Loading timeout - 5 saniye sonra sayfayı göster (veri gelmese bile)
+  const [showLoading, setShowLoading] = useState(true)
+  useEffect(() => {
+    if (!loading || (supplyData && supplyData.length > 0) || (coins && coins.length > 0)) {
+      setShowLoading(false)
+      return
+    }
+    const timeoutId = setTimeout(() => {
+      setShowLoading(false)
+    }, 5000) // 5 saniye sonra loading'i kapat
+    return () => clearTimeout(timeoutId)
+  }, [loading, supplyData, coins])
+
+  if (showLoading && loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-blue-900/30 dark:to-indigo-900/30 max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8">
+      <div className="min-h-screen bg-white dark:bg-gray-900 max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8">
         <div className="flex items-center justify-center py-20">
           <div className="relative w-16 h-16">
-            <div className="absolute inset-0 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+            <div className="absolute inset-0 border-4 border-primary-500 dark:border-primary-400 border-t-transparent rounded-full animate-spin"></div>
           </div>
         </div>
       </div>
@@ -277,7 +290,7 @@ function SupplyTracking() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-blue-900/30 dark:to-indigo-900/30 max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8">
+    <div className="min-h-screen bg-white dark:bg-gray-900 max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8">
       {/* Header */}
       <div className="flex items-center gap-3 sm:gap-4 mb-6 sm:mb-8 animate-fade-in">
         <div className={`w-8 h-8 sm:w-12 sm:h-12 lg:w-14 lg:h-14 bg-gradient-to-br ${headerIconGradient} rounded-xl flex items-center justify-center shadow-lg transform transition-all duration-300 hover:scale-110`}>

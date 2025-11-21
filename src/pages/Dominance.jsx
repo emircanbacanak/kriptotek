@@ -58,7 +58,7 @@ const Dominance = () => {
     
     setDominanceData(data.dominanceData || [])
     
-    // Volume data'yı filtrele - stabilcoinler hariç
+    // Volume data'yı filtrele - stabilcoinler hariç, ilk 5 coin
     const STABLECOIN_SYMBOLS = ['USDT', 'USDC', 'DAI', 'BUSD', 'TUSD', 'FRAX', 'USDD', 'LUSD', 'FEI', 'UST', 'MIM', 'EURS', 'EURT', 'USDE', 'PYUSD', 'USDF', 'FDUSD', 'USDS', 'USDG', 'RLUSD', 'USYC', 'USD0', 'USD1', 'USDT0', 'USDTB', 'BFUSD', 'SUSDS', 'SUSDE', 'OUSG', 'BUILD', 'C1USD', 'EURC', 'CRVUSD', 'SDAI', 'DUSD', 'CUSDO', 'WSTUSR', 'USR', 'CUSD', 'USDA', 'USDO', 'USX', 'USDB', 'FDIT']
     const filteredVolumeData = (data.volumeData || [])
       .filter(coin => {
@@ -66,6 +66,7 @@ const Dominance = () => {
         return !STABLECOIN_SYMBOLS.includes(symbol) && !symbol.includes('USD') && !symbol.includes('USDT') && !symbol.includes('USDC')
       })
       .sort((a, b) => b.volume - a.volume)
+      .slice(0, 5) // İlk 5 coin
     setVolumeData(filteredVolumeData)
     
     // Historical data'yı MongoDB'den gelen veriden al
@@ -109,11 +110,49 @@ const Dominance = () => {
     setTopCoins(data.top3Coins)
     
     // Hakimiyet Tablosunda sadece BTC ve ETH göster - dominanceData'dan al
+    // 24s Değişim: Volume dominance yüzdelik değişimi
+    const totalVolume = data.global?.total_volume?.usd || 1
     const tableData = []
     if (btcData && btcData.value !== undefined && btcData.value !== null && !isNaN(btcData.value) &&
         data.top3Coins && data.top3Coins[0] && 
         data.top3Coins[0].market_cap !== undefined && data.top3Coins[0].market_cap !== null &&
         data.top3Coins[0].total_volume !== undefined && data.top3Coins[0].total_volume !== null) {
+      // Volume dominance hesapla
+      const currentVolumeDominance = data.top3Coins[0].volume_dominance || (data.top3Coins[0].total_volume / totalVolume) * 100
+      
+      // Volume dominance değişimini hesapla
+      // Önce API'den gelen volume_change_24h'ı kontrol et (varsa kullan)
+      let volumeDominanceChange = 0
+      if (data.top3Coins[0].volume_change_24h !== null && data.top3Coins[0].volume_change_24h !== undefined) {
+        // API'den direkt volume değişimi geliyorsa, volume dominance değişimini hesapla
+        // volume_change_24h yüzde cinsinden ise, volume dominance değişimi de yaklaşık olarak aynı olabilir
+        // Ancak daha doğru hesaplama için historical data kullanılmalı
+        volumeDominanceChange = data.top3Coins[0].volume_change_24h
+      } else {
+        // API'den gelmiyorsa, historical data'dan hesapla
+        let previousVolumeDominance = null
+        if (data.historicalData && data.historicalData.length > 0) {
+          // Son 24 saat içindeki en eski kaydı bul
+          const now = new Date()
+          const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+          
+          // Son 2 günlük veriyi kontrol et (24 saatlik değişim için)
+          const recentHistorical = data.historicalData
+            .filter(h => h.date && new Date(h.date) >= yesterday)
+            .sort((a, b) => new Date(a.date) - new Date(b.date))
+          
+          if (recentHistorical.length > 0) {
+            const oldestRecent = recentHistorical[0]
+            previousVolumeDominance = oldestRecent.btcVolumeDominance
+          }
+        }
+        
+        // Volume dominance değişimini hesapla
+        if (previousVolumeDominance !== null && previousVolumeDominance !== undefined && !isNaN(previousVolumeDominance)) {
+          volumeDominanceChange = currentVolumeDominance - previousVolumeDominance
+        }
+      }
+      
       tableData.push({
         name: data.top3Coins[0].name || t('bitcoin'),
         symbol: 'BTC',
@@ -121,15 +160,48 @@ const Dominance = () => {
         dominance: btcData.value,
         marketCap: data.top3Coins[0].market_cap,
         volume: data.top3Coins[0].total_volume,
-        change: data.top3Coins[0].price_change_percentage_24h !== undefined && data.top3Coins[0].price_change_percentage_24h !== null
-          ? data.top3Coins[0].price_change_percentage_24h
-          : 0
+        change: volumeDominanceChange, // Volume dominance yüzdelik değişimi
+        volumeDominance: currentVolumeDominance // Mevcut volume dominance
       })
     }
     if (ethData && ethData.value !== undefined && ethData.value !== null && !isNaN(ethData.value) &&
         data.top3Coins && data.top3Coins[1] &&
         data.top3Coins[1].market_cap !== undefined && data.top3Coins[1].market_cap !== null &&
         data.top3Coins[1].total_volume !== undefined && data.top3Coins[1].total_volume !== null) {
+      // Volume dominance hesapla
+      const currentVolumeDominance = data.top3Coins[1].volume_dominance || (data.top3Coins[1].total_volume / totalVolume) * 100
+      
+      // Volume dominance değişimini hesapla
+      // Önce API'den gelen volume_change_24h'ı kontrol et (varsa kullan)
+      let volumeDominanceChange = 0
+      if (data.top3Coins[1].volume_change_24h !== null && data.top3Coins[1].volume_change_24h !== undefined) {
+        // API'den direkt volume değişimi geliyorsa, volume dominance değişimini hesapla
+        volumeDominanceChange = data.top3Coins[1].volume_change_24h
+      } else {
+        // API'den gelmiyorsa, historical data'dan hesapla
+        let previousVolumeDominance = null
+        if (data.historicalData && data.historicalData.length > 0) {
+          // Son 24 saat içindeki en eski kaydı bul
+          const now = new Date()
+          const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+          
+          // Son 2 günlük veriyi kontrol et (24 saatlik değişim için)
+          const recentHistorical = data.historicalData
+            .filter(h => h.date && new Date(h.date) >= yesterday)
+            .sort((a, b) => new Date(a.date) - new Date(b.date))
+          
+          if (recentHistorical.length > 0) {
+            const oldestRecent = recentHistorical[0]
+            previousVolumeDominance = oldestRecent.ethVolumeDominance
+          }
+        }
+        
+        // Volume dominance değişimini hesapla
+        if (previousVolumeDominance !== null && previousVolumeDominance !== undefined && !isNaN(previousVolumeDominance)) {
+          volumeDominanceChange = currentVolumeDominance - previousVolumeDominance
+        }
+      }
+      
       tableData.push({
         name: data.top3Coins[1].name || t('ethereum'),
         symbol: 'ETH',
@@ -137,9 +209,8 @@ const Dominance = () => {
         dominance: ethData.value,
         marketCap: data.top3Coins[1].market_cap,
         volume: data.top3Coins[1].total_volume,
-        change: data.top3Coins[1].price_change_percentage_24h !== undefined && data.top3Coins[1].price_change_percentage_24h !== null
-          ? data.top3Coins[1].price_change_percentage_24h
-          : 0
+        change: volumeDominanceChange, // Volume dominance yüzdelik değişimi
+        volumeDominance: currentVolumeDominance // Mevcut volume dominance
       })
     }
     setDominanceTableData(tableData)

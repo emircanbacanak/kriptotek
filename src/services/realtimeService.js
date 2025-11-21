@@ -6,6 +6,7 @@ class RealtimeService {
   constructor() {
     this.ws = null
     this.isConnected = false
+    this.isConnecting = false // Bağlanma sürecinde mi?
     this.reconnectAttempts = 0
     this.maxReconnectAttempts = 10
     this.reconnectDelay = 3000
@@ -17,9 +18,29 @@ class RealtimeService {
    * WebSocket bağlantısını başlat
    */
   connect() {
-    if (this.isConnected && this.ws && this.ws.readyState === WebSocket.OPEN) {
-      return // Zaten bağlı
+    // Zaten bağlıysa veya bağlanma sürecindeyse, tekrar bağlanma
+    if (this.isConnecting) {
+      return // Zaten bağlanma sürecinde
     }
+    
+    if (this.ws) {
+      if (this.ws.readyState === WebSocket.OPEN) {
+        return // Zaten bağlı
+      }
+      if (this.ws.readyState === WebSocket.CONNECTING) {
+        this.isConnecting = true
+        return // Zaten bağlanıyor
+      }
+      // Kapanmış veya hata durumunda, mevcut bağlantıyı temizle
+      try {
+        this.ws.close()
+      } catch (e) {
+        // Ignore
+      }
+      this.ws = null
+    }
+    
+    this.isConnecting = true
 
     // Production'da otomatik tespit
     const getApiUrl = () => {
@@ -48,7 +69,10 @@ class RealtimeService {
     const mongoApiUrl = getApiUrl()
     const wsUrl = mongoApiUrl.replace(/^http/, 'ws').replace(/^https/, 'wss') + '/ws'
     
-    console.log(`🔌 WebSocket bağlantısı: ${wsUrl}`)
+    // Sadece ilk bağlantıda log'la
+    if (!this.ws) {
+      console.log(`🔌 WebSocket bağlantısı: ${wsUrl}`)
+    }
     
     try {
       this.ws = new WebSocket(wsUrl)
@@ -56,6 +80,7 @@ class RealtimeService {
       this.ws.onopen = () => {
         console.log(`✅ WebSocket bağlantısı kuruldu: ${wsUrl}`)
         this.isConnected = true
+        this.isConnecting = false
         this.reconnectAttempts = 0
         this.dispatchEvent('connected', { url: wsUrl })
       }
@@ -79,16 +104,16 @@ class RealtimeService {
           : 'UNKNOWN'
         
         // Sadece gerçek hataları log'la (CONNECTING durumundaki geçici hatalar normal)
-        if (state !== WebSocket.CONNECTING) {
+        // CONNECTING durumundaki hataları log'lama (çok fazla log oluşturuyor)
+        if (state !== WebSocket.CONNECTING && state !== WebSocket.OPEN) {
           console.error(`❌ WebSocket hatası (${stateText}):`, {
             url: wsUrl,
             readyState: state,
             error: error?.message || error?.type || 'Unknown error',
             timestamp: new Date().toISOString()
           })
-        } else {
-          console.warn(`⚠️ WebSocket bağlantı denemesi (${stateText}): ${wsUrl}`)
         }
+        // CONNECTING durumundaki hataları sessizce geç
         this.dispatchEvent('error', { error, url: wsUrl, readyState: state })
       }
       
@@ -97,13 +122,24 @@ class RealtimeService {
         const code = event?.code || 0
         const reason = event?.reason || 'Unknown'
         
-        console.log(`📡 WebSocket bağlantısı kapatıldı (code: ${code}, clean: ${wasClean}, reason: ${reason})`)
+        // Sadece beklenmeyen kapanmaları log'la
+        if (!wasClean && code !== 1000 && code !== 1006) {
+          console.log(`📡 WebSocket bağlantısı kapatıldı (code: ${code}, clean: ${wasClean}, reason: ${reason})`)
+        }
         this.isConnected = false
+        this.isConnecting = false
         this.dispatchEvent('disconnected', { code, reason, wasClean })
         
-        // Sadece beklenmeyen kapanmalarda yeniden bağlan
-        if (!wasClean && code !== 1000) {
+        // Sadece beklenmeyen kapanmalarda yeniden bağlan (1006 = abnormal closure, normal)
+        if (!wasClean && code !== 1000 && code !== 1006) {
           this.attemptReconnect()
+        } else if (code === 1006) {
+          // Abnormal closure - kısa bir süre sonra yeniden bağlan
+          setTimeout(() => {
+            if (!this.isConnected) {
+              this.attemptReconnect()
+            }
+          }, 2000)
         }
       }
     } catch (error) {
@@ -112,6 +148,7 @@ class RealtimeService {
         error: error.message,
         stack: error.stack
       })
+      this.isConnecting = false
       this.attemptReconnect()
     }
   }
@@ -133,17 +170,20 @@ class RealtimeService {
    */
   attemptReconnect() {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.warn('⚠️ Maksimum yeniden bağlanma denemesi aşıldı')
+      // Maksimum deneme aşıldı, sessizce dur
       return
     }
     
     this.reconnectAttempts++
-    const delay = this.reconnectDelay * this.reconnectAttempts
+    const delay = Math.min(this.reconnectDelay * this.reconnectAttempts, 10000) // Max 10 saniye
     
-    console.log(`🔄 ${delay / 1000} saniye sonra yeniden bağlanma denemesi (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`)
+    // Sadece ilk birkaç denemede log'la
+    if (this.reconnectAttempts <= 3) {
+      console.log(`🔄 ${delay / 1000} saniye sonra yeniden bağlanma denemesi (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`)
+    }
     
     setTimeout(() => {
-      if (!this.isConnected) {
+      if (!this.isConnected && !this.ws) {
         this.connect()
       }
     }, delay)

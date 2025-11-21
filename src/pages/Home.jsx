@@ -168,14 +168,27 @@ const Home = () => {
   const headerIconGradient = useMemo(() => isDark ? 'from-yellow-600 to-orange-600' : 'from-blue-500 to-indigo-500', [isDark])
   const headerTextGradient = useMemo(() => isDark ? 'from-yellow-400 to-orange-400' : 'from-blue-600 to-indigo-600', [isDark])
 
-  if (loading && coins.length === 0) {
+  // Loading timeout - 5 saniye sonra sayfayı göster (veri gelmese bile)
+  const [showLoading, setShowLoading] = useState(true)
+  useEffect(() => {
+    if (!loading || coins.length > 0) {
+      setShowLoading(false)
+      return
+    }
+    const timeoutId = setTimeout(() => {
+      setShowLoading(false)
+    }, 5000) // 5 saniye sonra loading'i kapat
+    return () => clearTimeout(timeoutId)
+  }, [loading, coins.length])
+
+  if (showLoading && loading && coins.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/50 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/20 dark:to-indigo-950/20 flex items-center justify-center">
+      <div className="min-h-screen bg-white dark:bg-gray-900 flex items-center justify-center">
         <div className="relative">
-          <div className="w-20 h-20 border-4 border-blue-200/50 dark:border-blue-900/50 rounded-full"></div>
-          <div className="absolute top-0 left-0 w-20 h-20 border-4 border-transparent border-t-blue-600 dark:border-t-blue-400 rounded-full animate-spin"></div>
+          <div className="w-20 h-20 border-4 border-gray-200 dark:border-gray-700 rounded-full"></div>
+          <div className="absolute top-0 left-0 w-20 h-20 border-4 border-transparent border-t-primary-500 dark:border-t-primary-400 rounded-full animate-spin"></div>
           <div className="absolute inset-0 flex items-center justify-center">
-            <Sparkles className="w-8 h-8 text-blue-600 dark:text-blue-400 animate-pulse" />
+            <Sparkles className="w-8 h-8 text-primary-500 dark:text-primary-400 animate-pulse" />
           </div>
         </div>
       </div>
@@ -183,7 +196,7 @@ const Home = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/50 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/20 dark:to-indigo-950/20">
+    <div className="min-h-screen bg-white dark:bg-gray-900">
       <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8 lg:py-12">
         {/* Modern Header */}
         <div className="mb-4 sm:mb-6 md:mb-8 lg:mb-12">
@@ -297,7 +310,14 @@ const Home = () => {
               ))}
               {topMovers.topGainers.length === 0 && (
                 <div className="text-center py-6 sm:py-8 text-gray-500 dark:text-gray-400 text-sm">
-                  {t('noData')}
+                  {loading ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="w-4 h-4 border-2 border-gray-300 dark:border-gray-600 border-t-primary-500 dark:border-t-primary-400 rounded-full animate-spin"></div>
+                      <span>{t('loading') || 'Yükleniyor...'}</span>
+                    </div>
+                  ) : (
+                    t('noData')
+                  )}
                 </div>
               )}
             </div>
@@ -385,7 +405,14 @@ const Home = () => {
               ))}
               {topMovers.topLosers.length === 0 && (
                 <div className="text-center py-6 sm:py-8 text-gray-500 dark:text-gray-400 text-sm">
-                  {t('noData')}
+                  {loading ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="w-4 h-4 border-2 border-gray-300 dark:border-gray-600 border-t-primary-500 dark:border-t-primary-400 rounded-full animate-spin"></div>
+                      <span>{t('loading') || 'Yükleniyor...'}</span>
+                    </div>
+                  ) : (
+                    t('noData')
+                  )}
                 </div>
               )}
             </div>

@@ -1180,14 +1180,21 @@ app.post('/api/dominance/update', async (req, res) => {
       mergedData.historicalData = []
     }
 
-    // Bugünün snapshot'ını ekle
+    // Bugünün snapshot'ını ekle (volume dominance bilgisi de ekle)
     const today = new Date().toISOString().split('T')[0]
     const todayIndex = mergedData.historicalData.findIndex(h => h.date === today)
+    const totalVolume24h = dominanceData.global?.total_volume?.usd || 1
+    const btcVolume = dominanceData.top3Coins?.[0]?.total_volume || 0
+    const ethVolume = dominanceData.top3Coins?.[1]?.total_volume || 0
+    const btcVolumeDominance = (btcVolume / totalVolume24h) * 100
+    const ethVolumeDominance = (ethVolume / totalVolume24h) * 100
     const snapshot = {
       date: today,
       coin1: dominanceData.dominanceData[0]?.value || 0,
       coin2: dominanceData.dominanceData[1]?.value || 0,
-      others: dominanceData.dominanceData[2]?.value || 0
+      others: dominanceData.dominanceData[2]?.value || 0,
+      btcVolumeDominance: btcVolumeDominance, // BTC volume dominance
+      ethVolumeDominance: ethVolumeDominance  // ETH volume dominance
     }
 
     if (todayIndex >= 0) {
@@ -1680,27 +1687,71 @@ function calculateTrendingScores(coins) {
         (volatilityScore * 0.10)
       )
       
-      // ============ AI TAHMİN MODELİ (24 Saatlik) ============
+      // ============ GELİŞMİŞ AI TAHMİN MODELİ (24 Saatlik) ============
       
-      // 1. Momentum Factor (Fiyat momentumu)
-      const momentumFactor = priceChange * 0.6
-      
-      // 2. Reversion Factor (Geri dönüş faktörü)
-      let reversionFactor = 0
-      if (priceChange > 10) {
-        reversionFactor = -2  // Aşırı yükseliş → düzeltme beklentisi
-      } else if (priceChange < -10) {
-        reversionFactor = 3  // Aşırı düşüş → toparlanma beklentisi
+      // 1. Gelişmiş Momentum Factor (Fiyat momentumu - daha hassas)
+      // Momentum'u daha doğru hesapla: sadece değişim değil, değişimin hızı da önemli
+      let momentumFactor = 0
+      if (priceChange > 0) {
+        // Pozitif momentum: değişim hızına göre ağırlıklandır
+        momentumFactor = Math.min(priceChange * 0.7, priceChange * 0.5 + Math.log(1 + Math.abs(priceChange)) * 0.3)
+      } else {
+        // Negatif momentum: daha dikkatli
+        momentumFactor = priceChange * 0.65
       }
       
-      // 3. Liquidity Impact (Likidite etkisi)
-      const liquidityImpact = (volumeRatio > 0.15) ? 1 : -0.5
+      // 2. Gelişmiş Reversion Factor (Geri dönüş faktörü - daha akıllı)
+      let reversionFactor = 0
+      if (priceChange > 15) {
+        reversionFactor = -3.5  // Çok aşırı yükseliş → güçlü düzeltme beklentisi
+      } else if (priceChange > 10) {
+        reversionFactor = -2.5  // Aşırı yükseliş → düzeltme beklentisi
+      } else if (priceChange > 5) {
+        reversionFactor = -1  // Orta yükseliş → hafif düzeltme
+      } else if (priceChange < -15) {
+        reversionFactor = 4  // Çok aşırı düşüş → güçlü toparlanma beklentisi
+      } else if (priceChange < -10) {
+        reversionFactor = 3  // Aşırı düşüş → toparlanma beklentisi
+      } else if (priceChange < -5) {
+        reversionFactor = 1.5  // Orta düşüş → hafif toparlanma
+      }
       
-      // 4. Stability Factor (İstikrar faktörü)
-      const stabilityFactor = (rank <= 10) ? 0.5 : 0
+      // 3. Gelişmiş Liquidity Impact (Likidite etkisi - daha detaylı)
+      let liquidityImpact = 0
+      if (volumeRatio > 0.25) {
+        liquidityImpact = 1.5  // Çok yüksek likidite → güçlü pozitif etki
+      } else if (volumeRatio > 0.15) {
+        liquidityImpact = 1  // Yüksek likidite → pozitif etki
+      } else if (volumeRatio > 0.08) {
+        liquidityImpact = 0.3  // Orta likidite → hafif pozitif
+      } else if (volumeRatio > 0.03) {
+        liquidityImpact = -0.3  // Düşük likidite → hafif negatif
+      } else {
+        liquidityImpact = -0.8  // Çok düşük likidite → negatif etki
+      }
       
-      // AI Prediction
-      const aiPrediction = momentumFactor + reversionFactor + liquidityImpact + stabilityFactor
+      // 4. Gelişmiş Stability Factor (İstikrar faktörü - rank bazlı)
+      let stabilityFactor = 0
+      if (rank <= 5) {
+        stabilityFactor = 0.8  // Top 5 → çok istikrarlı
+      } else if (rank <= 10) {
+        stabilityFactor = 0.5  // Top 10 → istikrarlı
+      } else if (rank <= 20) {
+        stabilityFactor = 0.2  // Top 20 → orta istikrar
+      } else if (rank <= 50) {
+        stabilityFactor = 0  // Top 50 → nötr
+      } else {
+        stabilityFactor = -0.3  // Alt sıralar → daha az istikrarlı
+      }
+      
+      // 5. Volatility Factor (Volatilite faktörü - yeni)
+      const volatilityFactor = Math.abs(priceChange) > 20 ? -0.5 : 0  // Aşırı volatilite → negatif
+      
+      // 6. Market Cap Factor (Piyasa değeri faktörü - yeni)
+      const marketCapFactor = marketCap > 10000000000 ? 0.3 : (marketCap > 1000000000 ? 0.1 : 0)  // Büyük market cap → pozitif
+      
+      // Gelişmiş AI Prediction (tüm faktörler birleştirilmiş)
+      const aiPrediction = momentumFactor + reversionFactor + liquidityImpact + stabilityFactor + volatilityFactor + marketCapFactor
       
       // ============ POZİSYON BELİRLEME ============
       let predictionDirection = 'neutral'
@@ -1997,6 +2048,245 @@ app.get('/cache/supply_tracking', async (req, res) => {
       ok: false,
       success: false,
       error: error.message
+    })
+  }
+})
+
+// ========== SUPPLY HISTORY ENDPOINT ==========
+// GET /supply-history/all - Tüm supply snapshot'larını getir (frontend'de filtreleme yapılacak)
+app.get('/supply-history/all', async (req, res) => {
+  const startTime = Date.now()
+  console.log('📥 [Supply History] GET /supply-history/all isteği alındı')
+  console.log('📥 [Supply History] Request method:', req.method)
+  console.log('📥 [Supply History] Request URL:', req.url)
+  
+  try {
+    if (!db) {
+      console.error('❌ [Supply History] MongoDB bağlantısı yok')
+      return res.status(503).json({ 
+        ok: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const supplyHistoryCollection = db.collection('supply_history')
+    
+    // Collection'ın var olup olmadığını kontrol et
+    const collections = await db.listCollections().toArray()
+    const collectionExists = collections.some(c => c.name === 'supply_history')
+    console.log(`🔍 [Supply History] Collection var mı? ${collectionExists}`)
+    
+    if (!collectionExists) {
+      console.log('⚠️ [Supply History] supply_history collection bulunamadı, boş array döndürülüyor')
+      return res.json({ 
+        ok: true, 
+        data: [] 
+      })
+    }
+    
+    // Collection'daki toplam document sayısını kontrol et
+    const totalCount = await supplyHistoryCollection.countDocuments({})
+    console.log(`📊 [Supply History] Collection'da toplam ${totalCount} document var`)
+    
+    console.log('📖 [Supply History] MongoDB\'den mevcut snapshot\'lar okunuyor (yeni veri çekilmiyor)...')
+    const queryStartTime = Date.now()
+    
+    // Sadece gerekli alanları çek (projection) - performans için
+    // _id ve supplies alanlarını çek, diğer alanları çekme
+    // Limit'i daha da düşür (supplies alanı çok büyük olabilir)
+    console.log('⚡ [Supply History] Query optimize edildi: projection + limit 500')
+    const queryPromise = supplyHistoryCollection
+      .find({}, { 
+        projection: { 
+          _id: 1, 
+          supplies: 1,
+          timestamp: 1 
+        } 
+      })
+      .sort({ _id: -1 }) // En yeni önce
+      .limit(500) // Son 500 snapshot (daha hızlı - supplies alanı büyük olabilir)
+      .toArray()
+    
+    // 60 saniye timeout ekle (daha büyük veri için)
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error('MongoDB query timeout (60 saniye)'))
+      }, 60000)
+    })
+    
+    let snapshots
+    try {
+      snapshots = await Promise.race([queryPromise, timeoutPromise])
+    } catch (queryError) {
+      const queryDuration = Date.now() - queryStartTime
+      console.error(`❌ [Supply History] Query hatası (${queryDuration}ms):`, queryError)
+      throw queryError
+    }
+    
+    const queryDuration = Date.now() - queryStartTime
+    console.log(`✅ [Supply History] ${snapshots.length} mevcut snapshot okundu (${queryDuration}ms) - YENİ VERİ ÇEKİLMEDİ`)
+    
+    const totalDuration = Date.now() - startTime
+    console.log(`✅ [Supply History] Mevcut veriler response olarak gönderiliyor (toplam süre: ${totalDuration}ms)`)
+    
+    res.json({ 
+      ok: true, 
+      data: snapshots 
+    })
+    
+    console.log(`✅ [Supply History] Mevcut veriler gönderildi (sadece okuma, veri çekme yok)`)
+  } catch (error) {
+    const totalDuration = Date.now() - startTime
+    console.error('❌ GET /supply-history/all error:', error)
+    console.error('❌ Error name:', error.name)
+    console.error('❌ Error message:', error.message)
+    console.error('❌ Error stack:', error.stack)
+    console.error(`❌ Hata süresi: ${totalDuration}ms`)
+    
+    // Response zaten gönderilmişse tekrar gönderme
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        ok: false, 
+        error: error.message || 'Bilinmeyen hata'
+      })
+      console.log('❌ [Supply History] Error response gönderildi')
+    } else {
+      console.error('❌ [Supply History] Response zaten gönderilmiş, error response gönderilemedi')
+    }
+  }
+})
+
+// ========== SUPPLY SNAPSHOTS ENDPOINT ==========
+// GET /api/supply-snapshots/:coinId - Belirli bir coin için tüm supply snapshot'larını getir
+app.get('/api/supply-snapshots/:coinId', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const { coinId } = req.params
+    if (!coinId) {
+      return res.status(400).json({
+        success: false,
+        error: 'coinId parametresi gerekli'
+      })
+    }
+
+    const supplyHistoryCollection = db.collection('supply_history')
+    
+    console.log(`🔍 [Supply Snapshots] ${coinId} için snapshot'lar aranıyor...`)
+    
+    // Collection'ın varlığını kontrol et
+    const collections = await db.listCollections().toArray()
+    const hasCollection = collections.some(col => col.name === 'supply_history')
+    
+    if (!hasCollection) {
+      console.warn(`⚠️ [Supply Snapshots] supply_history collection bulunamadı`)
+      return res.json({
+        success: true,
+        data: {
+          coinId,
+          snapshots: [],
+          count: 0,
+          message: 'supply_history collection bulunamadı - henüz snapshot kaydedilmemiş olabilir'
+        }
+      })
+    }
+    
+    // Tüm snapshot'ları çek
+    let snapshots = []
+    try {
+      snapshots = await supplyHistoryCollection
+        .find({})
+        .toArray()
+      console.log(`📊 [Supply Snapshots] Toplam ${snapshots.length} snapshot bulundu`)
+    } catch (findError) {
+      console.error('❌ [Supply Snapshots] MongoDB find hatası:', findError)
+      console.error('❌ [Supply Snapshots] Error details:', {
+        message: findError.message,
+        stack: findError.stack,
+        name: findError.name
+      })
+      throw findError
+    }
+
+    // Her snapshot'tan sadece bu coin'e ait veriyi çıkar
+    const coinSnapshots = []
+    
+    for (const snapshot of snapshots) {
+      try {
+        // supplies objesi var mı kontrol et
+        if (!snapshot.supplies || typeof snapshot.supplies !== 'object') {
+          continue
+        }
+        
+        // Bu coin'e ait veri var mı kontrol et
+        if (snapshot.supplies[coinId] === undefined || snapshot.supplies[coinId] === null) {
+          continue
+        }
+        
+        // Timestamp'i kontrol et - yoksa _id'den çıkar
+        let timestamp = snapshot.timestamp
+        if (!timestamp || typeof timestamp !== 'number') {
+          if (snapshot._id) {
+            // _id formatından timestamp çıkarmayı dene (YYYY-MM-DD-HHMM formatı)
+            const dateStr = snapshot._id.toString()
+            // Eğer _id bir tarih string'i ise parse et
+            if (dateStr.match(/^\d{4}-\d{2}-\d{2}-\d{4}$/)) {
+              const [year, month, day, time] = dateStr.split('-')
+              const hour = time.substring(0, 2)
+              const minute = time.substring(2, 4)
+              const dateObj = new Date(`${year}-${month}-${day}T${hour}:${minute}:00`)
+              timestamp = dateObj.getTime()
+              if (isNaN(timestamp)) {
+                timestamp = Date.now()
+              }
+            } else {
+              // Fallback: şu anki zamanı kullan
+              timestamp = Date.now()
+            }
+          } else {
+            timestamp = Date.now()
+          }
+        }
+        
+        coinSnapshots.push({
+          date: snapshot.date || snapshot._id?.toString() || 'N/A',
+          timestamp: timestamp,
+          supply: snapshot.supplies[coinId]
+        })
+      } catch (mapError) {
+        console.warn(`⚠️ [Supply Snapshots] Snapshot parse hatası (${snapshot._id}):`, mapError.message)
+        continue
+      }
+    }
+    
+    // Timestamp'e göre sırala
+    coinSnapshots.sort((a, b) => a.timestamp - b.timestamp)
+    
+    console.log(`✅ [Supply Snapshots] ${coinId} için ${coinSnapshots.length} snapshot bulundu`)
+
+    console.log(`✅ [Supply Snapshots] ${coinId} için ${coinSnapshots.length} snapshot döndürülüyor`)
+    
+    return res.json({
+      success: true,
+      data: {
+        coinId,
+        snapshots: coinSnapshots,
+        count: coinSnapshots.length
+      }
+    })
+  } catch (error) {
+    console.error('❌ GET /api/supply-snapshots/:coinId error:', error)
+    console.error('❌ Error message:', error.message)
+    console.error('❌ Error stack:', error.stack)
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Bilinmeyen hata',
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     })
   }
 })

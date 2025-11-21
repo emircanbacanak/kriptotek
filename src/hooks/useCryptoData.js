@@ -12,29 +12,52 @@ const useCryptoData = () => {
   const [lastUpdate, setLastUpdate] = useState(null)
 
   useEffect(() => {
-    // Mevcut veriyi al
+    // Mevcut veriyi al - ANINDA
     const currentData = globalDataManager.getData()
     if (currentData.coins && currentData.coins.length > 0) {
       setCoins(currentData.coins)
       setTopMovers(currentData.topMovers || { topGainers: [], topLosers: [] })
       setLoading(false)
+      return // Veri varsa direkt çık
     }
     
-    // Abone ol
+    // Veri yoksa backend'den veri yüklenene kadar bekle (max 5 saniye, hızlı kontrol)
+    let retryCount = 0
+    const maxRetries = 50 // 50 x 100ms = 5 saniye
+    const checkDataInterval = setInterval(() => {
+      const data = globalDataManager.getData()
+      if (data.coins && data.coins.length > 0) {
+        setCoins(data.coins)
+        setTopMovers(data.topMovers || { topGainers: [], topLosers: [] })
+        setLoading(false)
+        clearInterval(checkDataInterval)
+      } else {
+        retryCount++
+        if (retryCount >= maxRetries) {
+          // 5 saniye sonra bile veri yoksa loading'i kapat (sayfa açılsın)
+          setLoading(false)
+          clearInterval(checkDataInterval)
+        }
+      }
+    }, 100) // Her 100ms'de bir kontrol et (çok hızlı)
+    
+    // Abone ol - ANINDA GÜNCELLEME
     const unsubscribe = globalDataManager.subscribe((data) => {
       setCoins(data.coins || [])
       setTopMovers(data.topMovers || { topGainers: [], topLosers: [] })
       setIsUpdating(data.isUpdating || false)
       setLastUpdate(data.lastCryptoUpdate)
       
-      // İlk veri geldiğinde loading'i kapat
+      // Veri geldiğinde loading'i kapat ve interval'i temizle
       if (data.coins && data.coins.length > 0) {
         setLoading(false)
+        clearInterval(checkDataInterval)
       }
     })
 
     // Cleanup
     return () => {
+      clearInterval(checkDataInterval)
       unsubscribe()
     }
   }, [])

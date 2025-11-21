@@ -360,7 +360,7 @@ async function fetchCryptoList() {
         
         // Sayfalar arası delay (ilk sayfa hariç) - Rate limit'i önlemek için
         if (i > 0) {
-          await new Promise(resolve => setTimeout(resolve, 2000)) // 2 saniye bekle
+          await new Promise(resolve => setTimeout(resolve, 3000)) // 3 saniye bekle (artırıldı)
         }
         
         // Her batch için farklı proxy seç
@@ -385,21 +385,21 @@ async function fetchCryptoList() {
             // Rate limit hatası (429) - özel handling
             if (response.status === 429) {
               const errorText = await response.text().catch(() => response.statusText)
-              console.warn(`⚠️ Rate limit (429) detected for ${page.name}${proxyInfo}, waiting 10 seconds...`)
+              console.warn(`⚠️ Rate limit (429) detected for ${page.name}${proxyInfo}, waiting 30 seconds...`)
               // Proxy başarısız olarak işaretle
               if (proxyUrl) {
                 failedProxies.add(proxyUrl)
                 workingProxies.delete(proxyUrl)
               }
-              // Rate limit hatası alındığında 10 saniye bekle
-              await new Promise(resolve => setTimeout(resolve, 10000))
+              // Rate limit hatası alındığında 30 saniye bekle (daha uzun bekleme)
+              await new Promise(resolve => setTimeout(resolve, 30000))
               // Farklı bir proxy ile retry yap
               const retryProxy = await getWorkingProxyForBatch(i, pages.length)
               const retryProxyInfo = retryProxy ? ` (Retry Proxy: ${retryProxy.split('@').pop() || retryProxy})` : ' (No Proxy)'
               console.log(`🔄 Retrying ${page.name}${retryProxyInfo}`)
               
               const retryController = new AbortController()
-              const retryTimeoutId = setTimeout(() => retryController.abort(), 30000)
+              const retryTimeoutId = setTimeout(() => retryController.abort(), 60000)
               
               const retryResponse = await fetchWithProxy(page.url, {
                 headers: {
@@ -412,7 +412,10 @@ async function fetchCryptoList() {
               clearTimeout(retryTimeoutId)
               
               if (!retryResponse.ok) {
-                throw new Error(`HTTP ${retryResponse.status}: Rate limit exceeded (retry failed)`)
+                // Retry de başarısız oldu, bu sayfayı atla
+                console.warn(`⚠️ Retry failed for ${page.name}, skipping this page`)
+                results.push({ status: 'rejected', reason: new Error(`HTTP ${retryResponse.status}: Rate limit exceeded (retry failed)`) })
+                continue
               }
               
               const retryData = await retryResponse.json()
@@ -519,9 +522,9 @@ async function fetchCryptoList() {
           
           console.log(`📡 [Ek Sayfa ${pageNum}] Fetching CoinGecko Page ${pageNum}${proxyInfo}`)
           
-          // Sayfalar arası delay
+          // Sayfalar arası delay (rate limit için - artırıldı)
           if (pageNum > 6) {
-            await new Promise(resolve => setTimeout(resolve, 2000))
+            await new Promise(resolve => setTimeout(resolve, 3000)) // 3 saniye bekleme
           }
           
           const controller = new AbortController()
@@ -558,6 +561,45 @@ async function fetchCryptoList() {
                 console.log(`✅ 500 coin'e ulaşıldı, ek sayfa çekme durduruldu`)
                 break
               }
+            }
+          } else if (response.status === 429) {
+            // Rate limit hatası - bekle ve retry yap
+            console.warn(`⚠️ [Ek Sayfa ${pageNum}] HTTP 429 (Rate Limit), 30 saniye bekleniyor...`)
+            await new Promise(resolve => setTimeout(resolve, 30000))
+            
+            // Retry
+            try {
+              const retryProxy = await getWorkingProxyForBatch(pageNum - 1, 10)
+              const retryController = new AbortController()
+              const retryTimeoutId = setTimeout(() => retryController.abort(), 60000)
+              
+              const retryResponse = await fetchWithProxy(pageUrl, {
+                headers: {
+                  'Accept': 'application/json',
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                },
+                signal: retryController.signal
+              }, retryProxy)
+              
+              clearTimeout(retryTimeoutId)
+              
+              if (retryResponse.ok) {
+                const pageData = await retryResponse.json()
+                if (Array.isArray(pageData) && pageData.length > 0) {
+                  pageData.forEach(coin => {
+                    if (!uniqueCoinsMap.has(coin.id)) {
+                      uniqueCoinsMap.set(coin.id, coin)
+                    }
+                  })
+                  uniqueData = Array.from(uniqueCoinsMap.values())
+                  filteredData = uniqueData.filter(coin => !isStablecoin(coin))
+                  console.log(`✅ [Ek Sayfa ${pageNum} Retry] ${pageData.length} coin çekildi`)
+                }
+              } else {
+                console.warn(`⚠️ [Ek Sayfa ${pageNum} Retry] Başarısız: HTTP ${retryResponse.status}`)
+              }
+            } catch (retryError) {
+              console.warn(`⚠️ [Ek Sayfa ${pageNum} Retry] Hata: ${retryError.message}`)
             }
           } else {
             console.warn(`⚠️ [Ek Sayfa ${pageNum}] HTTP ${response.status}, atlanıyor`)
@@ -629,7 +671,7 @@ async function fetchCryptoList() {
       
       try {
         // Batch'ler halinde çek (rate limit için)
-        const batchSize = 20 // Daha küçük batch'ler (rate limit için)
+        const batchSize = 10 // Daha küçük batch'ler (rate limit için - 20'den 10'a düşürüldü)
         const batches = []
         for (let i = 0; i < coinsToFetch.length; i += batchSize) {
           batches.push(coinsToFetch.slice(i, i + batchSize))
@@ -648,9 +690,9 @@ async function fetchCryptoList() {
           
           const batch = batches[batchIndex]
           
-          // Her batch arasında 2 saniye bekle (rate limit için)
+          // Her batch arasında 5 saniye bekle (rate limit için - artırıldı)
           if (batchIndex > 0) {
-            await new Promise(resolve => setTimeout(resolve, 2000))
+            await new Promise(resolve => setTimeout(resolve, 5000))
           }
           
           // /coins/{id} endpoint'i ile her coin için detaylı bilgi çek
@@ -658,62 +700,103 @@ async function fetchCryptoList() {
           
           for (let coinIndex = 0; coinIndex < batch.length; coinIndex++) {
             const coinId = batch[coinIndex]
-            try {
-              const supplyUrl = `${COINGECKO_API}/coins/${coinId}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false`
-              
-              const controller = new AbortController()
-              const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 saniye timeout
-              
-              const supplyResponse = await fetchWithProxy(supplyUrl, {
-                headers: {
-                  'Accept': 'application/json',
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                },
-                signal: controller.signal
-              }, proxyUrl)
-              
-              clearTimeout(timeoutId)
-              
-              if (supplyResponse.ok) {
-                const coinData = await supplyResponse.json()
-                if (coinData && coinData.market_data) {
-                  const marketData = coinData.market_data
-                  const totalSupply = marketData.total_supply !== null && marketData.total_supply !== undefined ? marketData.total_supply : null
-                  const maxSupply = marketData.max_supply !== null && marketData.max_supply !== undefined ? marketData.max_supply : null
-                  
-                  // Sadece null değilse kaydet (0 değerleri de geçerli)
-                  if (totalSupply !== null || maxSupply !== null) {
-                    supplyDataMap.set(coinId, {
-                      total_supply: totalSupply,
-                      max_supply: maxSupply
-                    })
+            let success = false
+            let retryCount = 0
+            const maxRetries = 2
+            
+            while (!success && retryCount <= maxRetries) {
+              try {
+                const supplyUrl = `${COINGECKO_API}/coins/${coinId}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false`
+                
+                // Her retry'de farklı proxy dene
+                const currentProxy = retryCount === 0 ? proxyUrl : await getWorkingProxyForBatch((batchIndex + coinIndex + retryCount) % 5, 5)
+                
+                if (retryCount > 0) {
+                  console.log(`🔄 [Supply] ${coinId} için retry ${retryCount}/${maxRetries} (Proxy: ${currentProxy ? currentProxy.split('@').pop() || currentProxy : 'No Proxy'})`)
+                  await new Promise(resolve => setTimeout(resolve, 2000)) // Retry arasında 2 saniye bekle
+                }
+                
+                const controller = new AbortController()
+                const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 saniye timeout (artırıldı)
+                
+                let supplyResponse
+                try {
+                  supplyResponse = await fetchWithProxy(supplyUrl, {
+                    headers: {
+                      'Accept': 'application/json',
+                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                    },
+                    signal: controller.signal
+                  }, currentProxy)
+                } catch (fetchError) {
+                  clearTimeout(timeoutId)
+                  if (fetchError.name === 'AbortError') {
+                    console.warn(`⚠️ [Supply] ${coinId} timeout (15s)`)
+                  } else {
+                    console.warn(`⚠️ [Supply] ${coinId} fetch hatası: ${fetchError.message}`)
+                  }
+                  retryCount++
+                  continue
+                }
+                
+                clearTimeout(timeoutId)
+                
+                if (supplyResponse && supplyResponse.ok) {
+                  const coinData = await supplyResponse.json()
+                  if (coinData && coinData.market_data) {
+                    const marketData = coinData.market_data
+                    const totalSupply = marketData.total_supply !== null && marketData.total_supply !== undefined ? marketData.total_supply : null
+                    const maxSupply = marketData.max_supply !== null && marketData.max_supply !== undefined ? marketData.max_supply : null
                     
-                    // İlk birkaç coin için debug log
-                    if (coinIndex < 3) {
+                    // Sadece null değilse kaydet (0 değerleri de geçerli)
+                    if (totalSupply !== null || maxSupply !== null) {
+                      supplyDataMap.set(coinId, {
+                        total_supply: totalSupply,
+                        max_supply: maxSupply
+                      })
+                      
                       console.log(`✅ ${coinId}: total_supply=${totalSupply}, max_supply=${maxSupply}`)
+                      success = true
+                    } else {
+                      console.log(`⚠️ ${coinId}: supply bilgisi yok (null)`)
+                      success = true // Başarılı ama supply yok, tekrar denemeye gerek yok
                     }
                   } else {
-                    // İlk birkaç coin için debug log
-                    if (coinIndex < 3) {
-                      console.log(`⚠️ ${coinId}: supply bilgisi yok`)
-                    }
-                  }
-                } else {
-                  if (coinIndex < 3) {
                     console.warn(`⚠️ ${coinId}: market_data bulunamadı`)
+                    success = true // Başarılı ama market_data yok, tekrar denemeye gerek yok
                   }
-                }
-              } else {
+                } else if (supplyResponse && supplyResponse.status === 429) {
+                // Rate limit hatası - daha uzun bekle
+                console.warn(`⚠️ ${coinId} için HTTP 429 (Rate Limit), 30 saniye bekleniyor...`)
+                await new Promise(resolve => setTimeout(resolve, 30000))
+                retryCount++
+                continue
+              } else if (supplyResponse) {
                 console.warn(`⚠️ ${coinId} için HTTP ${supplyResponse.status} hatası`)
+                retryCount++
+                continue
+              } else {
+                // supplyResponse null/undefined
+                console.warn(`⚠️ ${coinId} için response alınamadı`)
+                retryCount++
+                continue
               }
-              
-              // Her coin arasında kısa bir bekleme (rate limit için)
-              await new Promise(resolve => setTimeout(resolve, 200)) // 200ms bekleme
             } catch (error) {
-              // Hata durumunda devam et
-              if (error.name !== 'AbortError') {
-                console.warn(`⚠️ ${coinId} için supply bilgisi çekilemedi: ${error.message}`)
+              // Hata durumunda retry yap
+              if (error.name === 'AbortError') {
+                console.warn(`⚠️ ${coinId} timeout (15s)`)
+              } else {
+                console.warn(`⚠️ ${coinId} için hata: ${error.message}`)
               }
+              retryCount++
+              if (retryCount > maxRetries) {
+                console.error(`❌ ${coinId} için ${maxRetries} retry sonrası başarısız, atlanıyor`)
+              }
+            }
+            
+            // Her coin arasında bekleme (rate limit için)
+            if (success || retryCount > maxRetries) {
+              await new Promise(resolve => setTimeout(resolve, 1000)) // 1 saniye bekleme
             }
           }
           

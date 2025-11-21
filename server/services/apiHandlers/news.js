@@ -1,9 +1,3 @@
-/**
- * News API Handler
- * RSS feed'lerden haberleri çeker ve MongoDB'ye kaydeder
- * 3 kaynak: Kriptofoni, Cointelegraph TR, Bitcoinsistemi
- */
-
 let db = null
 
 export function setDb(database) {
@@ -35,11 +29,41 @@ function parseRSSFeed(xml, source) {
         
         if (!titleMatch || !linkMatch) continue
         
-        const title = (titleMatch[1] || '').trim().replace(/<[^>]*>/g, '')
+        // HTML entity decode helper function
+        const decodeHtmlEntities = (text) => {
+          if (!text) return text
+          return text
+            .replace(/&#8217;/g, "'")      // Right single quotation mark
+            .replace(/&#8216;/g, "'")      // Left single quotation mark
+            .replace(/&#8218;/g, "'")      // Single low-9 quotation mark
+            .replace(/&#8220;/g, '"')      // Left double quotation mark
+            .replace(/&#8221;/g, '"')      // Right double quotation mark
+            .replace(/&#8222;/g, '"')      // Double low-9 quotation mark
+            .replace(/&#39;/g, "'")        // Apostrophe
+            .replace(/&#x27;/g, "'")       // Apostrophe (hex)
+            .replace(/&apos;/g, "'")       // Apostrophe (named)
+            .replace(/&quot;/g, '"')       // Quotation mark
+            .replace(/&amp;/g, '&')        // Ampersand
+            .replace(/&lt;/g, '<')          // Less than
+            .replace(/&gt;/g, '>')         // Greater than
+            .replace(/&nbsp;/g, ' ')       // Non-breaking space
+            .replace(/&#160;/g, ' ')       // Non-breaking space (numeric)
+            .replace(/&mdash;/g, '—')      // Em dash
+            .replace(/&ndash;/g, '–')      // En dash
+            .replace(/&#8211;/g, '–')      // En dash (numeric)
+            .replace(/&#8212;/g, '—')      // Em dash (numeric)
+            .replace(/&hellip;/g, '...')   // Horizontal ellipsis
+            .replace(/&#8230;/g, '...')    // Horizontal ellipsis (numeric)
+        }
+        
+        let title = (titleMatch[1] || '').trim().replace(/<[^>]*>/g, '')
+        title = decodeHtmlEntities(title)
+        
         const url = (linkMatch[1] || '').trim()
         const pubDateStr = pubDateMatch ? pubDateMatch[1].trim() : new Date().toISOString()
         const rawDescription = descriptionMatch ? (descriptionMatch[1] || '').trim() : ''
-        const description = rawDescription.replace(/<[^>]*>/g, '')
+        let description = rawDescription.replace(/<[^>]*>/g, '')
+        description = decodeHtmlEntities(description)
         const contentEncoded = contentEncodedMatch ? (contentEncodedMatch[1] || '').trim() : ''
 
         // Resim URL'i çıkar (client-side extractImageFromItem mantığına göre)

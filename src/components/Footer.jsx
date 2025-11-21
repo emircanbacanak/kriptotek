@@ -9,6 +9,7 @@ const Footer = () => {
   return (
     <footer className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 py-6 sm:py-8 px-4 sm:px-6">
       <div className="max-w-7xl mx-auto">
+        {/* Başlık ve Alt Başlık */}
         <div className="text-center mb-6">
           <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white mb-2">
             {t('platformTitle')}
@@ -18,6 +19,7 @@ const Footer = () => {
           </p>
         </div>
 
+        {/* Sosyal Medya İkonları - Mobil ve Desktop'ta yan yana */}
         <div className="flex items-center justify-center gap-3 sm:gap-4 mb-4">
           <a
             href="https://www.youtube.com/@kriptotek8907"
@@ -60,6 +62,7 @@ const Footer = () => {
           </a>
         </div>
 
+        {/* Borsa Kayıt Butonları */}
         <div className="flex items-center justify-center gap-2 sm:gap-3 mb-6">
           <a 
             href="https://tinyurl.com/54bf5wes" 
@@ -81,12 +84,14 @@ const Footer = () => {
           </a>
         </div>
 
+        {/* Disclaimer */}
         <div className="text-center mb-3">
           <p className="text-xs sm:text-sm text-amber-600 dark:text-amber-400 font-medium">
             {t('disclaimer')}
           </p>
         </div>
 
+        {/* Copyright ve Tasarımcı Bilgisi */}
         <div className="flex flex-wrap items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-gray-400 text-center">
           <span>© {currentYear} Kriptotek. {t('allRightsReserved')}</span>
           <span>•</span>

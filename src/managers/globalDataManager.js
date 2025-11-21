@@ -42,6 +42,20 @@ class GlobalDataManager {
     this.subscribers = new Set()
     this.isUpdating = false
     
+    // localStorage cache keys
+    this.CACHE_KEYS = {
+      crypto: 'global_crypto_data',
+      dominance: 'global_dominance_data',
+      fearGreed: 'global_fear_greed_data',
+      trending: 'global_trending_data',
+      currency: 'global_currency_data',
+      fedRate: 'global_fed_rate_data',
+      supplyTracking: 'global_supply_tracking_data'
+    }
+    
+    // Constructor'da localStorage'dan verileri yükle
+    this.loadFromLocalStorage()
+    
     // API URL - Production'da otomatik tespit
     const getApiUrl = () => {
       if (import.meta.env.VITE_MONGO_API_URL) {
@@ -57,6 +71,164 @@ class GlobalDataManager {
       return 'http://localhost:3000'
     }
     this.MONGO_API_URL = getApiUrl()
+  }
+
+  // localStorage'dan verileri yükle
+  loadFromLocalStorage() {
+    try {
+      // Crypto verileri
+      const cryptoCache = localStorage.getItem(this.CACHE_KEYS.crypto)
+      if (cryptoCache) {
+        const { coins, topMovers, lastCryptoUpdate } = JSON.parse(cryptoCache)
+        if (coins && Array.isArray(coins) && coins.length > 0) {
+          this.coins = coins
+          this.topMovers = topMovers || { topGainers: [], topLosers: [] }
+          this.lastCryptoUpdate = lastCryptoUpdate ? new Date(lastCryptoUpdate) : null
+          console.log(`📦 [localStorage] Crypto verisi yüklendi (${coins.length} coin)`)
+        }
+      }
+      
+      // Dominance verileri
+      const dominanceCache = localStorage.getItem(this.CACHE_KEYS.dominance)
+      if (dominanceCache) {
+        const { data, lastUpdate } = JSON.parse(dominanceCache)
+        if (data) {
+          this.dominanceData = data
+          this.lastDominanceUpdate = lastUpdate || Date.now()
+          console.log(`📦 [localStorage] Dominance verisi yüklendi`)
+        }
+      }
+      
+      // Fear & Greed
+      const fearGreedCache = localStorage.getItem(this.CACHE_KEYS.fearGreed)
+      if (fearGreedCache) {
+        const data = JSON.parse(fearGreedCache)
+        if (data) {
+          this.fearGreedIndex = data
+          console.log(`📦 [localStorage] Fear & Greed verisi yüklendi`)
+        }
+      }
+      
+      // Trending verileri
+      const trendingCache = localStorage.getItem(this.CACHE_KEYS.trending)
+      if (trendingCache) {
+        const { coins, lastUpdate } = JSON.parse(trendingCache)
+        if (coins && Array.isArray(coins) && coins.length > 0) {
+          this.trendingCoins = coins
+          this.lastTrendingUpdate = lastUpdate || Date.now()
+          console.log(`📦 [localStorage] Trending verisi yüklendi (${coins.length} coin)`)
+        }
+      }
+      
+      // Currency rates
+      const currencyCache = localStorage.getItem(this.CACHE_KEYS.currency)
+      if (currencyCache) {
+        const { data, lastUpdate } = JSON.parse(currencyCache)
+        if (data) {
+          this.currencyRates = data
+          this.lastCurrencyUpdate = lastUpdate || Date.now()
+          if (typeof window !== 'undefined') {
+            window.__exchangeRates = this.currencyRates
+          }
+          console.log(`📦 [localStorage] Currency rates yüklendi`)
+        }
+      }
+      
+      // Fed Rate
+      const fedRateCache = localStorage.getItem(this.CACHE_KEYS.fedRate)
+      if (fedRateCache) {
+        const { data, lastUpdate } = JSON.parse(fedRateCache)
+        if (data) {
+          this.fedRateData = data
+          this.lastFedRateUpdate = lastUpdate || Date.now()
+          console.log(`📦 [localStorage] Fed Rate verisi yüklendi`)
+        }
+      }
+      
+      // Supply Tracking
+      const supplyTrackingCache = localStorage.getItem(this.CACHE_KEYS.supplyTracking)
+      if (supplyTrackingCache) {
+        const { data, lastUpdate } = JSON.parse(supplyTrackingCache)
+        if (data) {
+          this.supplyTrackingData = data
+          this.lastSupplyTrackingUpdate = lastUpdate || Date.now()
+          console.log(`📦 [localStorage] Supply Tracking verisi yüklendi`)
+        }
+      }
+      
+      // localStorage'dan yüklendikten sonra abonelere bildir (localStorage kaydetme yapmadan)
+      const data = this.getData()
+      this.subscribers.forEach(callback => {
+        try {
+          callback(data)
+        } catch (error) {
+          console.error('Error notifying global subscriber:', error)
+        }
+      })
+    } catch (error) {
+      console.warn('⚠️ localStorage yükleme hatası:', error)
+    }
+  }
+
+  // Verileri localStorage'a kaydet
+  saveToLocalStorage() {
+    try {
+      // Crypto verileri
+      if (this.coins && this.coins.length > 0) {
+        localStorage.setItem(this.CACHE_KEYS.crypto, JSON.stringify({
+          coins: this.coins,
+          topMovers: this.topMovers,
+          lastCryptoUpdate: this.lastCryptoUpdate
+        }))
+      }
+      
+      // Dominance verileri
+      if (this.dominanceData) {
+        localStorage.setItem(this.CACHE_KEYS.dominance, JSON.stringify({
+          data: this.dominanceData,
+          lastUpdate: this.lastDominanceUpdate
+        }))
+      }
+      
+      // Fear & Greed
+      if (this.fearGreedIndex) {
+        localStorage.setItem(this.CACHE_KEYS.fearGreed, JSON.stringify(this.fearGreedIndex))
+      }
+      
+      // Trending verileri
+      if (this.trendingCoins && this.trendingCoins.length > 0) {
+        localStorage.setItem(this.CACHE_KEYS.trending, JSON.stringify({
+          coins: this.trendingCoins,
+          lastUpdate: this.lastTrendingUpdate
+        }))
+      }
+      
+      // Currency rates
+      if (this.currencyRates) {
+        localStorage.setItem(this.CACHE_KEYS.currency, JSON.stringify({
+          data: this.currencyRates,
+          lastUpdate: this.lastCurrencyUpdate
+        }))
+      }
+      
+      // Fed Rate
+      if (this.fedRateData) {
+        localStorage.setItem(this.CACHE_KEYS.fedRate, JSON.stringify({
+          data: this.fedRateData,
+          lastUpdate: this.lastFedRateUpdate
+        }))
+      }
+      
+      // Supply Tracking
+      if (this.supplyTrackingData) {
+        localStorage.setItem(this.CACHE_KEYS.supplyTracking, JSON.stringify({
+          data: this.supplyTrackingData,
+          lastUpdate: this.lastSupplyTrackingUpdate
+        }))
+      }
+    } catch (error) {
+      console.warn('⚠️ localStorage kaydetme hatası:', error)
+    }
   }
 
   // Abone ol (sayfalar veri değişikliklerini dinleyebilir)
@@ -82,6 +254,9 @@ class GlobalDataManager {
         console.error('Error notifying global subscriber:', error)
       }
     })
+    
+    // Veriler değiştiğinde localStorage'a kaydet
+    this.saveToLocalStorage()
   }
 
   // Top movers hesapla
@@ -642,7 +817,11 @@ class GlobalDataManager {
     this.setupRealtimeListeners()
     
     // İlk başlatmada sadece MongoDB'den mevcut veriyi yükle (API çağrısı yapma)
-    this.loadFromMongoDBOnly().catch(() => {})
+    // Retry mekanizması ile backend hazır olana kadar dene - ANINDA YÜKLE
+    this.loadFromMongoDBOnlyWithRetry().catch(() => {
+      // Hata olsa bile abonelere bildir
+      this.notifySubscribers()
+    })
     
     // Recursive setTimeout kullanarak 5 dakikalık sabit zaman dilimlerinde güncelle
     const scheduleNextUpdate = () => {
@@ -657,199 +836,300 @@ class GlobalDataManager {
     scheduleNextUpdate()
   }
   
-  // Sadece MongoDB'den mevcut veriyi yükle (API çağrısı yapmadan)
+  // Sadece MongoDB'den mevcut veriyi yükle (API çağrısı yapmadan) - PARALEL YÜKLEME
   async loadFromMongoDBOnly() {
     const timeStr = new Date().toLocaleTimeString('tr-TR')
     console.log(`📥 [${timeStr}] MongoDB'den mevcut veriler yükleniyor...`)
     
+    // İlk başta abonelere bildir (loading state için)
+    this.notifySubscribers()
+    
     try {
       const MONGO_API_URL = this.MONGO_API_URL
       
+      // TÜM VERİLERİ PARALEL YÜKLE (anında gelmesi için)
+      const [
+        cryptoResponse,
+        dominanceResponse,
+        fearGreedResponse,
+        trendingResponse,
+        currencyResponse,
+        fedRateResponse,
+        supplyTrackingResponse
+      ] = await Promise.allSettled([
+        fetch(`${MONGO_API_URL}/cache/crypto_list`, {
+          headers: { 'Accept': 'application/json' }
+        }).catch(() => null),
+        fetch(`${MONGO_API_URL}/api/cache/dominance_data`, {
+          headers: { 'Accept': 'application/json' }
+        }).catch(() => null),
+        fetch(`${MONGO_API_URL}/api/cache/fear_greed`, {
+          headers: { 'Accept': 'application/json' }
+        }).catch(() => null),
+        fetch(`${MONGO_API_URL}/api/trending`, {
+          headers: { 'Accept': 'application/json' }
+        }).catch(() => null),
+        fetch(`${MONGO_API_URL}/api/cache/currency_rates`, {
+          headers: { 'Accept': 'application/json' }
+        }).catch(() => null),
+        fetch(`${MONGO_API_URL}/api/fed-rate`, {
+          headers: { 'Accept': 'application/json' }
+        }).catch(() => null),
+        fetch(`${MONGO_API_URL}/cache/supply_tracking`, {
+          headers: { 'Accept': 'application/json' }
+        }).catch(() => null)
+      ])
+      
       // 1. Crypto verileri
-      try {
-        const mongoResponse = await fetch(`${MONGO_API_URL}/cache/crypto_list`, {
-          headers: { 'Accept': 'application/json' },
-          signal: AbortSignal.timeout(5000)
-        })
-        if (mongoResponse.ok) {
-          const mongoResult = await mongoResponse.json()
+      if (cryptoResponse.status === 'fulfilled' && cryptoResponse.value && cryptoResponse.value.ok) {
+        try {
+          const mongoResult = await cryptoResponse.value.json()
           if (mongoResult.success && mongoResult.data) {
-            const coins = mongoResult.data.coins || mongoResult.data.data?.coins || []
+            const coins = mongoResult.data.coins || mongoResult.data.data?.coins || mongoResult.data || []
             if (Array.isArray(coins) && coins.length > 0) {
-              // Debug: total_supply ve max_supply kontrolü
-              const sampleCoin = coins[0]
-              const coinsWithTotalSupply = coins.filter(c => c.total_supply !== null && c.total_supply !== undefined).length
-              const coinsWithMaxSupply = coins.filter(c => c.max_supply !== null && c.max_supply !== undefined).length
-              
               this.coins = coins.length > 500 ? coins.slice(0, 500) : coins
               this.topMovers = this.calculateTopMovers(this.coins)
               this.lastCryptoUpdate = new Date()
-              
               console.log(`✅ [${timeStr}] Crypto verisi MongoDB'den yüklendi (${this.coins.length} coin)`)
-              
-              // Debug: Set edildikten sonra kontrol
-              const sampleCoinAfter = this.coins[0]
             }
           }
-        }
-      } catch (error) {
-        // Hata mesajını daha detaylı logla
-        const errorMsg = error?.message || error?.toString() || 'Bilinmeyen hata'
-        console.warn(`⚠️ [${timeStr}] Crypto verisi yüklenemedi:`, errorMsg)
-        if (error?.stack) {
-          console.warn(`⚠️ [${timeStr}] Hata stack:`, error.stack)
+        } catch (e) {
+          // Sessizce geç
         }
       }
       
       // 2. Dominance verileri
-      try {
-        const mongoResponse = await fetch(`${MONGO_API_URL}/api/cache/dominance_data`)
-        if (mongoResponse.ok) {
-          const mongoResult = await mongoResponse.json()
+      if (dominanceResponse.status === 'fulfilled' && dominanceResponse.value && dominanceResponse.value.ok) {
+        try {
+          const mongoResult = await dominanceResponse.value.json()
           if (mongoResult.success && mongoResult.data) {
             this.dominanceData = mongoResult.data
             this.lastDominanceUpdate = Date.now()
+            console.log(`✅ [${timeStr}] Dominance verisi MongoDB'den yüklendi`)
           }
+        } catch (e) {
+          // Sessizce geç
         }
-      } catch (error) {
-        console.warn(`⚠️ [${timeStr}] Dominance verisi yüklenemedi:`, error.message)
       }
       
       // 3. Fear & Greed
-      try {
-        const mongoResponse = await fetch(`${MONGO_API_URL}/api/cache/fear_greed`)
-        if (mongoResponse.ok) {
-          const mongoResult = await mongoResponse.json()
+      if (fearGreedResponse.status === 'fulfilled' && fearGreedResponse.value && fearGreedResponse.value.ok) {
+        try {
+          const mongoResult = await fearGreedResponse.value.json()
           if (mongoResult.success && mongoResult.data) {
             this.fearGreedIndex = mongoResult.data
+            console.log(`✅ [${timeStr}] Fear & Greed verisi MongoDB'den yüklendi`)
           }
+        } catch (e) {
+          // Sessizce geç
         }
-      } catch (error) {
-        console.warn(`⚠️ [${timeStr}] Fear & Greed verisi yüklenemedi:`, error.message)
       }
       
       // 4. Trending verileri
-      try {
-        const trendingResponse = await fetch(`${MONGO_API_URL}/api/trending`)
-        if (trendingResponse.ok) {
-          const trendingResult = await trendingResponse.json()
+      if (trendingResponse.status === 'fulfilled' && trendingResponse.value && trendingResponse.value.ok) {
+        try {
+          const trendingResult = await trendingResponse.value.json()
           if (trendingResult.success && trendingResult.data) {
             this.trendingCoins = trendingResult.data.coins || []
             this.lastTrendingUpdate = trendingResult.data.updatedAt || Date.now()
+            console.log(`✅ [${timeStr}] Trending verisi MongoDB'den yüklendi (${this.trendingCoins.length} coin)`)
           }
+        } catch (e) {
+          // Sessizce geç
         }
-      } catch (error) {
-        console.warn(`⚠️ [${timeStr}] Trending verisi yüklenemedi:`, error.message)
       }
       
       // 5. Currency rates
-      try {
-        const mongoResponse = await fetch(`${MONGO_API_URL}/api/cache/currency_rates`)
-        if (mongoResponse.ok) {
-          const mongoResult = await mongoResponse.json()
+      if (currencyResponse.status === 'fulfilled' && currencyResponse.value && currencyResponse.value.ok) {
+        try {
+          const mongoResult = await currencyResponse.value.json()
           if (mongoResult.success && mongoResult.data) {
             this.currencyRates = mongoResult.data
             this.lastCurrencyUpdate = Date.now()
             if (typeof window !== 'undefined') {
               window.__exchangeRates = this.currencyRates
             }
+            console.log(`✅ [${timeStr}] Currency rates MongoDB'den yüklendi`)
           }
+        } catch (e) {
+          // Sessizce geç
         }
-      } catch (error) {
-        console.warn(`⚠️ [${timeStr}] Currency rates yüklenemedi:`, error.message)
       }
       
       // 6. Fed Rate
-      try {
-        const mongoResponse = await fetch(`${MONGO_API_URL}/api/fed-rate`, {
-          headers: { 'Accept': 'application/json' },
-          signal: AbortSignal.timeout(10000)
-        })
-        if (mongoResponse.ok) {
-          const mongoResult = await mongoResponse.json()
-          if (mongoResult.success && mongoResult.data) {
-            this.fedRateData = mongoResult.data
-            this.lastFedRateUpdate = Date.now()
-            console.log(`✅ [${timeStr}] Fed Rate verisi MongoDB'den yüklendi`)
-          } else {
-            console.warn(`⚠️ [${timeStr}] Fed Rate verisi MongoDB'de bulunamadı (success: ${mongoResult.success})`)
-          }
-        } else if (mongoResponse.status === 404) {
-          // Cache yoksa, backend'den çekmeyi dene (sayfa bozulmasın)
-          console.log(`⚠️ [${timeStr}] Fed Rate verisi MongoDB'de yok (404), backend'den çekiliyor...`)
+      if (fedRateResponse.status === 'fulfilled' && fedRateResponse.value) {
+        if (fedRateResponse.value.ok) {
           try {
-            const updateResponse = await fetch(`${MONGO_API_URL}/api/fed-rate/update`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              signal: AbortSignal.timeout(15000)
-            })
-            if (updateResponse.ok) {
-              const updateResult = await updateResponse.json()
-              if (updateResult.success && updateResult.data) {
-                this.fedRateData = updateResult.data
-                this.lastFedRateUpdate = Date.now()
-                console.log(`✅ [${timeStr}] Fed Rate verisi backend'den çekildi`)
-              } else {
-                console.warn(`⚠️ [${timeStr}] Fed Rate backend güncelleme başarısız (success: ${updateResult.success})`)
-              }
-            } else {
-              console.warn(`⚠️ [${timeStr}] Fed Rate backend güncelleme hatası: HTTP ${updateResponse.status}`)
+            const mongoResult = await fedRateResponse.value.json()
+            if (mongoResult.success && mongoResult.data) {
+              this.fedRateData = mongoResult.data
+              this.lastFedRateUpdate = Date.now()
+              console.log(`✅ [${timeStr}] Fed Rate verisi MongoDB'den yüklendi`)
             }
-          } catch (updateError) {
-            console.warn(`⚠️ [${timeStr}] Fed Rate backend güncelleme hatası:`, updateError.message)
+          } catch (e) {
+            // Sessizce geç
           }
-        } else {
-          console.warn(`⚠️ [${timeStr}] Fed Rate verisi yüklenemedi: HTTP ${mongoResponse.status}`)
+        } else if (fedRateResponse.value.status === 404) {
+          // Cache yoksa, backend'den çekmeyi dene (async, sayfa bozulmasın)
+          fetch(`${MONGO_API_URL}/api/fed-rate/update`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          }).catch(() => {}) // Sessizce geç
         }
-      } catch (error) {
-        console.warn(`⚠️ [${timeStr}] Fed Rate verisi yüklenemedi:`, error.message)
       }
       
       // 7. Supply Tracking
-      try {
-        const mongoResponse = await fetch(`${MONGO_API_URL}/cache/supply_tracking`, {
-          headers: { 'Accept': 'application/json' },
-          signal: AbortSignal.timeout(10000)
-        })
-        if (mongoResponse.ok) {
-          const mongoResult = await mongoResponse.json()
+      if (supplyTrackingResponse.status === 'fulfilled' && supplyTrackingResponse.value && supplyTrackingResponse.value.ok) {
+        try {
+          const mongoResult = await supplyTrackingResponse.value.json()
           if (mongoResult.success && mongoResult.data) {
             this.supplyTrackingData = mongoResult.data.data || mongoResult.data
             this.lastSupplyTrackingUpdate = Date.now()
+            console.log(`✅ [${timeStr}] Supply Tracking verisi MongoDB'den yüklendi`)
           }
+        } catch (e) {
+          // Sessizce geç
         }
-      } catch (error) {
-        console.warn(`⚠️ [${timeStr}] Supply Tracking verisi yüklenemedi:`, error.message)
       }
       
-      // Abonelere bildir
+      // Abonelere bildir (veri yüklenmiş olsun veya olmasın) - ANINDA
       this.notifySubscribers()
       
       const nextUpdateTime = new Date(Date.now() + this.getNextUpdateTime()).toLocaleTimeString('tr-TR')
-      console.log(`✅ [${timeStr}] MongoDB'den mevcut veriler yüklendi`)
+      console.log(`✅ [${timeStr}] MongoDB'den veri yükleme işlemi tamamlandı`)
       console.log(`⏰ Bir sonraki güncelleme: ${nextUpdateTime}`)
+      
+      // Veri durumunu logla
+      const dataStatus = {
+        crypto: this.coins.length > 0 ? `${this.coins.length} coin` : 'YOK',
+        dominance: this.dominanceData ? 'VAR' : 'YOK',
+        fearGreed: this.fearGreedIndex ? 'VAR' : 'YOK',
+        trending: this.trendingCoins.length > 0 ? `${this.trendingCoins.length} coin` : 'YOK',
+        currency: this.currencyRates ? 'VAR' : 'YOK',
+        fedRate: this.fedRateData ? 'VAR' : 'YOK',
+        supplyTracking: this.supplyTrackingData ? 'VAR' : 'YOK'
+      }
+      console.log(`📊 Veri durumu:`, dataStatus)
     } catch (error) {
       console.error(`❌ [${timeStr}] MongoDB yükleme hatası:`, error.message || error)
+      // Hata olsa bile abonelere bildir (boş veri ile) - ANINDA
+      this.notifySubscribers()
+      throw error // Retry için hatayı fırlat
+    }
+  }
+
+  // Retry mekanizması ile MongoDB'den veri yükle - HIZLI RETRY
+  async loadFromMongoDBOnlyWithRetry() {
+    const maxRetries = 5 // Daha az deneme
+    let retryCount = 0
+    
+    while (retryCount < maxRetries) {
+      try {
+        await this.loadFromMongoDBOnly()
+        // Başarılı olduysa çık
+        return
+      } catch (error) {
+        retryCount++
+        if (retryCount < maxRetries) {
+          // 300ms bekle ve tekrar dene (çok hızlı)
+          await new Promise(resolve => setTimeout(resolve, 300))
+          if (retryCount <= 2) {
+            console.log(`🔄 [${new Date().toLocaleTimeString('tr-TR')}] MongoDB veri yükleme tekrar denemesi (${retryCount}/${maxRetries})`)
+          }
+        } else {
+          // Son denemede bile abonelere bildir (boş veri ile)
+          this.notifySubscribers()
+        }
+      }
     }
   }
 
   // WebSocket ile real-time güncellemeleri dinle
   setupRealtimeListeners() {
-    // api_cache collection'ındaki crypto_list güncellemelerini dinle
+    // api_cache collection'ındaki tüm güncellemeleri dinle
     realtimeService.subscribe('api_cache', (message) => {
       if (message.operationType === 'update' || message.operationType === 'replace') {
         const documentId = message.documentId || message.fullDocument?._id
+        const data = message.fullDocument?.data || message.data?.data || message.fullDocument || message.data
+        
+        // Crypto list güncellemesi
         if (documentId === 'crypto_list') {
-          const data = message.fullDocument || message.data
-          if (data && data.coins) {
-            const coins = Array.isArray(data.coins) ? data.coins : []
-            if (coins.length > 0) {
-              console.log(`🔄 [WebSocket] Crypto list güncellendi (${coins.length} coin)`)
-              this.coins = coins.length > 500 ? coins.slice(0, 500) : coins
-              this.topMovers = this.calculateTopMovers(this.coins)
-              this.lastCryptoUpdate = new Date()
-              this.notifySubscribers()
+          const coins = data?.coins || data || []
+          if (Array.isArray(coins) && coins.length > 0) {
+            console.log(`🔄 [WebSocket] Crypto list güncellendi (${coins.length} coin)`)
+            this.coins = coins.length > 500 ? coins.slice(0, 500) : coins
+            this.topMovers = this.calculateTopMovers(this.coins)
+            this.lastCryptoUpdate = new Date()
+            this.notifySubscribers()
+          }
+        }
+        
+        // Dominance data güncellemesi
+        if (documentId === 'dominance_data') {
+          if (data) {
+            console.log(`🔄 [WebSocket] Dominance data güncellendi`)
+            this.dominanceData = data
+            this.lastDominanceUpdate = Date.now()
+            this.notifySubscribers()
+          }
+        }
+        
+        // Fear & Greed güncellemesi
+        if (documentId === 'fear_greed') {
+          if (data) {
+            console.log(`🔄 [WebSocket] Fear & Greed güncellendi`)
+            this.fearGreedIndex = data
+            this.notifySubscribers()
+          }
+        }
+        
+        // Currency rates güncellemesi
+        if (documentId === 'currency_rates') {
+          if (data) {
+            console.log(`🔄 [WebSocket] Currency rates güncellendi`)
+            this.currencyRates = data
+            this.lastCurrencyUpdate = Date.now()
+            if (typeof window !== 'undefined') {
+              window.__exchangeRates = this.currencyRates
             }
+            this.notifySubscribers()
+          }
+        }
+        
+        // Fed Rate güncellemesi
+        if (documentId === 'fed_rate') {
+          if (data) {
+            console.log(`🔄 [WebSocket] Fed Rate güncellendi`)
+            this.fedRateData = data
+            this.lastFedRateUpdate = Date.now()
+            this.notifySubscribers()
+          }
+        }
+        
+        // Supply Tracking güncellemesi
+        if (documentId === 'supply_tracking') {
+          if (data) {
+            console.log(`🔄 [WebSocket] Supply Tracking güncellendi`)
+            this.supplyTrackingData = data.data || data
+            this.lastSupplyTrackingUpdate = Date.now()
+            this.notifySubscribers()
+          }
+        }
+      }
+    })
+    
+    // trending_data collection'ındaki güncellemeleri dinle
+    realtimeService.subscribe('trending_data', (message) => {
+      if (message.operationType === 'update' || message.operationType === 'replace') {
+        const documentId = message.documentId || message.fullDocument?._id
+        if (documentId === 'trending_coins') {
+          const data = message.fullDocument || message.data
+          const coins = data?.coins || []
+          if (Array.isArray(coins) && coins.length > 0) {
+            console.log(`🔄 [WebSocket] Trending coins güncellendi (${coins.length} coin)`)
+            this.trendingCoins = coins
+            this.lastTrendingUpdate = data.updatedAt || Date.now()
+            this.notifySubscribers()
           }
         }
       }

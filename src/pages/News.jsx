@@ -36,6 +36,44 @@ const styles = `
   }
 `
 
+/**
+ * HTML entity'leri decode et (&#8217; -> ', &quot; -> ", vb.)
+ */
+function decodeHtmlEntities(text) {
+  if (!text || typeof text !== 'string') return text
+  
+  // HTML entity'leri decode et
+  const textarea = document.createElement('textarea')
+  textarea.innerHTML = text
+  let decoded = textarea.value
+  
+  // Ek olarak yaygın entity'leri manuel decode et
+  decoded = decoded
+    .replace(/&#8217;/g, "'")      // Right single quotation mark
+    .replace(/&#8216;/g, "'")      // Left single quotation mark
+    .replace(/&#8218;/g, "'")      // Single low-9 quotation mark
+    .replace(/&#8220;/g, '"')      // Left double quotation mark
+    .replace(/&#8221;/g, '"')      // Right double quotation mark
+    .replace(/&#8222;/g, '"')      // Double low-9 quotation mark
+    .replace(/&#39;/g, "'")        // Apostrophe
+    .replace(/&#x27;/g, "'")       // Apostrophe (hex)
+    .replace(/&apos;/g, "'")       // Apostrophe (named)
+    .replace(/&quot;/g, '"')       // Quotation mark
+    .replace(/&amp;/g, '&')        // Ampersand
+    .replace(/&lt;/g, '<')          // Less than
+    .replace(/&gt;/g, '>')         // Greater than
+    .replace(/&nbsp;/g, ' ')       // Non-breaking space
+    .replace(/&#160;/g, ' ')       // Non-breaking space (numeric)
+    .replace(/&mdash;/g, '—')      // Em dash
+    .replace(/&ndash;/g, '–')      // En dash
+    .replace(/&#8211;/g, '–')      // En dash (numeric)
+    .replace(/&#8212;/g, '—')      // Em dash (numeric)
+    .replace(/&hellip;/g, '...')   // Horizontal ellipsis
+    .replace(/&#8230;/g, '...')    // Horizontal ellipsis (numeric)
+  
+  return decoded
+}
+
 function News() {
   const { t, language } = useLanguage()
   const { theme } = useTheme()
@@ -48,6 +86,7 @@ function News() {
   const unsubscribeRef = useRef(null)
   const previousNewsIdsRef = useRef(new Set())
   const [nowTick, setNowTick] = useState(Date.now())
+  const [filterType, setFilterType] = useState('all') // 'all', 'important', 'positive', 'negative', 'neutral'
 
   useEffect(() => {
     updatePageSEO('news', language)
@@ -155,9 +194,9 @@ function News() {
     return false
   }, [])
 
-  // Her dakika yeniden render ederek zaman damgalarını canlı güncelle
+  // Her saniye yeniden render ederek zaman damgalarını canlı güncelle (dinamik zaman gösterimi için)
   useEffect(() => {
-    const interval = setInterval(() => setNowTick(Date.now()), 60 * 1000)
+    const interval = setInterval(() => setNowTick(Date.now()), 1000) // Her 1 saniyede bir güncelle
     return () => clearInterval(interval)
   }, [])
 
@@ -273,13 +312,41 @@ function News() {
     }
   }, [])
 
-  // Arama filtreleme (zaten 24 saat içindeki haberler)
+  // Haber sentiment analizi helper
+  const getNewsSentiment = useCallback((item) => {
+    const text = ((item.title || '') + ' ' + (item.description || '')).toLowerCase()
+    if (text.includes('yüksel') || text.includes('art') || text.includes('pozitif') || text.includes('olumlu') || text.includes('bull') || text.includes('pump')) {
+      return 'positive'
+    } else if (text.includes('düş') || text.includes('azal') || text.includes('negatif') || text.includes('olumsuz') || text.includes('bear') || text.includes('dump') || text.includes('düşüş')) {
+      return 'negative'
+    }
+    return 'neutral'
+  }, [])
+
+  // Arama ve filtreleme (zaten 24 saat içindeki haberler)
   useEffect(() => {
     let filtered = news
     
+    // Durum filtreleme (önemli, pozitif, negatif, nötr)
+    if (filterType !== 'all') {
+      filtered = filtered.filter(item => {
+        if (filterType === 'important') {
+          return isImportantNews(item)
+        } else if (filterType === 'positive') {
+          return getNewsSentiment(item) === 'positive'
+        } else if (filterType === 'negative') {
+          return getNewsSentiment(item) === 'negative'
+        } else if (filterType === 'neutral') {
+          return getNewsSentiment(item) === 'neutral'
+        }
+        return true
+      })
+    }
+    
+    // Arama filtreleme
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase()
-      filtered = news.filter(item =>
+      filtered = filtered.filter(item =>
         item.title.toLowerCase().includes(query) ||
         item.description.toLowerCase().includes(query)
       )
@@ -293,7 +360,7 @@ function News() {
     })
     
     setFilteredNews(filtered)
-  }, [searchQuery, news])
+  }, [searchQuery, news, filterType, isImportantNews, getNewsSentiment])
 
   // Zaman formatı (Europe/Istanbul)
   function parseIstanbulDate(input) {
@@ -409,16 +476,77 @@ function News() {
 
         
 
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder={t('searchNews') || 'Haberlerde ara...'}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 dark:text-white placeholder-gray-400"
-          />
+        {/* Search and Filter */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          {/* Search */}
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500" />
+            <input
+              type="text"
+              placeholder={t('searchNews') || 'Haberlerde ara...'}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+            />
+          </div>
+          
+          {/* Filter Buttons */}
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setFilterType('all')}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                filterType === 'all'
+                  ? 'bg-blue-500 dark:bg-blue-600 text-white shadow-lg'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }`}
+            >
+              {t('all') || 'Tümü'}
+            </button>
+            <button
+              onClick={() => setFilterType('important')}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 flex items-center gap-1.5 ${
+                filterType === 'important'
+                  ? 'bg-red-500 dark:bg-red-600 text-white shadow-lg'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }`}
+            >
+              <span>🔥</span>
+              <span>{t('important') || 'Önemli'}</span>
+            </button>
+            <button
+              onClick={() => setFilterType('positive')}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 flex items-center gap-1.5 ${
+                filterType === 'positive'
+                  ? 'bg-green-500 dark:bg-green-600 text-white shadow-lg'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }`}
+            >
+              <span>📈</span>
+              <span>{t('positive') || 'Pozitif'}</span>
+            </button>
+            <button
+              onClick={() => setFilterType('negative')}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 flex items-center gap-1.5 ${
+                filterType === 'negative'
+                  ? 'bg-red-500 dark:bg-red-600 text-white shadow-lg'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }`}
+            >
+              <span>📉</span>
+              <span>{t('negative') || 'Negatif'}</span>
+            </button>
+            <button
+              onClick={() => setFilterType('neutral')}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 flex items-center gap-1.5 ${
+                filterType === 'neutral'
+                  ? 'bg-gray-500 dark:bg-gray-600 text-white shadow-lg'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }`}
+            >
+              <span>📰</span>
+              <span>{t('neutral') || 'Nötr'}</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -631,13 +759,13 @@ function News() {
               {/* Content */}
               <div className="p-2.5 sm:p-3 flex-1 flex flex-col min-h-0">
                 <h2 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white mb-1.5 line-clamp-2 hover:text-primary-600 dark:hover:text-primary-400 transition-colors leading-tight">
-                  {item.title}
+                  {decodeHtmlEntities(item.title)}
                 </h2>
                 
                 <p className="text-xs text-gray-600 dark:text-gray-400 mb-1.5 line-clamp-2 flex-1 leading-relaxed min-h-[2.5rem]">
                   {item.description && item.description.length > 150 
-                    ? item.description.substring(0, 150).trim() + '...' 
-                    : item.description}
+                    ? decodeHtmlEntities(item.description.substring(0, 150).trim() + '...')
+                    : decodeHtmlEntities(item.description)}
                 </p>
                 
                 {/* Analysis Summary */}

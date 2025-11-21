@@ -9,66 +9,71 @@ export const ThemeProvider = ({ children }) => {
   const authContext = useAuth()
   const user = authContext?.user || null
   
-  const [isDark, setIsDark] = useState(() => {
-    const saved = localStorage.getItem('theme')
-    return saved === 'dark' || (saved !== 'light' && false) // Default light
-  })
-  const [theme, setTheme] = useState(() => {
+  // localStorage'dan tema yükle - ANINDA (F5 sonrası hemen uygula)
+  const getInitialTheme = () => {
+    if (typeof window === 'undefined') return 'light'
     const saved = localStorage.getItem('theme')
     return saved || 'light'
-  })
+  }
+
+  const [theme, setTheme] = useState(getInitialTheme)
+  const [isDark, setIsDark] = useState(() => getInitialTheme() === 'dark')
   const [isInitialized, setIsInitialized] = useState(false)
 
-  // MongoDB'den tema yükle (kullanıcı giriş yapmışsa)
+  // İlk yüklemede localStorage'dan temayı DOM'a ANINDA uygula (F5 sonrası)
   useEffect(() => {
-    const loadTheme = async () => {
-      if (!user) {
-        // Kullanıcı giriş yapmamışsa localStorage'dan yükle
-        const savedTheme = localStorage.getItem('theme')
-        const themeValue = savedTheme || 'light'
-        setTheme(themeValue)
-        setIsDark(themeValue === 'dark')
-        setIsInitialized(true)
-        return
-      }
+    const initialTheme = getInitialTheme()
+    const root = window.document.documentElement
+    root.classList.remove('light', 'dark')
+    root.classList.add(initialTheme)
+    setIsInitialized(true)
+  }, []) // Sadece mount'ta çalış
 
+  // MongoDB'den tema yükle (kullanıcı giriş yapmışsa) - ARKA PLANDA
+  useEffect(() => {
+    if (!user) {
+      // Kullanıcı giriş yapmamışsa localStorage'dan yükle (zaten yüklendi)
+      setIsInitialized(true)
+      return
+    }
+
+    // MongoDB'den veri çek (arka planda, localStorage'ı override etmez)
+    const loadTheme = async () => {
       try {
         const result = await loadUserSettings(user.uid)
         if (result.success && result.settings && result.settings.display?.theme) {
           const themeValue = result.settings.display.theme
-          setTheme(themeValue)
-          setIsDark(themeValue === 'dark')
-        } else {
-          // MongoDB'de ayar yoksa, localStorage'dan yükle
-          const savedTheme = localStorage.getItem('theme')
-          const themeValue = savedTheme || 'light'
-          setTheme(themeValue)
-          setIsDark(themeValue === 'dark')
+          // MongoDB'den gelen tema farklıysa güncelle
+          if (themeValue !== theme) {
+            setTheme(themeValue)
+            setIsDark(themeValue === 'dark')
+            localStorage.setItem('theme', themeValue)
+            const root = window.document.documentElement
+            root.classList.remove('light', 'dark')
+            root.classList.add(themeValue)
+          }
         }
       } catch (error) {
-        console.error('Error loading theme:', error)
-        const savedTheme = localStorage.getItem('theme')
-        const themeValue = savedTheme || 'light'
-        setTheme(themeValue)
-        setIsDark(themeValue === 'dark')
-      } finally {
-        setIsInitialized(true)
+        console.error('Error loading theme from MongoDB:', error)
+        // Hata durumunda localStorage'daki değeri koru
       }
     }
 
     loadTheme()
-  }, [user])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]) // Sadece user değiştiğinde çalış (theme dependency'si sonsuz döngüye neden olur)
 
-  // Tema değişikliklerini DOM'a uygula ve MongoDB'ye kaydet
+  // Tema değişikliklerini DOM'a uygula ve localStorage + MongoDB'ye kaydet
   useEffect(() => {
     if (!isInitialized) return
     
     const root = window.document.documentElement
     root.classList.remove('light', 'dark')
     root.classList.add(theme)
-    localStorage.setItem('theme', theme)
+    setIsDark(theme === 'dark')
+    localStorage.setItem('theme', theme) // Her zaman localStorage'a kaydet
     
-    // MongoDB'ye kaydet (kullanıcı giriş yapmışsa)
+    // MongoDB'ye kaydet (kullanıcı giriş yapmışsa) - ARKA PLANDA
     if (user) {
       const saveTheme = async () => {
         try {
@@ -83,7 +88,8 @@ export const ThemeProvider = ({ children }) => {
             }
           })
         } catch (error) {
-          console.error('Error saving theme:', error)
+          console.error('Error saving theme to MongoDB:', error)
+          // Hata durumunda localStorage'daki değer korunuyor
         }
       }
       saveTheme()
