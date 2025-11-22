@@ -56,7 +56,7 @@ function getNextUpdateTime(intervalMinutes = 5) {
 }
 
 /**
- * Dominance verilerini güncelle
+ * Dominance verilerini güncelle (helper function)
  */
 async function updateDominance() {
   try {
@@ -68,7 +68,11 @@ async function updateDominance() {
     if (response.ok) {
       const result = await response.json()
       const timeStr = new Date().toLocaleTimeString('tr-TR')
-      console.log(`✅ [${timeStr}] Dominance verisi güncellendi (CoinMarketCap)`)
+      if (result.cached) {
+        console.log(`✅ [${timeStr}] Dominance verisi cache'den alındı (API rate limit - CoinMarketCap)`)
+      } else {
+        console.log(`✅ [${timeStr}] Dominance verisi güncellendi (CoinMarketCap)`)
+      }
       return true
     } else {
       const error = await response.text()
@@ -81,6 +85,58 @@ async function updateDominance() {
     console.error(`❌ [${timeStr}] Dominance güncelleme hatası:`, error.message)
     return false
   }
+}
+
+/**
+ * Dominance verilerini güncelle (10 dakikada bir - scheduled)
+ */
+async function updateDominanceScheduled() {
+  if (dominanceIsRunning) {
+    return
+  }
+
+  dominanceIsRunning = true
+  const timeStr = new Date().toLocaleTimeString('tr-TR')
+  const nextUpdateTime = new Date(Date.now() + getNextUpdateTime(10)).toLocaleTimeString('tr-TR')
+  
+  console.log(`\n📊 [${timeStr}] ========== Dominance Güncelleme Başladı ==========`)
+  console.log(`⏰ [${timeStr}] Bir sonraki güncelleme: ${nextUpdateTime}`)
+
+  const startTime = Date.now()
+
+  try {
+    const success = await updateDominance()
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2)
+    console.log(`\n📊 [${timeStr}] ========== Dominance Güncelleme Tamamlandı ==========`)
+    console.log(`⏱️  [${timeStr}] Toplam süre: ${duration}s`)
+    console.log(`📊 [${timeStr}] Dominance: ${success ? '✅ Başarılı' : '❌ Başarısız (bir sonraki scheduled zamanda tekrar denenecek)'}`)
+    console.log(`⏰ [${timeStr}] Bir sonraki güncelleme: ${nextUpdateTime}`)
+    console.log(`═══════════════════════════════════════════════════════════\n`)
+  } catch (error) {
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2)
+    console.error(`\n❌ [${timeStr}] ========== Dominance Güncelleme Hatası ==========`)
+    console.error(`⏱️  [${timeStr}] Toplam süre: ${duration}s`)
+    console.error(`❌ [${timeStr}] Hata:`, error.message || error)
+    console.error(`📊 [${timeStr}] Dominance: ❌ Başarısız (bir sonraki scheduled zamanda tekrar denenecek)`)
+    console.error(`═══════════════════════════════════════════════════════════\n`)
+  } finally {
+    dominanceIsRunning = false
+    scheduleDominanceNext()
+  }
+}
+
+/**
+ * Dominance için sonraki güncellemeyi planla (10 dakika)
+ */
+function scheduleDominanceNext() {
+  if (dominanceSchedulerInterval) {
+    clearTimeout(dominanceSchedulerInterval)
+  }
+
+  const delay = getNextUpdateTime(10) // 10 dakika
+  dominanceSchedulerInterval = setTimeout(() => {
+    updateDominanceScheduled()
+  }, delay)
 }
 
 /**
@@ -122,6 +178,10 @@ let newsIsRunning = false
 // Trending model tahminleri için ayrı scheduler (30 dakikada bir)
 let trendingModelSchedulerInterval = null
 let trendingModelIsRunning = false
+
+// Dominance için ayrı scheduler (10 dakikada bir)
+let dominanceSchedulerInterval = null
+let dominanceIsRunning = false
 
 /**
  * Fear & Greed verilerini güncelle (10 dakikada bir)
@@ -503,11 +563,10 @@ async function updateAll() {
   const startTime = Date.now()
 
   try {
-    // Crypto, Dominance, Currency Rates ve Fed Rate güncelle (PARALEL - farklı endpoint'ler)
-    // Fear & Greed ve News ayrı scheduler'larda (10 dakikada bir)
-    const [cryptoSuccess, dominanceSuccess, currencySuccess, fedRateSuccess] = await Promise.all([
+    // Crypto, Currency Rates ve Fed Rate güncelle (PARALEL - farklı endpoint'ler)
+    // Dominance, Fear & Greed ve News ayrı scheduler'larda (10 dakikada bir)
+    const [cryptoSuccess, currencySuccess, fedRateSuccess] = await Promise.all([
       updateCrypto(),
-      updateDominance(),
       updateCurrencyRates(),
       updateFedRate()
     ])
@@ -529,7 +588,7 @@ async function updateAll() {
     console.log(`\n🔄 [${timeStr}] ========== API Scheduler Güncelleme Tamamlandı ==========`)
     console.log(`⏱️  [${timeStr}] Toplam süre: ${duration}s`)
     console.log(`📈 [${timeStr}] Crypto: ${cryptoSuccess ? '✅ Başarılı' : '❌ Başarısız'}`)
-    console.log(`📊 [${timeStr}] Dominance: ${dominanceSuccess ? '✅ Başarılı' : '❌ Başarısız'}`)
+    console.log(`📊 [${timeStr}] Dominance: Ayrı scheduler'da çalışıyor (10 dakikada bir)`)
     console.log(`💱 [${timeStr}] Currency Rates: ${currencySuccess ? '✅ Başarılı' : '❌ Başarısız'}`)
     console.log(`🏦 [${timeStr}] Fed Rate: ${fedRateSuccess ? '✅ Başarılı' : '❌ Başarısız'}`)
     console.log(`📊 [${timeStr}] Supply Tracking: ${supplyTrackingSuccess ? '✅ Başarılı' : '❌ Başarısız'}`)
@@ -588,6 +647,12 @@ function start() {
     scheduleNewsNext() // Sadece zamanlayıcı kur, hemen çalıştırma
   }
   
+  // Dominance scheduler'ı başlat (10 dakikada bir) - SADECE PLANLA, HEMEN ÇALIŞTIRMA
+  if (!dominanceSchedulerInterval) {
+    console.log('🚀 Dominance Scheduler başlatıldı (10 dakikada bir)')
+    scheduleDominanceNext() // Sadece zamanlayıcı kur, hemen çalıştırma
+  }
+  
   // Trending model tahminleri scheduler'ı başlat (30 dakikada bir) - SADECE PLANLA, HEMEN ÇALIŞTIRMA
   if (!trendingModelSchedulerInterval) {
     console.log('🚀 Trending Model Tahmin Scheduler başlatıldı (30 dakikada bir)')
@@ -609,6 +674,18 @@ function stop() {
     clearTimeout(fearGreedSchedulerInterval)
     fearGreedSchedulerInterval = null
     console.log('🛑 Fear & Greed Scheduler durduruldu')
+  }
+  
+  if (newsSchedulerInterval) {
+    clearTimeout(newsSchedulerInterval)
+    newsSchedulerInterval = null
+    console.log('🛑 News Scheduler durduruldu')
+  }
+  
+  if (dominanceSchedulerInterval) {
+    clearTimeout(dominanceSchedulerInterval)
+    dominanceSchedulerInterval = null
+    console.log('🛑 Dominance Scheduler durduruldu')
   }
   
   if (trendingModelSchedulerInterval) {

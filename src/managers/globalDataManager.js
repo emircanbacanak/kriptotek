@@ -330,7 +330,7 @@ class GlobalDataManager {
                     this.lastFedRateUpdate = Date.now()
                     this.saveToLocalStorage()
                     this.notifySubscribers()
-                  }
+    }
                 }
               })
               .catch(() => {})
@@ -376,11 +376,11 @@ class GlobalDataManager {
       // Crypto verileri
       if (this.coins && this.coins.length > 0) {
         try {
-          localStorage.setItem(this.CACHE_KEYS.crypto, JSON.stringify({
-            coins: this.coins,
-            topMovers: this.topMovers,
-            lastCryptoUpdate: this.lastCryptoUpdate
-          }))
+        localStorage.setItem(this.CACHE_KEYS.crypto, JSON.stringify({
+          coins: this.coins,
+          topMovers: this.topMovers,
+          lastCryptoUpdate: this.lastCryptoUpdate
+        }))
         } catch (e) {
           // Sessizce devam et
         }
@@ -389,10 +389,10 @@ class GlobalDataManager {
       // Dominance verileri
       if (this.dominanceData) {
         try {
-          localStorage.setItem(this.CACHE_KEYS.dominance, JSON.stringify({
-            data: this.dominanceData,
-            lastUpdate: this.lastDominanceUpdate
-          }))
+        localStorage.setItem(this.CACHE_KEYS.dominance, JSON.stringify({
+          data: this.dominanceData,
+          lastUpdate: this.lastDominanceUpdate
+        }))
         } catch (e) {
           // Sessizce devam et
         }
@@ -401,7 +401,7 @@ class GlobalDataManager {
       // Fear & Greed
       if (this.fearGreedIndex) {
         try {
-          localStorage.setItem(this.CACHE_KEYS.fearGreed, JSON.stringify(this.fearGreedIndex))
+        localStorage.setItem(this.CACHE_KEYS.fearGreed, JSON.stringify(this.fearGreedIndex))
         } catch (e) {
           // Sessizce devam et
         }
@@ -410,10 +410,10 @@ class GlobalDataManager {
       // Trending verileri
       if (this.trendingCoins && this.trendingCoins.length > 0) {
         try {
-          localStorage.setItem(this.CACHE_KEYS.trending, JSON.stringify({
-            coins: this.trendingCoins,
-            lastUpdate: this.lastTrendingUpdate
-          }))
+        localStorage.setItem(this.CACHE_KEYS.trending, JSON.stringify({
+          coins: this.trendingCoins,
+          lastUpdate: this.lastTrendingUpdate
+        }))
         } catch (e) {
           // Sessizce devam et
         }
@@ -422,10 +422,10 @@ class GlobalDataManager {
       // Currency rates
       if (this.currencyRates) {
         try {
-          localStorage.setItem(this.CACHE_KEYS.currency, JSON.stringify({
-            data: this.currencyRates,
-            lastUpdate: this.lastCurrencyUpdate
-          }))
+        localStorage.setItem(this.CACHE_KEYS.currency, JSON.stringify({
+          data: this.currencyRates,
+          lastUpdate: this.lastCurrencyUpdate
+        }))
         } catch (e) {
           // Sessizce devam et
         }
@@ -434,10 +434,10 @@ class GlobalDataManager {
       // Fed Rate
       if (this.fedRateData) {
         try {
-          localStorage.setItem(this.CACHE_KEYS.fedRate, JSON.stringify({
-            data: this.fedRateData,
-            lastUpdate: this.lastFedRateUpdate
-          }))
+        localStorage.setItem(this.CACHE_KEYS.fedRate, JSON.stringify({
+          data: this.fedRateData,
+          lastUpdate: this.lastFedRateUpdate
+        }))
         } catch (e) {
           // Sessizce devam et
         }
@@ -446,10 +446,10 @@ class GlobalDataManager {
       // Supply Tracking
       if (this.supplyTrackingData) {
         try {
-          localStorage.setItem(this.CACHE_KEYS.supplyTracking, JSON.stringify({
-            data: this.supplyTrackingData,
-            lastUpdate: this.lastSupplyTrackingUpdate
-          }))
+        localStorage.setItem(this.CACHE_KEYS.supplyTracking, JSON.stringify({
+          data: this.supplyTrackingData,
+          lastUpdate: this.lastSupplyTrackingUpdate
+        }))
         } catch (e) {
           // Sessizce devam et
         }

@@ -405,9 +405,6 @@ export async function updateNews() {
           if (newsItem.source === 'cointelegraph' && !isNaN(publishedAt.getTime())) {
             const originalDate = publishedAt.toISOString()
             publishedAt = new Date(publishedAt.getTime() + (3 * 60 * 60 * 1000))
-            console.log(`🕐 CoinTelegraph: "${newsItem.title.substring(0, 50)}"`)
-            console.log(`   Orijinal: ${originalDate}`)
-            console.log(`   Yeni: ${publishedAt.toISOString()} (+3 saat)`)
           }
           // Kriptofoni ve Bitcoinsistemi için saat değişikliği YOK (elleme)
           

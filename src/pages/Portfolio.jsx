@@ -238,14 +238,17 @@ const Portfolio = () => {
     const stopLoss = parseFloat(formData.stopLoss)
     const entryPrice = parseFloat(formData.entryPrice)
     
+    if (isNaN(stopLoss) || isNaN(entryPrice)) return null
+    
     if (formData.type === 'long') {
       const loss = (stopLoss - entryPrice) * calculatedCoinAmount
       const lossPercent = entryPrice > 0 ? ((stopLoss - entryPrice) / entryPrice) * 100 : 0
       return { loss, lossPercent }
     } else {
-      const profit = (entryPrice - stopLoss) * calculatedCoinAmount
-      const profitPercent = entryPrice > 0 ? ((entryPrice - stopLoss) / entryPrice) * 100 : 0
-      return { profit, profitPercent }
+      // Short pozisyon: stopLoss yukarıda ise zarar, aşağıda ise kar
+      const loss = (stopLoss - entryPrice) * calculatedCoinAmount
+      const lossPercent = entryPrice > 0 ? ((stopLoss - entryPrice) / entryPrice) * 100 : 0
+      return { loss, lossPercent }
     }
   }, [formData.stopLoss, formData.entryPrice, formData.type, calculatedCoinAmount])
 
@@ -280,25 +283,35 @@ const Portfolio = () => {
       const leverage = position.isLeveraged ? (parseFloat(position.leverage) || 1) : 1
       const coinAmount = position.coinAmount || (investmentAmount * leverage / entryPrice)
       
+      const currentValue = currentPrice * coinAmount
+      const entryValue = entryPrice * coinAmount
+      
+      // Kar/Zarar = Mevcut Değer - Giriş Değeri (long için pozitif kar, short için negatif kar)
       let profitLoss = 0
       let profitLossPercent = 0
       
       if (position.type === 'long') {
-        profitLoss = (currentPrice - entryPrice) * coinAmount
-        profitLossPercent = entryPrice > 0 ? ((currentPrice - entryPrice) / entryPrice) * 100 : 0
+        profitLoss = currentValue - entryValue
+        profitLossPercent = entryValue > 0 ? ((currentValue - entryValue) / entryValue) * 100 : 0
+      } else if (position.type === 'short') {
+        // Short pozisyon: Fiyat düştüğünde kar, yükseldiğinde zarar
+        // Giriş fiyatında satıldı (entryValue), mevcut fiyatta geri alınacak (currentValue)
+        profitLoss = entryValue - currentValue
+        profitLossPercent = entryValue > 0 ? ((entryValue - currentValue) / entryValue) * 100 : 0
       } else {
-        profitLoss = (entryPrice - currentPrice) * coinAmount
-        profitLossPercent = entryPrice > 0 ? ((entryPrice - currentPrice) / entryPrice) * 100 : 0
+        // Spot pozisyon: Sadece fiyat artışından kar
+        profitLoss = currentValue - entryValue
+        profitLossPercent = entryValue > 0 ? ((currentValue - entryValue) / entryValue) * 100 : 0
       }
-
-      const currentValue = currentPrice * coinAmount
-      const entryValue = entryPrice * coinAmount
 
       let stopLossStatus = null
       let takeProfitStatus = null
       
+      // Hassas stop loss kontrolü (kuruşuna kadar)
       if (position.stopLoss) {
         const stopLoss = parseFloat(position.stopLoss)
+        // Long pozisyon: Fiyat stop loss'un altına veya eşit olursa tetiklenir
+        // Short pozisyon: Fiyat stop loss'un üstüne veya eşit olursa tetiklenir
         if (position.type === 'long' && currentPrice <= stopLoss) {
           stopLossStatus = 'triggered'
         } else if (position.type === 'short' && currentPrice >= stopLoss) {
@@ -306,8 +319,11 @@ const Portfolio = () => {
         }
       }
       
+      // Hassas take profit kontrolü (kuruşuna kadar)
       if (position.takeProfit) {
         const takeProfit = parseFloat(position.takeProfit)
+        // Long pozisyon: Fiyat take profit'in üstüne veya eşit olursa tetiklenir
+        // Short pozisyon: Fiyat take profit'in altına veya eşit olursa tetiklenir
         if (position.type === 'long' && currentPrice >= takeProfit) {
           takeProfitStatus = 'triggered'
         } else if (position.type === 'short' && currentPrice <= takeProfit) {
@@ -333,14 +349,29 @@ const Portfolio = () => {
   const portfolioSummary = useMemo(() => {
     const totalEntryValue = positionsWithData.reduce((sum, pos) => sum + (pos.entryValue || 0), 0)
     const totalCurrentValue = positionsWithData.reduce((sum, pos) => sum + (pos.currentValue || 0), 0)
+    // Kar/Zarar = Her pozisyonun kendi profitLoss değerlerinin toplamı (long ve short için doğru)
     const totalProfitLoss = positionsWithData.reduce((sum, pos) => sum + (pos.profitLoss || 0), 0)
     const totalProfitLossPercent = totalEntryValue > 0 ? (totalProfitLoss / totalEntryValue) * 100 : 0
+    
+    // Toplam kar (pozitif profitLoss değerlerinin toplamı)
+    const totalProfit = positionsWithData.reduce((sum, pos) => {
+      const profit = pos.profitLoss || 0
+      return sum + (profit > 0 ? profit : 0)
+    }, 0)
+    
+    // Toplam zarar (negatif profitLoss değerlerinin mutlak değerlerinin toplamı)
+    const totalLoss = positionsWithData.reduce((sum, pos) => {
+      const profit = pos.profitLoss || 0
+      return sum + (profit < 0 ? Math.abs(profit) : 0)
+    }, 0)
 
     return {
       totalEntryValue,
       totalCurrentValue,
       totalProfitLoss,
-      totalProfitLossPercent
+      totalProfitLossPercent,
+      totalProfit,
+      totalLoss
     }
   }, [positionsWithData])
 
@@ -867,9 +898,14 @@ const Portfolio = () => {
                         ? 'text-red-600 dark:text-red-400' 
                         : 'text-green-600 dark:text-green-400'
                     }`}>
-                      {stopLossCalculation.loss < 0 ? '-' : '+'}{formatPrice(Math.abs(stopLossCalculation.loss))}
+                      {stopLossCalculation.loss < 0 ? '-' : '+'}{formatPrice(Math.abs(stopLossCalculation.loss || 0))}
                       <span className="text-base ml-2 font-semibold">
-                        ({stopLossCalculation.lossPercent < 0 ? '' : '+'}{stopLossCalculation.lossPercent.toFixed(2)}%)
+                        ({(() => {
+                          const percent = stopLossCalculation.lossPercent !== undefined && !isNaN(stopLossCalculation.lossPercent) 
+                            ? stopLossCalculation.lossPercent 
+                            : 0
+                          return `${percent < 0 ? '' : '+'}${percent.toFixed(2)}`
+                        })()}%)
                       </span>
                     </div>
                   </div>
@@ -899,9 +935,14 @@ const Portfolio = () => {
                       {t('takeProfitResult')}
                     </div>
                     <div className="text-2xl font-extrabold text-green-600 dark:text-green-400">
-                      +{formatPrice(takeProfitCalculation.profit)}
+                      +{formatPrice(takeProfitCalculation.profit || 0)}
                       <span className="text-base ml-2 font-semibold">
-                        (+{takeProfitCalculation.profitPercent.toFixed(2)}%)
+                        (+{(() => {
+                          const percent = (takeProfitCalculation.profitPercent !== undefined && !isNaN(takeProfitCalculation.profitPercent)) 
+                            ? takeProfitCalculation.profitPercent 
+                            : 0
+                          return percent.toFixed(2)
+                        })()}%)
                       </span>
                     </div>
                   </div>
@@ -977,25 +1018,25 @@ const Portfolio = () => {
       <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
             <div className="flex items-center gap-4">
               <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl blur-2xl opacity-60 animate-pulse"></div>
-                <div className="relative w-16 h-16 bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 rounded-xl flex items-center justify-center shadow-2xl transform hover:scale-110 transition-transform">
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-indigo-600 dark:from-yellow-600 dark:to-orange-600 rounded-xl blur-2xl opacity-60 animate-pulse"></div>
+                <div className="relative w-16 h-16 bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 dark:from-yellow-600 dark:via-orange-600 dark:to-orange-600 rounded-xl flex items-center justify-center shadow-2xl transform hover:scale-110 transition-transform">
                   <Wallet className="w-8 h-8 text-white" />
                 </div>
               </div>
               <div>
-                <h1 className="text-4xl sm:text-5xl font-extrabold bg-gradient-to-r from-gray-900 via-blue-600 to-indigo-600 dark:from-white dark:via-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
+                <h1 className="text-4xl sm:text-5xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-yellow-400 dark:to-orange-400 bg-clip-text text-transparent">
                   {t('portfolio')}
                 </h1>
-                <p className="text-base text-gray-600 dark:text-gray-400 mt-2 font-medium">
+                <p className="text-base text-gray-600 dark:text-gray-300 mt-2">
                   {t('portfolioDescription')}
                 </p>
               </div>
             </div>
             <button
               onClick={openAddModal}
-              className="group relative px-6 py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-xl font-bold hover:shadow-2xl transition-all transform hover:scale-110 active:scale-95 flex items-center gap-2 overflow-hidden"
+              className="group relative px-6 py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 dark:from-yellow-600 dark:via-orange-600 dark:to-orange-600 text-white rounded-xl font-bold hover:shadow-2xl transition-all transform hover:scale-110 active:scale-95 flex items-center gap-2 overflow-hidden"
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-700 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-700 dark:from-yellow-700 dark:via-orange-700 dark:to-orange-700 opacity-0 group-hover:opacity-100 transition-opacity"></div>
               <Plus className="w-5 h-5 relative z-10" />
               <span className="relative z-10">{t('addPosition')}</span>
             </button>
@@ -1003,90 +1044,193 @@ const Portfolio = () => {
 
           {/* Portfolio Summary */}
           <div className="relative z-10">
-          {positionsWithData.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <div className="group relative bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-2xl border-2 border-gray-200/50 dark:border-gray-700/50 p-6 hover:shadow-2xl transition-all transform hover:scale-105 overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-400/10 dark:bg-blue-400/5 rounded-full blur-3xl group-hover:blur-[40px] transition-all"></div>
-                <div className="relative">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-                      <BarChart3 className="w-6 h-6 text-white" />
-                    </div>
-                    <div className="text-sm font-bold text-gray-600 dark:text-gray-400">
-                      {t('totalPortfolioValue')}
-                    </div>
-                  </div>
-                  <div className="text-3xl font-extrabold text-gray-900 dark:text-white">
-                    {formatPrice(portfolioSummary.totalCurrentValue)}
+            {positionsWithData.length > 0 && (
+              <div className="space-y-4 mb-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Giriş Değeri */}
+              <div className="relative bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-xl border border-gray-200/50 dark:border-gray-700/50 p-5 hover:shadow-lg transition-all">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    Giriş Değeri
+                  </span>
+                  <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
+                    <BarChart3 className="w-4 h-4 text-white" />
                   </div>
                 </div>
+                <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {(() => {
+                    const convertedPrice = convertCurrency(portfolioSummary.totalEntryValue || 0, 'USD', currency)
+                    const formatter = new Intl.NumberFormat('en-US', {
+                      style: 'currency',
+                      currency: currency,
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2
+                    })
+                    return formatter.format(convertedPrice)
+                  })()}
+                </div>
               </div>
-              <div className="group relative bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-2xl border-2 border-gray-200/50 dark:border-gray-700/50 p-6 hover:shadow-2xl transition-all transform hover:scale-105 overflow-hidden">
-                <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl group-hover:blur-[40px] transition-all ${
-                  portfolioSummary.totalProfitLoss >= 0 
-                    ? 'bg-green-400/10 dark:bg-green-400/5' 
-                    : 'bg-red-400/10 dark:bg-red-400/5'
-                }`}></div>
-                <div className="relative">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-lg ${
-                      portfolioSummary.totalProfitLoss >= 0 
-                        ? 'bg-gradient-to-br from-green-500 to-emerald-600' 
-                        : 'bg-gradient-to-br from-red-500 to-rose-600'
-                    }`}>
-                      {portfolioSummary.totalProfitLoss >= 0 ? (
-                        <ArrowUpRight className="w-6 h-6 text-white" />
-                      ) : (
-                        <ArrowDownRight className="w-6 h-6 text-white" />
-                      )}
-                    </div>
-                    <div className="text-sm font-bold text-gray-600 dark:text-gray-400">
-                      {t('totalProfitLoss')}
-                    </div>
+
+              {/* Mevcut Değer */}
+              <div className="relative bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-xl border border-gray-200/50 dark:border-gray-700/50 p-5 hover:shadow-lg transition-all">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    {t('totalPortfolioValue')}
+                  </span>
+                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center">
+                    <BarChart3 className="w-4 h-4 text-white" />
                   </div>
-                  <div className={`text-3xl font-extrabold ${
+                </div>
+                <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {(() => {
+                    const convertedPrice = convertCurrency(portfolioSummary.totalCurrentValue || 0, 'USD', currency)
+                    const formatter = new Intl.NumberFormat('en-US', {
+                      style: 'currency',
+                      currency: currency,
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2
+                    })
+                    return formatter.format(convertedPrice)
+                  })()}
+                </div>
+              </div>
+              {/* Net Kar/Zarar */}
+              <div className={`relative bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-xl border p-5 hover:shadow-lg transition-all ${
+                portfolioSummary.totalProfitLoss >= 0 
+                  ? 'border-green-200/50 dark:border-green-700/50' 
+                  : 'border-red-200/50 dark:border-red-700/50'
+              }`}>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    {t('totalProfitLoss')}
+                  </span>
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
                     portfolioSummary.totalProfitLoss >= 0 
-                      ? 'text-green-600 dark:text-green-400' 
-                      : 'text-red-600 dark:text-red-400'
+                      ? 'bg-gradient-to-br from-green-500 to-emerald-600' 
+                      : 'bg-gradient-to-br from-red-500 to-rose-600'
                   }`}>
-                    {portfolioSummary.totalProfitLoss >= 0 ? '+' : ''}{formatPrice(portfolioSummary.totalProfitLoss)}
-                  </div>
-                  <div className={`text-base mt-2 font-bold ${
-                    portfolioSummary.totalProfitLossPercent >= 0 
-                      ? 'text-green-600 dark:text-green-400' 
-                      : 'text-red-600 dark:text-red-400'
-                  }`}>
-                    {portfolioSummary.totalProfitLossPercent >= 0 ? '+' : ''}{portfolioSummary.totalProfitLossPercent.toFixed(2)}%
+                    {portfolioSummary.totalProfitLoss >= 0 ? (
+                      <ArrowUpRight className="w-4 h-4 text-white" />
+                    ) : (
+                      <ArrowDownRight className="w-4 h-4 text-white" />
+                    )}
                   </div>
                 </div>
-              </div>
-              <div className="group relative bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-2xl border-2 border-gray-200/50 dark:border-gray-700/50 p-6 hover:shadow-2xl transition-all transform hover:scale-105 overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-400/30 to-pink-400/30 rounded-full blur-3xl group-hover:blur-[40px] transition-all"></div>
-                <div className="relative">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center shadow-lg">
-                      <Activity className="w-6 h-6 text-white" />
-                    </div>
-                    <div className="text-sm font-bold text-gray-600 dark:text-gray-400">
-                      {t('totalPositions')}
-                    </div>
-                  </div>
-                  <div className="text-3xl font-extrabold text-gray-900 dark:text-white">
-                    {positionsWithData.length}
-                  </div>
+                <div className={`text-2xl font-bold ${
+                  portfolioSummary.totalProfitLoss >= 0 
+                    ? 'text-green-600 dark:text-green-400' 
+                    : 'text-red-600 dark:text-red-400'
+                }`}>
+                  {(() => {
+                    const convertedPrice = convertCurrency(Math.abs(portfolioSummary.totalProfitLoss || 0), 'USD', currency)
+                    const formatter = new Intl.NumberFormat('en-US', {
+                      style: 'currency',
+                      currency: currency,
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2
+                    })
+                    return `${portfolioSummary.totalProfitLoss >= 0 ? '+' : '-'}${formatter.format(convertedPrice)}`
+                  })()}
+                </div>
+                <div className={`text-xs mt-1 font-semibold ${
+                  portfolioSummary.totalProfitLossPercent >= 0 
+                    ? 'text-green-600 dark:text-green-400' 
+                    : 'text-red-600 dark:text-red-400'
+                }`}>
+                  {(() => {
+                    const percent = portfolioSummary.totalProfitLossPercent !== undefined && !isNaN(portfolioSummary.totalProfitLossPercent) 
+                      ? portfolioSummary.totalProfitLossPercent 
+                      : 0
+                    return `${percent >= 0 ? '+' : ''}${percent.toFixed(2)}%`
+                  })()}
                 </div>
               </div>
+              {/* Pozisyon Sayısı */}
+              <div className="relative bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-xl border border-gray-200/50 dark:border-gray-700/50 p-5 hover:shadow-lg transition-all">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    {t('totalPositions')}
+                  </span>
+                  <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
+                    <Activity className="w-4 h-4 text-white" />
+                  </div>
+                </div>
+                <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {positionsWithData.length}
+                </div>
+              </div>
+              </div>
+
+              {/* Kar/Zarar Detayları */}
+              {(portfolioSummary.totalProfit > 0 || portfolioSummary.totalLoss > 0) && (
+                <div className="relative bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-xl border border-gray-200/50 dark:border-gray-700/50 p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <BarChart3 className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                      Detaylı Kar/Zarar Analizi
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {portfolioSummary.totalProfit > 0 && (
+                      <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800/50">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Toplam Kar
+                          </span>
+                        </div>
+                        <span className="text-lg font-bold text-green-600 dark:text-green-400">
+                          {(() => {
+                            const convertedPrice = convertCurrency(portfolioSummary.totalProfit || 0, 'USD', currency)
+                            const formatter = new Intl.NumberFormat('en-US', {
+                              style: 'currency',
+                              currency: currency,
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                            })
+                            return `+${formatter.format(convertedPrice)}`
+                          })()}
+                        </span>
+                      </div>
+                    )}
+                    {portfolioSummary.totalLoss > 0 && (
+                      <div className="flex items-center justify-between p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800/50">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Toplam Zarar
+                          </span>
+                        </div>
+                        <span className="text-lg font-bold text-red-600 dark:text-red-400">
+                          {(() => {
+                            const convertedPrice = convertCurrency(portfolioSummary.totalLoss || 0, 'USD', currency)
+                            const formatter = new Intl.NumberFormat('en-US', {
+                              style: 'currency',
+                              currency: currency,
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                            })
+                            return `-${formatter.format(convertedPrice)}`
+                          })()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
+          </div>
 
           {/* Positions List */}
-          {positionsWithData.length === 0 ? (
-            <div className="relative bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-2xl border-2 border-gray-200/50 dark:border-gray-700/50 p-16 text-center overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-400/10 via-purple-400/10 to-indigo-400/10"></div>
+          <div className="relative z-10">
+            {positionsWithData.length === 0 ? (
+            <div className="relative bg-white dark:bg-gray-800/95 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-gray-700/50 p-16 text-center overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-gray-50 via-gray-100/50 to-gray-50 dark:from-gray-800/50 dark:via-gray-700/30 dark:to-gray-800/50"></div>
               <div className="relative">
                 <div className="relative w-24 h-24 mx-auto mb-6">
-                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full blur-2xl opacity-40 animate-pulse"></div>
-                  <div className="relative w-24 h-24 bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 rounded-full flex items-center justify-center shadow-2xl">
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 dark:from-orange-500/20 dark:to-yellow-500/20 rounded-full blur-2xl opacity-60 animate-pulse"></div>
+                  <div className="relative w-24 h-24 bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 dark:from-orange-500 dark:via-orange-600 dark:to-yellow-500 rounded-full flex items-center justify-center shadow-2xl">
                     <Wallet className="w-12 h-12 text-white" />
                   </div>
                 </div>
@@ -1098,10 +1242,11 @@ const Portfolio = () => {
                 </p>
                 <button
                   onClick={openAddModal}
-                  className="px-8 py-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-xl font-bold hover:shadow-2xl transition-all transform hover:scale-110 active:scale-95 flex items-center gap-2 mx-auto"
+                  className="group relative px-8 py-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 dark:from-yellow-600 dark:via-orange-600 dark:to-orange-600 text-white rounded-xl font-bold hover:shadow-2xl transition-all transform hover:scale-110 active:scale-95 flex items-center gap-2 mx-auto overflow-hidden"
                 >
-                  <Plus className="w-6 h-6" />
-                  {t('addFirstPosition')}
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-700 dark:from-yellow-700 dark:via-orange-700 dark:to-orange-700 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                  <Plus className="w-6 h-6 relative z-10" />
+                  <span className="relative z-10">{t('addFirstPosition')}</span>
                 </button>
               </div>
             </div>
@@ -1120,6 +1265,9 @@ const Portfolio = () => {
                     : 'text-red-600 dark:text-red-400'
                 }
 
+                const isTriggered = position.stopLossStatus === 'triggered' || position.takeProfitStatus === 'triggered'
+                const triggerType = position.takeProfitStatus === 'triggered' ? 'takeProfit' : (position.stopLossStatus === 'triggered' ? 'stopLoss' : null)
+
                 return (
                   <div
                     key={position.id}
@@ -1132,118 +1280,146 @@ const Portfolio = () => {
                         : 'bg-gradient-to-br from-red-400 to-rose-400'
                     }`}></div>
                     
+                    {/* Stop/Take Profit Overlay */}
+                    {isTriggered && (
+                      <div className={`absolute inset-0 flex items-center justify-center z-30 pointer-events-none ${
+                        triggerType === 'takeProfit' 
+                          ? 'text-green-600 dark:text-green-400' 
+                          : 'text-red-600 dark:text-red-400'
+                      }`}>
+                        <div 
+                          className="transform rotate-[-45deg] font-extrabold text-xl md:text-2xl lg:text-3xl opacity-90 drop-shadow-lg"
+                          style={{ 
+                            textShadow: '1px 1px 4px rgba(0,0,0,0.3)',
+                            letterSpacing: '0.05em'
+                          }}
+                        >
+                          {triggerType === 'takeProfit' ? '🎯 HEDEF' : '🛑 STOP LOSS'}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* İçerik - Blur uygulanacak (butonlar hariç) */}
                     <div className="relative">
-                      {/* Row 1: Symbol/Icon + Position Type */}
-                      <div className="grid grid-cols-2 gap-4 mb-4">
-                        {/* Col 1: Symbol and Icon */}
-                        <div className="flex items-center gap-3">
-                          <div className="relative flex-shrink-0">
-                            <div className="absolute inset-0 bg-gradient-to-br from-blue-400/30 to-indigo-400/30 rounded-full blur-lg"></div>
-                            <img
-                              src={position.coin.image}
-                              alt={position.coin.name}
-                              className="relative w-12 h-12 rounded-full ring-2 ring-gray-100 dark:ring-gray-700"
-                            />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="text-sm font-extrabold text-gray-900 dark:text-white truncate">
-                              {position.coin.symbol.toUpperCase()}
+                      <div className={isTriggered ? 'blur-[1px] pointer-events-none' : ''}>
+                        {/* Row 1: Symbol/Icon + Position Type */}
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                          {/* Col 1: Symbol and Icon */}
+                          <div className="flex items-center gap-3">
+                            <div className="relative flex-shrink-0">
+                              <div className="absolute inset-0 bg-gradient-to-br from-blue-400/30 to-indigo-400/30 rounded-full blur-lg"></div>
+                              <img
+                                src={position.coin.image}
+                                alt={position.coin.name}
+                                className="relative w-12 h-12 rounded-full ring-2 ring-gray-100 dark:ring-gray-700"
+                              />
                             </div>
-                            {position.isLeveraged && (
-                              <div className="text-xs font-bold text-gray-500 dark:text-gray-400">
-                                {position.leverage}x
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-extrabold text-gray-900 dark:text-white truncate">
+                                {position.coin.symbol.toUpperCase()}
+                              </div>
+                              {position.isLeveraged && (
+                                <div className="text-xs font-bold text-gray-500 dark:text-gray-400">
+                                  {position.leverage}x
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          
+                          {/* Col 2: Position Type + Profit/Loss % */}
+                          <div className="flex flex-col items-end gap-2">
+                            <div className="flex items-center justify-end gap-2">
+                              <span className={`text-2xl font-extrabold ${getPositionTypeColor()}`}>
+                                {getPositionTypeLabel()}
+                              </span>
+                              {position.isLeveraged ? (
+                                <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
+                                  position.type === 'long'
+                                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                                    : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                                }`}>
+                                  {position.type === 'long' ? t('long') : t('short')}
+                                </span>
+                              ) : (
+                                <span className="text-xs font-bold px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                                  {t('spot')}
+                                </span>
+                              )}
+                            </div>
+                            {/* Profit/Loss Percentage */}
+                            {position.profitLossPercent !== undefined && (
+                              <div className={`text-sm font-extrabold ${
+                                position.profitLossPercent >= 0
+                                  ? 'text-green-600 dark:text-green-400'
+                                  : 'text-red-600 dark:text-red-400'
+                              }`}>
+                                {(() => {
+                                  const percent = position.profitLossPercent !== undefined && !isNaN(position.profitLossPercent) 
+                                    ? position.profitLossPercent 
+                                    : 0
+                                  return `${percent >= 0 ? '+' : ''}${percent.toFixed(2)}%`
+                                })()}
                               </div>
                             )}
                           </div>
                         </div>
-                        
-                        {/* Col 2: Position Type + Profit/Loss % */}
-                        <div className="flex flex-col items-end gap-2">
-                          <div className="flex items-center justify-end gap-2">
-                            <span className={`text-2xl font-extrabold ${getPositionTypeColor()}`}>
-                              {getPositionTypeLabel()}
-                            </span>
-                            {position.isLeveraged ? (
-                              <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
-                                position.type === 'long'
-                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                                  : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
-                              }`}>
-                                {position.type === 'long' ? t('long') : t('short')}
-                              </span>
-                            ) : (
-                              <span className="text-xs font-bold px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                                {t('spot')}
-                              </span>
-                            )}
-                          </div>
-                          {/* Profit/Loss Percentage */}
-                          {position.profitLossPercent !== undefined && (
-                            <div className={`text-sm font-extrabold ${
-                              position.profitLossPercent >= 0
-                                ? 'text-green-600 dark:text-green-400'
-                                : 'text-red-600 dark:text-red-400'
-                            }`}>
-                              {position.profitLossPercent >= 0 ? '+' : ''}{position.profitLossPercent.toFixed(2)}%
-                            </div>
-                          )}
-                        </div>
-                      </div>
 
-                      {/* Row 2: Entry Price (Left) + Current Price (Right) */}
-                      <div className="mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
-                        <div className="grid grid-cols-2 gap-4">
-                          {/* Left: Entry Price */}
-                          <div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400 font-bold mb-1">
-                              {t('entryPrice')}
-                            </div>
-                            <div className="text-lg font-extrabold text-gray-900 dark:text-white">
-                              {position.coin ? formatPriceWithCoin(position.entryPrice, position.coin.id) : formatPrice(position.entryPrice)}
-                            </div>
-                          </div>
-                          {/* Right: Current Price */}
-                          {position.coin && position.currentPrice && (
-                            <div className="text-right">
+                        {/* Row 2: Entry Price (Left) + Current Price (Right) */}
+                        <div className="mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
+                          <div className="grid grid-cols-2 gap-4">
+                            {/* Left: Entry Price */}
+                            <div>
                               <div className="text-xs text-gray-500 dark:text-gray-400 font-bold mb-1">
-                                {t('currentPrice')}
+                                {t('entryPrice')}
                               </div>
                               <div className="text-lg font-extrabold text-gray-900 dark:text-white">
-                                {formatPriceWithCoin(position.currentPrice, position.coin.id)}
+                                {position.coin ? formatPriceWithCoin(position.entryPrice, position.coin.id) : formatPrice(position.entryPrice)}
                               </div>
                             </div>
-                          )}
+                            {/* Right: Current Price */}
+                            {position.coin && position.currentPrice && (
+                              <div className="text-right">
+                                <div className="text-xs text-gray-500 dark:text-gray-400 font-bold mb-1">
+                                  {t('currentPrice')}
+                                </div>
+                                <div className="text-lg font-extrabold text-gray-900 dark:text-white">
+                                  {formatPriceWithCoin(position.currentPrice, position.coin.id)}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Row 3: Target Price + Stop Price */}
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                          {/* Col 1: Target Price (Green) */}
+                          <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-3 border border-green-200 dark:border-green-800">
+                            <div className="text-xs text-green-700 dark:text-green-400 font-bold mb-1">
+                              {t('takeProfitShort')}
+                            </div>
+                            <div className="text-sm font-extrabold text-green-600 dark:text-green-400">
+                              {position.takeProfit ? (position.coin ? formatPriceWithCoin(position.takeProfit, position.coin.id) : formatPrice(position.takeProfit)) : '-'}
+                            </div>
+                          </div>
+                          
+                          {/* Col 2: Stop Price (Red) */}
+                          <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-3 border border-red-200 dark:border-red-800">
+                            <div className="text-xs text-red-700 dark:text-red-400 font-bold mb-1">
+                              {t('stopLossShort')}
+                            </div>
+                            <div className="text-sm font-extrabold text-red-600 dark:text-red-400">
+                              {position.stopLoss ? (position.coin ? formatPriceWithCoin(position.stopLoss, position.coin.id) : formatPrice(position.stopLoss)) : '-'}
+                            </div>
+                          </div>
                         </div>
                       </div>
-
-                      {/* Row 3: Target Price + Stop Price */}
-                      <div className="grid grid-cols-2 gap-3 mb-4">
-                        {/* Col 1: Target Price (Green) */}
-                        <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-3 border border-green-200 dark:border-green-800">
-                          <div className="text-xs text-green-700 dark:text-green-400 font-bold mb-1">
-                            {t('takeProfitShort')}
-                          </div>
-                          <div className="text-sm font-extrabold text-green-600 dark:text-green-400">
-                            {position.takeProfit ? (position.coin ? formatPriceWithCoin(position.takeProfit, position.coin.id) : formatPrice(position.takeProfit)) : '-'}
-                          </div>
-                        </div>
-                        
-                        {/* Col 2: Stop Price (Red) */}
-                        <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-3 border border-red-200 dark:border-red-800">
-                          <div className="text-xs text-red-700 dark:text-red-400 font-bold mb-1">
-                            {t('stopLossShort')}
-                          </div>
-                          <div className="text-sm font-extrabold text-red-600 dark:text-red-400">
-                            {position.stopLoss ? (position.coin ? formatPriceWithCoin(position.stopLoss, position.coin.id) : formatPrice(position.stopLoss)) : '-'}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Action Buttons */}
-                      <div className="flex items-center gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+                      
+                      {/* Action Buttons - Blur'dan muaf */}
+                      <div className={`flex items-center gap-2 pt-3 border-t border-gray-200 dark:border-gray-700 ${isTriggered ? 'relative z-40' : ''}`} style={isTriggered ? { filter: 'none' } : {}}>
                         <button
                           onClick={() => openEditModal(position)}
                           className="flex-1 px-3 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all text-sm font-bold flex items-center justify-center gap-2"
+                          style={isTriggered ? { filter: 'none' } : {}}
                         >
                           <Edit2 className="w-4 h-4" />
                           {t('edit') || 'Düzenle'}
@@ -1251,6 +1427,7 @@ const Portfolio = () => {
                         <button
                           onClick={() => setShowDeleteConfirm(position.id)}
                           className="flex-1 px-3 py-2 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition-all text-sm font-bold flex items-center justify-center gap-2"
+                          style={isTriggered ? { filter: 'none' } : {}}
                         >
                           <Trash2 className="w-4 h-4" />
                           {t('delete') || 'Sil'}
@@ -1261,7 +1438,7 @@ const Portfolio = () => {
                 )
               })}
             </div>
-          )}
+            )}
           </div>
 
       <style>{`

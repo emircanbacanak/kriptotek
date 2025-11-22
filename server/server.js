@@ -1485,8 +1485,29 @@ app.post('/api/dominance/update', async (req, res) => {
       })
     }
 
-    // CoinMarketCap API'den veri çek
-    const dominanceData = await fetchDominanceData(COINMARKETCAP_API_KEY)
+    // CoinMarketCap API'den veri çek (retry mekanizması ile)
+    let dominanceData
+    try {
+      dominanceData = await fetchDominanceData(COINMARKETCAP_API_KEY)
+    } catch (error) {
+      // API hatası durumunda MongoDB'den mevcut veriyi kullan (fallback)
+      console.warn('⚠️ CoinMarketCap API hatası, MongoDB\'den mevcut veri kullanılıyor...')
+      const collection = db.collection('api_cache')
+      const existing = await collection.findOne({ _id: 'dominance_data' })
+      
+      if (existing && existing.data) {
+        // Mevcut veriyi döndür (güncelleme yapılmadı)
+        return res.json({
+          success: true,
+          data: existing.data,
+          message: 'Dominance data retrieved from cache (API unavailable)',
+          cached: true
+        })
+      } else {
+        // MongoDB'de de veri yoksa hata döndür
+        throw error
+      }
+    }
 
     // MongoDB'ye kaydet
     const collection = db.collection('api_cache')
