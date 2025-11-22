@@ -73,7 +73,7 @@ class RealtimeService {
     
     // Sadece ilk bağlantıda log'la
     if (!this.ws) {
-      console.log(`🔌 WebSocket bağlantısı: ${wsUrl}`)
+      logger.log(`🔌 WebSocket bağlantısı: ${wsUrl}`)
     }
     
     try {

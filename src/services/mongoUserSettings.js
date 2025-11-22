@@ -1,4 +1,5 @@
 import MONGODB_CONFIG from '../config/mongodb'
+import logger from '../utils/logger'
 // Production'da otomatik tespit: environment variable yoksa window.location.origin kullan
 const getApiUrl = () => {
   if (import.meta.env.VITE_MONGO_API_URL) {
@@ -104,7 +105,7 @@ export const saveUserSettingsToMongo = async (userId, settings) => {
     if (response.ok) {
       const result = await response.json()
       if (result.success) {
-        console.log('✅ [MongoDB] User settings saved to backend API')
+        logger.log('✅ [MongoDB] User settings saved to backend API')
         return {
           success: true,
           source: 'mongodb',
@@ -139,7 +140,7 @@ export const loadUserSettings = async (userId) => {
   const mongoResult = await loadUserSettingsFromMongo(userId)
   // Veri yok (404 veya boş)
   if (mongoResult.success && !mongoResult.exists) {
-    console.log('ℹ️ [mongoUserSettings] No user settings found in MongoDB (this is normal for new users)')
+    logger.log('ℹ️ [mongoUserSettings] No user settings found in MongoDB (this is normal for new users)')
     return mongoResult
   }
   

@@ -2531,10 +2531,12 @@ async function startServer() {
       }
     })
     
-    console.log('✅ Static dosyalar serve ediliyor:', distDir)
-  } else {
-    console.log('⚠️ dist/ klasörü bulunamadı (development mode)')
+    // Production'da mesaj gösterme
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('✅ Static dosyalar serve ediliyor:', distDir)
+    }
   }
+  // Development mode - mesaj gösterme (production'da hiçbir şey yazdırma)
   
   // HTTP server ve WebSocket server oluştur
   const httpServer = createServer(app)
