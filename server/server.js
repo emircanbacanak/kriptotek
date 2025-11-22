@@ -221,6 +221,213 @@ app.put('/api/user-settings/:userId', async (req, res) => {
   }
 })
 
+// ========== PORTFOLIO ENDPOINTS ==========
+// GET /api/portfolio/:userId - Kullanıcının portföyünü getir
+app.get('/api/portfolio/:userId', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const { userId } = req.params
+    const collection = db.collection('user_portfolio')
+    
+    const portfolio = await collection.findOne({ userId })
+    
+    if (!portfolio) {
+      return res.json({
+        success: true,
+        data: {
+          userId,
+          positions: [],
+          totalValue: 0,
+          totalProfitLoss: 0,
+          totalProfitLossPercent: 0
+        }
+      })
+    }
+    
+    return res.json({
+      success: true,
+      data: portfolio
+    })
+  } catch (error) {
+    console.error('❌ GET /api/portfolio/:userId error:', error)
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    })
+  }
+})
+
+// POST /api/portfolio/:userId/positions - Yeni pozisyon ekle
+app.post('/api/portfolio/:userId/positions', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const { userId } = req.params
+    const position = req.body
+    
+    const collection = db.collection('user_portfolio')
+    
+    // Position ID oluştur
+    const positionId = position.id || `pos_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    
+    // Portfolio'yu bul veya oluştur
+    const portfolio = await collection.findOne({ userId })
+    
+    if (!portfolio) {
+      // Yeni portfolio oluştur
+      await collection.insertOne({
+        userId,
+        positions: [{
+          ...position,
+          id: positionId,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        }],
+        updatedAt: Date.now()
+      })
+    } else {
+      // Mevcut portfolio'ya ekle
+      await collection.updateOne(
+        { userId },
+        {
+          $push: {
+            positions: {
+              ...position,
+              id: positionId,
+              createdAt: Date.now(),
+              updatedAt: Date.now()
+            }
+          },
+          $set: {
+            updatedAt: Date.now()
+          }
+        }
+      )
+    }
+    
+    return res.json({
+      success: true,
+      data: { id: positionId }
+    })
+  } catch (error) {
+    console.error('❌ POST /api/portfolio/:userId/positions error:', error)
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    })
+  }
+})
+
+// PUT /api/portfolio/:userId/positions/:positionId - Pozisyon güncelle
+app.put('/api/portfolio/:userId/positions/:positionId', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const { userId, positionId } = req.params
+    const updates = req.body
+    
+    const collection = db.collection('user_portfolio')
+    
+    // Pozisyonu güncelle
+    const updateFields = {
+      'positions.$.updatedAt': Date.now(),
+      updatedAt: Date.now()
+    }
+    
+    Object.keys(updates).forEach(key => {
+      updateFields[`positions.$.${key}`] = updates[key]
+    })
+    
+    const result = await collection.updateOne(
+      { userId, 'positions.id': positionId },
+      {
+        $set: updateFields
+      }
+    )
+    
+    if (result.matchedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Pozisyon bulunamadı'
+      })
+    }
+    
+    return res.json({
+      success: true,
+      data: { id: positionId }
+    })
+  } catch (error) {
+    console.error('❌ PUT /api/portfolio/:userId/positions/:positionId error:', error)
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    })
+  }
+})
+
+// DELETE /api/portfolio/:userId/positions/:positionId - Pozisyon sil
+app.delete('/api/portfolio/:userId/positions/:positionId', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const { userId, positionId } = req.params
+    
+    const collection = db.collection('user_portfolio')
+    
+    // Pozisyonu sil
+    const result = await collection.updateOne(
+      { userId },
+      {
+        $pull: {
+          positions: { id: positionId }
+        },
+        $set: {
+          updatedAt: Date.now()
+        }
+      }
+    )
+    
+    if (result.matchedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Portfolio bulunamadı'
+      })
+    }
+    
+    return res.json({
+      success: true,
+      data: { id: positionId }
+    })
+  } catch (error) {
+    console.error('❌ DELETE /api/portfolio/:userId/positions/:positionId error:', error)
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    })
+  }
+})
+
 // Admin - Get All Users (MongoDB + Firebase Google users)
 app.get('/api/admin/users', async (req, res) => {
   try {

@@ -10,6 +10,7 @@ import Admin from './pages/Admin'
 import Settings from './pages/Settings'
 import Trending from './pages/Trending'
 import Favorites from './pages/Favorites'
+import Portfolio from './pages/Portfolio'
 import News from './pages/News'
 import FedRate from './pages/FedRate'
 import SupplyTracking from './pages/SupplyTracking'
@@ -113,6 +114,14 @@ const App = () => {
           element={
             <PremiumRoute>
               <Favorites />
+            </PremiumRoute>
+          }
+        />
+        <Route
+          path="portfolio"
+          element={
+            <PremiumRoute>
+              <Portfolio />
             </PremiumRoute>
           }
         />

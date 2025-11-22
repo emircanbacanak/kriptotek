@@ -31,6 +31,7 @@ const Sidebar = ({ onItemClick }) => {
     { to: '/news', icon: Newspaper, label: t('news'), isPremium: false, isAdmin: false },
     { to: '/trending', icon: TrendingUp, label: t('trending'), isPremium: true, isAdmin: false },
     { to: '/favorites', icon: Star, label: t('favorites'), isPremium: true, isAdmin: false },
+    { to: '/portfolio', icon: Wallet, label: t('portfolio'), isPremium: true, isAdmin: false },
     { to: '/settings', icon: Settings, label: t('settings'), isPremium: false, isAdmin: false },
     { to: '/admin', icon: ShieldCheck, label: t('admin'), isPremium: false, isAdmin: true },
   ]
