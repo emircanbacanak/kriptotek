@@ -645,7 +645,7 @@ async function fetchWithProxy(url, options, startProxyIndex = 0) {
   }
   
   // Hiçbir proxy çalışmadı, normal fetch dene
-  return await fetch(url, options)
+    return await fetch(url, options)
 }
 
 // Stablecoin'leri filtrele - Kapsamlı liste
@@ -1072,38 +1072,38 @@ async function fetchCryptoList() {
           // Paralel işlem: Her batch'te parallelLimit kadar coin'i aynı anda çek
           for (let i = 0; i < batch.length; i += parallelLimit) {
             const parallelBatch = batch.slice(i, i + parallelLimit)
-            
+          
             // Paralel fetch işlemleri
             const parallelPromises = parallelBatch.map(async (coinId, coinIndex) => {
-              let success = false
-              let retryCount = 0
+            let success = false
+            let retryCount = 0
               const maxRetries = 1 // Hız için retry sayısını azalttık (2 → 1)
               let coinFailed = false
-              
-              while (!success && retryCount <= maxRetries) {
-                try {
-                  const supplyUrl = `${COINGECKO_API}/coins/${coinId}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false`
-                  
+            
+            while (!success && retryCount <= maxRetries) {
+              try {
+                const supplyUrl = `${COINGECKO_API}/coins/${coinId}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false`
+                
                   // Her retry'de farklı proxy index kullan
                   const proxyStartIndex = (batchIndex * batch.length + i + coinIndex + retryCount) % FREE_PROXIES.length
-                  
-                  if (retryCount > 0) {
+                
+                if (retryCount > 0) {
                     await new Promise(resolve => setTimeout(resolve, 1000)) // Retry arasında 1 saniye bekle
-                  }
-                  
-                  const controller = new AbortController()
+                }
+                
+                const controller = new AbortController()
                   const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 saniye timeout
-                  
-                  try {
+                
+                try {
                     const supplyResponse = await fetchWithProxy(supplyUrl, {
-                      headers: {
-                        'Accept': 'application/json',
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                      },
-                      signal: controller.signal
+                    headers: {
+                      'Accept': 'application/json',
+                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                    },
+                    signal: controller.signal
                     }, proxyStartIndex)
                     
-                    clearTimeout(timeoutId)
+                  clearTimeout(timeoutId)
                     
                     if (supplyResponse && supplyResponse.ok) {
                       const coinData = await supplyResponse.json()
@@ -1119,7 +1119,7 @@ async function fetchCryptoList() {
                             max_supply: maxSupply
                           })
                           success = true
-                        } else {
+                  } else {
                           success = true // Başarılı ama supply yok
                         }
                       } else {
@@ -1129,9 +1129,9 @@ async function fetchCryptoList() {
                       // Rate limit hatası - daha kısa bekle (hız için)
                       if (retryCount === 0) {
                         await new Promise(resolve => setTimeout(resolve, 20000)) // 20 saniye bekle
-                      }
-                      retryCount++
-                      continue
+                  }
+                  retryCount++
+                  continue
                     } else {
                       // HTTP hatası - sessizce retry yap
                       retryCount++
@@ -1215,47 +1215,47 @@ async function fetchCryptoList() {
                     },
                     signal: controller.signal
                   }, proxyStartIndex)
-                  
-                  clearTimeout(timeoutId)
-                  
-                  if (supplyResponse && supplyResponse.ok) {
-                    const coinData = await supplyResponse.json()
-                    if (coinData && coinData.market_data) {
-                      const marketData = coinData.market_data
-                      const totalSupply = marketData.total_supply !== null && marketData.total_supply !== undefined ? marketData.total_supply : null
-                      const maxSupply = marketData.max_supply !== null && marketData.max_supply !== undefined ? marketData.max_supply : null
-                      
-                      if (totalSupply !== null || maxSupply !== null) {
-                        supplyDataMap.set(coinId, {
-                          total_supply: totalSupply,
-                          max_supply: maxSupply
-                        })
-                        success = true
-                      } else {
-                        success = true // Başarılı ama supply yok
-                      }
+                
+                clearTimeout(timeoutId)
+                
+                if (supplyResponse && supplyResponse.ok) {
+                  const coinData = await supplyResponse.json()
+                  if (coinData && coinData.market_data) {
+                    const marketData = coinData.market_data
+                    const totalSupply = marketData.total_supply !== null && marketData.total_supply !== undefined ? marketData.total_supply : null
+                    const maxSupply = marketData.max_supply !== null && marketData.max_supply !== undefined ? marketData.max_supply : null
+                    
+                    if (totalSupply !== null || maxSupply !== null) {
+                      supplyDataMap.set(coinId, {
+                        total_supply: totalSupply,
+                        max_supply: maxSupply
+                      })
+                      success = true
                     } else {
-                      success = true // Başarılı ama market_data yok
+                        success = true // Başarılı ama supply yok
                     }
-                  } else if (supplyResponse && supplyResponse.status === 429) {
+                  } else {
+                      success = true // Başarılı ama market_data yok
+                  }
+                } else if (supplyResponse && supplyResponse.status === 429) {
                     // Rate limit hatası
                     if (retryCount === 0) {
                       await new Promise(resolve => setTimeout(resolve, 30000)) // 30 saniye bekle
                     }
-                    retryCount++
-                    continue
+                retryCount++
+                continue
                   } else {
-                    retryCount++
-                    continue
+                retryCount++
+                continue
                   }
                 } catch (fetchError) {
                   clearTimeout(timeoutId)
-                  retryCount++
-                  continue
-                }
-              } catch (error) {
                 retryCount++
-                if (retryCount > maxRetries) {
+                continue
+              }
+            } catch (error) {
+              retryCount++
+              if (retryCount > maxRetries) {
                   // Son retry de başarısız
                 }
               }
@@ -1327,7 +1327,7 @@ async function fetchCryptoList() {
         supply_absolute_change_24h: coin.circulating_supply ? (coin.circulating_supply * 0.01) : 0
       }
     })
-    
+
     return {
       data: normalizedData,
       apiStatuses

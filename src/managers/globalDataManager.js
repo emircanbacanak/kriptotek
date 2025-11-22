@@ -231,6 +231,21 @@ class GlobalDataManager {
     }
   }
 
+  // Fed Rate verilerini set et (hook'tan çağrılabilir)
+  setFedRateData(data, timestamp = null) {
+    this.fedRateData = data
+    this.lastFedRateUpdate = timestamp || Date.now()
+    // localStorage'a kaydet
+    if (data) {
+      localStorage.setItem(this.CACHE_KEYS.fedRate, JSON.stringify({
+        data: this.fedRateData,
+        lastUpdate: this.lastFedRateUpdate
+      }))
+    }
+    // Abonelere bildir
+    this.notifySubscribers()
+  }
+
   // Abone ol (sayfalar veri değişikliklerini dinleyebilir)
   subscribe(callback) {
     this.subscribers.add(callback)

@@ -1785,6 +1785,12 @@ function calculateTrendingScores(coins) {
       // Gelişmiş AI Prediction (tüm faktörler birleştirilmiş)
       const aiPrediction = momentumFactor + reversionFactor + liquidityImpact + stabilityFactor + volatilityFactor + marketCapFactor
       
+      // Tahmin'i sınırla: çok aşırı tahminler yapma
+      // NaN veya undefined kontrolü ekle
+      const clampedPrediction = isNaN(aiPrediction) || !isFinite(aiPrediction) 
+        ? 0 
+        : Math.max(-15, Math.min(15, aiPrediction))
+      
       // ============ POZİSYON BELİRLEME ============
       // Sınırlanmış tahmin'i kullan
       const finalPrediction = clampedPrediction
@@ -2378,7 +2384,7 @@ app.get('/api/fed-rate', async (req, res) => {
     try {
       console.log('⚠️ GET /api/fed-rate: Cache yok veya geçersiz, otomatik güncelleme yapılıyor...')
       const { fetchFedRateData } = await import('./services/apiHandlers/fedRate.js')
-      const fedRateData = await fetchFedRateData()
+      const fedRateData = await fetchFedRateData(db)
       
       // MongoDB'ye kaydet
       await collection.updateOne(
@@ -2426,7 +2432,7 @@ app.post('/api/fed-rate/update', async (req, res) => {
 
     // FRED_API_KEY artık gerekli değil - yeni kaynaklar eklenecek
     const { fetchFedRateData } = await import('./services/apiHandlers/fedRate.js')
-    const fedRateData = await fetchFedRateData()
+    const fedRateData = await fetchFedRateData(db)
 
     // MongoDB'ye kaydet
     const collection = db.collection('api_cache')
