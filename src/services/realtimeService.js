@@ -2,6 +2,8 @@
  * Realtime Service
  * WebSocket üzerinden MongoDB Change Streams'i dinler
  */
+import logger from '../utils/logger'
+
 class RealtimeService {
   constructor() {
     this.ws = null
@@ -78,7 +80,7 @@ class RealtimeService {
       this.ws = new WebSocket(wsUrl)
       
       this.ws.onopen = () => {
-        console.log(`✅ WebSocket bağlantısı kuruldu: ${wsUrl}`)
+        logger.log(`✅ WebSocket bağlantısı kuruldu: ${wsUrl}`)
         this.isConnected = true
         this.isConnecting = false
         this.reconnectAttempts = 0
@@ -124,7 +126,7 @@ class RealtimeService {
         
         // Sadece beklenmeyen kapanmaları log'la
         if (!wasClean && code !== 1000 && code !== 1006) {
-          console.log(`📡 WebSocket bağlantısı kapatıldı (code: ${code}, clean: ${wasClean}, reason: ${reason})`)
+          logger.log(`📡 WebSocket bağlantısı kapatıldı (code: ${code}, clean: ${wasClean}, reason: ${reason})`)
         }
         this.isConnected = false
         this.isConnecting = false

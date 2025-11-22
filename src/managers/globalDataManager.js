@@ -7,6 +7,7 @@ import cryptoService from '../services/cryptoService'
 import dominanceService from '../services/dominanceService'
 import fearGreedService from '../services/fearGreedService'
 import realtimeService from '../services/realtimeService'
+import logger from '../utils/logger'
 // currencyService artık backend scheduler tarafından yönetiliyor, sadece MongoDB'den okuyoruz
 
 class GlobalDataManager {
@@ -369,7 +370,7 @@ class GlobalDataManager {
                 cryptoList = coins
                 cryptoApiStatuses.push({ name: 'MongoDB Cache', success: true })
                 fromMongoDB = true
-                console.log(`✅ [${timeStr}] Crypto verisi MongoDB'den yüklendi (${cryptoList.length} coin)`)
+                logger.log(`✅ [${timeStr}] Crypto verisi MongoDB'den yüklendi (${cryptoList.length} coin)`)
               }
             }
           } else if (mongoResponse.status === 404) {
@@ -854,7 +855,7 @@ class GlobalDataManager {
   // Sadece MongoDB'den mevcut veriyi yükle (API çağrısı yapmadan) - PARALEL YÜKLEME
   async loadFromMongoDBOnly() {
     const timeStr = new Date().toLocaleTimeString('tr-TR')
-    console.log(`📥 [${timeStr}] MongoDB'den mevcut veriler yükleniyor...`)
+    logger.log(`📥 [${timeStr}] MongoDB'den mevcut veriler yükleniyor...`)
     
     // İlk başta abonelere bildir (loading state için)
     this.notifySubscribers()
@@ -905,7 +906,7 @@ class GlobalDataManager {
               this.coins = coins.length > 500 ? coins.slice(0, 500) : coins
               this.topMovers = this.calculateTopMovers(this.coins)
               this.lastCryptoUpdate = new Date()
-              console.log(`✅ [${timeStr}] Crypto verisi MongoDB'den yüklendi (${this.coins.length} coin)`)
+              logger.log(`✅ [${timeStr}] Crypto verisi MongoDB'den yüklendi (${this.coins.length} coin)`)
             }
           }
         } catch (e) {
@@ -920,7 +921,7 @@ class GlobalDataManager {
           if (mongoResult.success && mongoResult.data) {
             this.dominanceData = mongoResult.data
             this.lastDominanceUpdate = Date.now()
-            console.log(`✅ [${timeStr}] Dominance verisi MongoDB'den yüklendi`)
+            logger.log(`✅ [${timeStr}] Dominance verisi MongoDB'den yüklendi`)
           }
         } catch (e) {
           // Sessizce geç
@@ -933,7 +934,7 @@ class GlobalDataManager {
           const mongoResult = await fearGreedResponse.value.json()
           if (mongoResult.success && mongoResult.data) {
             this.fearGreedIndex = mongoResult.data
-            console.log(`✅ [${timeStr}] Fear & Greed verisi MongoDB'den yüklendi`)
+            logger.log(`✅ [${timeStr}] Fear & Greed verisi MongoDB'den yüklendi`)
           }
         } catch (e) {
           // Sessizce geç
@@ -947,7 +948,7 @@ class GlobalDataManager {
           if (trendingResult.success && trendingResult.data) {
             this.trendingCoins = trendingResult.data.coins || []
             this.lastTrendingUpdate = trendingResult.data.updatedAt || Date.now()
-            console.log(`✅ [${timeStr}] Trending verisi MongoDB'den yüklendi (${this.trendingCoins.length} coin)`)
+            logger.log(`✅ [${timeStr}] Trending verisi MongoDB'den yüklendi (${this.trendingCoins.length} coin)`)
           }
         } catch (e) {
           // Sessizce geç
@@ -964,7 +965,7 @@ class GlobalDataManager {
             if (typeof window !== 'undefined') {
               window.__exchangeRates = this.currencyRates
             }
-            console.log(`✅ [${timeStr}] Currency rates MongoDB'den yüklendi`)
+            logger.log(`✅ [${timeStr}] Currency rates MongoDB'den yüklendi`)
           }
         } catch (e) {
           // Sessizce geç
@@ -979,7 +980,7 @@ class GlobalDataManager {
             if (mongoResult.success && mongoResult.data) {
               this.fedRateData = mongoResult.data
               this.lastFedRateUpdate = Date.now()
-              console.log(`✅ [${timeStr}] Fed Rate verisi MongoDB'den yüklendi`)
+              logger.log(`✅ [${timeStr}] Fed Rate verisi MongoDB'den yüklendi`)
             }
           } catch (e) {
             // Sessizce geç
@@ -1000,7 +1001,7 @@ class GlobalDataManager {
           if (mongoResult.success && mongoResult.data) {
             this.supplyTrackingData = mongoResult.data.data || mongoResult.data
             this.lastSupplyTrackingUpdate = Date.now()
-            console.log(`✅ [${timeStr}] Supply Tracking verisi MongoDB'den yüklendi`)
+            logger.log(`✅ [${timeStr}] Supply Tracking verisi MongoDB'den yüklendi`)
           }
         } catch (e) {
           // Sessizce geç
@@ -1011,8 +1012,8 @@ class GlobalDataManager {
       this.notifySubscribers()
       
       const nextUpdateTime = new Date(Date.now() + this.getNextUpdateTime()).toLocaleTimeString('tr-TR')
-      console.log(`✅ [${timeStr}] MongoDB'den veri yükleme işlemi tamamlandı`)
-      console.log(`⏰ Bir sonraki güncelleme: ${nextUpdateTime}`)
+      logger.log(`✅ [${timeStr}] MongoDB'den veri yükleme işlemi tamamlandı`)
+      logger.log(`⏰ Bir sonraki güncelleme: ${nextUpdateTime}`)
       
       // Veri durumunu logla
       const dataStatus = {
@@ -1024,7 +1025,7 @@ class GlobalDataManager {
         fedRate: this.fedRateData ? 'VAR' : 'YOK',
         supplyTracking: this.supplyTrackingData ? 'VAR' : 'YOK'
       }
-      console.log(`📊 Veri durumu:`, dataStatus)
+      logger.log(`📊 Veri durumu:`, dataStatus)
     } catch (error) {
       console.error(`❌ [${timeStr}] MongoDB yükleme hatası:`, error.message || error)
       // Hata olsa bile abonelere bildir (boş veri ile) - ANINDA
