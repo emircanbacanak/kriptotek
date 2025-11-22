@@ -393,7 +393,7 @@ function News() {
     
     // İlk yükleme (cache yoksa veya eskiyse)
     if (!hasCache) {
-      initializeNews()
+    initializeNews()
     } else {
       // Cache varsa arka planda güncelle
       initializeNews()
@@ -957,15 +957,15 @@ function News() {
                   {(item.url || item.link) && (() => {
                     const cleanUrlValue = cleanUrl(item.url || item.link)
                     return cleanUrlValue ? (
-                      <a
+                  <a
                         href={cleanUrlValue}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                    target="_blank"
+                    rel="noopener noreferrer"
                         className="flex items-center space-x-1 text-[10px] sm:text-xs font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors hover:underline"
-                      >
-                        <span>{t('readMore') || 'Devamı'}</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
+                  >
+                    <span>{t('readMore') || 'Devamı'}</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
                     ) : null
                   })()}
                 </div>

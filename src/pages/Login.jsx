@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, Mail, Lock, ArrowRight, Shield } from 'lucide-react'
-import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { updatePageSEO } from '../utils/seoMetaTags'
@@ -16,9 +15,18 @@ import {
 } from '../utils/advancedSecurity'
 
 const Login = () => {
-  const { isDark } = useTheme()
   const { loginWithEmailPassword, loginWithGoogleAuth, isAuthenticated, refreshUserSettings } = useAuth()
   const { t, language, changeLanguage } = useLanguage()
+
+  // Bu sayfa sadece dark tema kullanır
+  useEffect(() => {
+    const root = window.document.documentElement
+    root.classList.remove('light')
+    root.classList.add('dark')
+    return () => {
+      // Sayfa kapanırken temayı geri yükle (isteğe bağlı)
+    }
+  }, [])
 
   useEffect(() => {
     updatePageSEO('login', language)
@@ -45,6 +53,8 @@ const Login = () => {
   const containerRef = useRef(null)
   const [draggedElement, setDraggedElement] = useState(null)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+  const lastClickTimeRef = useRef(0)
+  const lastClickElementRef = useRef(null)
 
   useEffect(() => {
     if (failedAttempts >= 3 && !showCaptcha) {
@@ -60,19 +70,87 @@ const Login = () => {
     }
   }, [isAuthenticated, navigate])
 
+  const handleDoubleClick = useCallback((e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    e.stopImmediatePropagation()
+    
+    // Drag'ı iptal et
+    if (draggedElement) {
+      setDraggedElement(null)
+      const element = document.getElementById(draggedElement)
+      if (element) {
+        element.style.cursor = 'grab'
+        element.style.zIndex = '2'
+      }
+    }
+    
+    // Tıklama zamanını sıfırla
+    lastClickTimeRef.current = 0
+    lastClickElementRef.current = null
+  }, [draggedElement])
+
   const handleDragStart = useCallback((e, elementId) => {
     e.preventDefault()
-    const element = e.target
+    e.stopPropagation()
+    
+    // Çift tıklamayı engelle - son tıklama zamanını kontrol et
+    const now = Date.now()
+    const timeSinceLastClick = now - lastClickTimeRef.current
+    const isSameElement = lastClickElementRef.current === elementId
+    
+    if (isSameElement && timeSinceLastClick < 500) {
+      // Çift tıklama algılandı, engelle
+      lastClickTimeRef.current = 0
+      lastClickElementRef.current = null
+      e.stopImmediatePropagation()
+      return false
+    }
+    
+    // Tıklama zamanını kaydet
+    lastClickTimeRef.current = now
+    lastClickElementRef.current = elementId
+    
+    const element = document.getElementById(elementId)
+    if (!element) return
+
     const rect = element.getBoundingClientRect()
+    const container = containerRef.current
+    if (!container) return
+
+    const containerRect = container.getBoundingClientRect()
+
+    // Mevcut pozisyonu al
+    let currentX = rect.left - containerRect.left
+    let currentY = rect.top - containerRect.top
+
+    // Eğer left/top varsa onu kullan
+    if (element.style.left) {
+      currentX = parseFloat(element.style.left) || currentX
+    }
+    if (element.style.top) {
+      currentY = parseFloat(element.style.top) || currentY
+    }
+
+    // Fare pozisyonu element içindeki offset
+    const offsetX = e.clientX - rect.left
+    const offsetY = e.clientY - rect.top
 
     setDraggedElement(elementId)
-    setDragOffset({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
-    })
+    setDragOffset({ x: offsetX, y: offsetY })
 
+    // Başlangıç pozisyonunu kaydet
+    element.dataset.startX = currentX.toString()
+    element.dataset.startY = currentY.toString()
+
+    // Stil ayarları
     element.style.cursor = 'grabbing'
     element.style.zIndex = '1000'
+    element.style.transition = 'none'
+    element.style.animation = 'none'
+    element.style.transform = 'none'
+    element.style.bottom = ''
+    element.style.right = ''
   }, [])
 
   const handleDragMove = useCallback((e) => {
@@ -86,36 +164,62 @@ const Login = () => {
 
     const containerRect = container.getBoundingClientRect()
 
-    const newX = e.clientX - containerRect.left - dragOffset.x
-    const newY = e.clientY - containerRect.top - dragOffset.y
+    // Fare pozisyonunu container'a göre hesapla
+    const mouseX = e.clientX - containerRect.left
+    const mouseY = e.clientY - containerRect.top
 
-    element.style.transform = `translate(${newX}px, ${newY}px)`
-    element.style.left = '0'
-    element.style.top = '0'
-    element.style.right = 'auto'
-    element.style.bottom = 'auto'
+    // Yeni pozisyon = fare pozisyonu - offset
+    let newX = mouseX - dragOffset.x
+    let newY = mouseY - dragOffset.y
+
+    // Sınırları kontrol et
+    const elementWidth = element.offsetWidth || 50
+    const elementHeight = element.offsetHeight || 50
+    const maxX = containerRect.width - elementWidth
+    const maxY = containerRect.height - elementHeight
+    newX = Math.max(0, Math.min(newX, maxX))
+    newY = Math.max(0, Math.min(newY, maxY))
+
+    // Direkt left/top kullan
+    element.style.left = `${newX}px`
+    element.style.top = `${newY}px`
   }, [draggedElement, dragOffset])
 
   const handleDragEnd = useCallback(() => {
     if (!draggedElement) return
 
     const element = document.getElementById(draggedElement)
-    if (element) {
-      const transform = element.style.transform
-      if (transform) {
-        const match = transform.match(/translate\((-?\d+\.?\d*)px,\s*(-?\d+\.?\d*)px\)/)
-        if (match) {
-          const x = parseFloat(match[1])
-          const y = parseFloat(match[2])
-          element.style.left = `${x}px`
-          element.style.top = `${y}px`
-          element.style.transform = ''
-        }
-      }
+    if (!element) return
 
-      element.style.cursor = 'grab'
-      element.style.zIndex = '2'
-    }
+    const container = containerRef.current
+    if (!container) return
+
+    const containerRect = container.getBoundingClientRect()
+    const rect = element.getBoundingClientRect()
+
+    // Mevcut pozisyonu al
+    let finalX = rect.left - containerRect.left
+    let finalY = rect.top - containerRect.top
+
+    // Sınırları kontrol et
+    const elementWidth = element.offsetWidth || 50
+    const elementHeight = element.offsetHeight || 50
+    const maxX = containerRect.width - elementWidth
+    const maxY = containerRect.height - elementHeight
+    finalX = Math.max(0, Math.min(finalX, maxX))
+    finalY = Math.max(0, Math.min(finalY, maxY))
+
+    // Smooth transition ile final pozisyona git
+    element.style.transition = 'left 0.3s ease-out, top 0.3s ease-out'
+    element.style.animation = ''
+    element.style.left = `${finalX}px`
+    element.style.top = `${finalY}px`
+    element.style.cursor = 'grab'
+    element.style.zIndex = '2'
+
+    // Dataset'i temizle
+    delete element.dataset.startX
+    delete element.dataset.startY
 
     setDraggedElement(null)
   }, [draggedElement])
@@ -124,17 +228,26 @@ const Login = () => {
     if (!draggedElement) return
 
     let rafId = null
+    let lastTime = 0
+    const throttleMs = 8 // ~120fps için throttle
 
     const handleMouseMove = (e) => {
       e.preventDefault()
 
-      if (rafId) {
-        cancelAnimationFrame(rafId)
-      }
-
-      rafId = requestAnimationFrame(() => {
+      const now = performance.now()
+      if (now - lastTime < throttleMs) {
+        // Throttle yap, çok sık çağrılmasın
+        if (rafId) {
+          cancelAnimationFrame(rafId)
+        }
+        rafId = requestAnimationFrame(() => {
+          lastTime = performance.now()
+          handleDragMove(e)
+        })
+      } else {
+        lastTime = now
         handleDragMove(e)
-      })
+      }
     }
 
     const container = containerRef.current
@@ -292,39 +405,39 @@ const Login = () => {
       ref={containerRef}
       className="min-h-screen animated-login-bg flex items-start sm:items-center justify-center py-16 sm:py-4 px-4 sm:px-6 lg:px-8 relative select-none"
     >
-      <div key="coin-1" id="coin-1" className="crypto-coin draggable-element" style={{ top: '10%', left: '8%', color: '#ffa726', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'coin-1')}>₿</div>
-      <div key="coin-2" id="coin-2" className="crypto-coin draggable-element" style={{ top: '25%', right: '12%', color: '#7c8eff', animationDelay: '-3s', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'coin-2')}>Ξ</div>
-      <div key="coin-3" id="coin-3" className="crypto-coin draggable-element" style={{ bottom: '35%', left: '15%', color: '#4ade80', animationDelay: '-6s', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'coin-3')}>₮</div>
-      <div key="coin-4" id="coin-4" className="crypto-coin draggable-element" style={{ bottom: '15%', right: '20%', color: '#fcd34d', animationDelay: '-9s', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'coin-4')}>🅱</div>
-      <div key="coin-5" id="coin-5" className="crypto-coin draggable-element" style={{ top: '60%', left: '5%', color: '#3b82f6', animationDelay: '-12s', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'coin-5')}>◎</div>
-      <div key="coin-6" id="coin-6" className="crypto-coin draggable-element" style={{ top: '40%', right: '8%', color: '#34d399', animationDelay: '-2s', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'coin-6')}>Ł</div>
-      <div key="coin-7" id="coin-7" className="crypto-coin draggable-element" style={{ top: '35%', left: '25%', color: '#ffa726', animationDelay: '-4s', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'coin-7')}>₿</div>
-      <div key="coin-8" id="coin-8" className="crypto-coin draggable-element" style={{ top: '70%', right: '30%', color: '#7c8eff', animationDelay: '-7s', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'coin-8')}>Ξ</div>
-      <div key="coin-9" id="coin-9" className="crypto-coin draggable-element" style={{ bottom: '50%', left: '40%', color: '#4ade80', animationDelay: '-10s', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'coin-9')}>₮</div>
-      <div key="coin-10" id="coin-10" className="crypto-coin draggable-element" style={{ top: '80%', left: '15%', color: '#60a5fa', animationDelay: '-13s', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'coin-10')}>Ð</div>
+      <div key="coin-1" id="coin-1" className="crypto-coin draggable-element" style={{ top: '10%', left: '8%', color: '#ffa726', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'coin-1')} onDoubleClick={handleDoubleClick}>₿</div>
+      <div key="coin-2" id="coin-2" className="crypto-coin draggable-element" style={{ top: '25%', right: '12%', color: '#7c8eff', animationDelay: '-3s', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'coin-2')} onDoubleClick={handleDoubleClick}>Ξ</div>
+      <div key="coin-3" id="coin-3" className="crypto-coin draggable-element" style={{ bottom: '35%', left: '15%', color: '#4ade80', animationDelay: '-6s', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'coin-3')} onDoubleClick={handleDoubleClick}>₮</div>
+      <div key="coin-4" id="coin-4" className="crypto-coin draggable-element" style={{ bottom: '15%', right: '20%', color: '#fcd34d', animationDelay: '-9s', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'coin-4')} onDoubleClick={handleDoubleClick}>🅱</div>
+      <div key="coin-5" id="coin-5" className="crypto-coin draggable-element" style={{ top: '60%', left: '5%', color: '#3b82f6', animationDelay: '-12s', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'coin-5')} onDoubleClick={handleDoubleClick}>◎</div>
+      <div key="coin-6" id="coin-6" className="crypto-coin draggable-element" style={{ top: '40%', right: '8%', color: '#34d399', animationDelay: '-2s', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'coin-6')} onDoubleClick={handleDoubleClick}>Ł</div>
+      <div key="coin-7" id="coin-7" className="crypto-coin draggable-element" style={{ top: '35%', left: '25%', color: '#ffa726', animationDelay: '-4s', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'coin-7')} onDoubleClick={handleDoubleClick}>₿</div>
+      <div key="coin-8" id="coin-8" className="crypto-coin draggable-element" style={{ top: '70%', right: '30%', color: '#7c8eff', animationDelay: '-7s', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'coin-8')} onDoubleClick={handleDoubleClick}>Ξ</div>
+      <div key="coin-9" id="coin-9" className="crypto-coin draggable-element" style={{ bottom: '50%', left: '40%', color: '#4ade80', animationDelay: '-10s', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'coin-9')} onDoubleClick={handleDoubleClick}>₮</div>
+      <div key="coin-10" id="coin-10" className="crypto-coin draggable-element" style={{ top: '80%', left: '15%', color: '#60a5fa', animationDelay: '-13s', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'coin-10')} onDoubleClick={handleDoubleClick}>Ð</div>
 
-      <div key="ticker-1" id="ticker-1" className={`price-ticker ${tickerData[0]?.isPositive ? 'green' : 'red'} draggable-element`} style={{ top: '5%', left: '20%', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'ticker-1')}>
+      <div key="ticker-1" id="ticker-1" className={`price-ticker ${tickerData[0]?.isPositive ? 'green' : 'red'} draggable-element`} style={{ top: '5%', left: '20%', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'ticker-1')} onDoubleClick={handleDoubleClick}>
         {tickerData[0] ? `${tickerData[0].symbol} ${tickerData[0].change} ${tickerData[0].price}` : 'BTC +5.2% $98450'}
       </div>
-      <div key="ticker-2" id="ticker-2" className={`price-ticker ${tickerData[1]?.isPositive ? 'green' : 'red'} draggable-element`} style={{ top: '5%', right: '20%', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'ticker-2')}>
+      <div key="ticker-2" id="ticker-2" className={`price-ticker ${tickerData[1]?.isPositive ? 'green' : 'red'} draggable-element`} style={{ top: '5%', right: '20%', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'ticker-2')} onDoubleClick={handleDoubleClick}>
         {tickerData[1] ? `${tickerData[1].symbol} ${tickerData[1].change} ${tickerData[1].price}` : 'ETH -2.1% $3245'}
       </div>
-      <div key="ticker-3" id="ticker-3" className={`price-ticker ${tickerData[2]?.isPositive ? 'green' : 'red'} draggable-element`} style={{ top: '35%', left: '5%', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'ticker-3')}>
+      <div key="ticker-3" id="ticker-3" className={`price-ticker ${tickerData[2]?.isPositive ? 'green' : 'red'} draggable-element`} style={{ top: '35%', left: '5%', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'ticker-3')} onDoubleClick={handleDoubleClick}>
         {tickerData[2] ? `${tickerData[2].symbol} ${tickerData[2].change} ${tickerData[2].price}` : 'BNB +3.8% $645'}
       </div>
-      <div key="ticker-4" id="ticker-4" className={`price-ticker ${tickerData[3]?.isPositive ? 'green' : 'red'} draggable-element`} style={{ top: '60%', left: '5%', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'ticker-4')}>
+      <div key="ticker-4" id="ticker-4" className={`price-ticker ${tickerData[3]?.isPositive ? 'green' : 'red'} draggable-element`} style={{ top: '60%', left: '5%', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'ticker-4')} onDoubleClick={handleDoubleClick}>
         {tickerData[3] ? `${tickerData[3].symbol} ${tickerData[3].change} ${tickerData[3].price}` : 'SOL +7.4% $178'}
       </div>
-      <div key="ticker-5" id="ticker-5" className={`price-ticker ${tickerData[4]?.isPositive ? 'green' : 'red'} draggable-element`} style={{ top: '35%', right: '5%', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'ticker-5')}>
+      <div key="ticker-5" id="ticker-5" className={`price-ticker ${tickerData[4]?.isPositive ? 'green' : 'red'} draggable-element`} style={{ top: '35%', right: '5%', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'ticker-5')} onDoubleClick={handleDoubleClick}>
         {tickerData[4] ? `${tickerData[4].symbol} ${tickerData[4].change} ${tickerData[4].price}` : 'XRP -1.5% $0.85'}
       </div>
-      <div key="ticker-6" id="ticker-6" className={`price-ticker ${tickerData[5]?.isPositive ? 'green' : 'red'} draggable-element`} style={{ top: '60%', right: '5%', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'ticker-6')}>
+      <div key="ticker-6" id="ticker-6" className={`price-ticker ${tickerData[5]?.isPositive ? 'green' : 'red'} draggable-element`} style={{ top: '60%', right: '5%', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'ticker-6')} onDoubleClick={handleDoubleClick}>
         {tickerData[5] ? `${tickerData[5].symbol} ${tickerData[5].change} ${tickerData[5].price}` : 'ADA +4.3% $1.12'}
       </div>
-      <div key="ticker-7" id="ticker-7" className={`price-ticker ${tickerData[6]?.isPositive ? 'green' : 'red'} draggable-element`} style={{ bottom: '5%', left: '20%', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'ticker-7')}>
+      <div key="ticker-7" id="ticker-7" className={`price-ticker ${tickerData[6]?.isPositive ? 'green' : 'red'} draggable-element`} style={{ bottom: '5%', left: '20%', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'ticker-7')} onDoubleClick={handleDoubleClick}>
         {tickerData[6] ? `${tickerData[6].symbol} ${tickerData[6].change} ${tickerData[6].price}` : 'DOGE -3.2% $0.18'}
       </div>
-      <div key="ticker-8" id="ticker-8" className={`price-ticker ${tickerData[7]?.isPositive ? 'green' : 'red'} draggable-element`} style={{ bottom: '5%', right: '20%', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'ticker-8')}>
+      <div key="ticker-8" id="ticker-8" className={`price-ticker ${tickerData[7]?.isPositive ? 'green' : 'red'} draggable-element`} style={{ bottom: '5%', right: '20%', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'ticker-8')} onDoubleClick={handleDoubleClick}>
         {tickerData[7] ? `${tickerData[7].symbol} ${tickerData[7].change} ${tickerData[7].price}` : 'MATIC +6.1% $1.5'}
       </div>
 
@@ -350,7 +463,7 @@ const Login = () => {
 
       <div className="max-w-[320px] sm:max-w-sm md:max-w-md w-full space-y-2 sm:space-y-4 relative select-text sm:px-0 sm:mt-2" style={{ zIndex: 100 }}>
         <div className="text-center">
-          <div className="mx-auto h-12 w-12 sm:h-16 sm:w-16 bg-gradient-to-br from-blue-500 via-green-500 to-yellow-500 rounded-xl flex items-center justify-center shadow-2xl shadow-blue-500/20 animate-pulse hover:scale-110 transition-transform duration-300 cursor-pointer">
+          <div className="mx-auto h-12 w-12 sm:h-16 sm:w-16 bg-gradient-to-br from-blue-500 via-green-500 to-yellow-500 rounded-xl flex items-center justify-center shadow-2xl shadow-blue-500/20 animate-pulse transition-opacity duration-300 cursor-pointer">
             <img src="/kriptotek.jpg" alt="Kriptotek" className="h-12 w-12 sm:h-16 sm:w-16 rounded-xl object-cover" />
           </div>
           <h2 className="mt-3 sm:mt-4 text-xl sm:text-3xl font-bold text-white">

@@ -126,19 +126,10 @@ body::-webkit-scrollbar {
 .btn-outline {
   background: transparent;
   border: 1px solid rgba(148, 163, 184, 0.6);
-  color: #1f2937;
-}
-
-.dark .btn-outline {
   color: #e5e7eb;
 }
 
 .btn-outline:hover:not(:disabled) {
-  background: rgba(241, 245, 249, 0.8);
-  border-color: rgba(148, 163, 184, 0.8);
-}
-
-.dark .btn-outline:hover:not(:disabled) {
   background: rgba(15, 23, 42, 0.8);
   border-color: rgba(148, 163, 184, 0.8);
 }
@@ -150,35 +141,22 @@ body::-webkit-scrollbar {
   width: 100%;
   border-radius: 0.75rem;
   border: 1px solid rgba(148, 163, 184, 0.5);
-  background-color: rgba(255, 255, 255, 0.9);
+  background-color: rgba(15, 23, 42, 0.8);
   padding: 0.55rem 0.75rem;
-  color: #1f2937;
+  color: #e5e7eb;
   font-size: 0.85rem;
   outline: none;
   transition: all 0.2s ease;
   font-family: inherit;
 }
 
-.dark .input {
-  background-color: rgba(15, 23, 42, 0.8);
-  color: #e5e7eb;
-}
-
 .input::placeholder {
-  color: rgba(107, 114, 128, 0.8);
-}
-
-.dark .input::placeholder {
   color: rgba(148, 163, 184, 0.8);
 }
 
 .input:focus {
   border-color: rgba(59, 130, 246, 0.8);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
-  background-color: rgba(255, 255, 255, 1);
-}
-
-.dark .input:focus {
   background-color: rgba(15, 23, 42, 0.95);
 }
 
@@ -191,22 +169,14 @@ body::-webkit-scrollbar {
    FORM CONTAINER
    ============================================ */
 .login-form-container {
-  background: radial-gradient(circle at top, rgba(255, 255, 255, 0.95), rgba(249, 250, 251, 0.9));
+  background: radial-gradient(circle at top, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.9));
   border-radius: 1.5rem;
   border: 1px solid rgba(59, 130, 246, 0.35);
-  box-shadow:
-    0 20px 60px rgba(0, 0, 0, 0.1),
-    0 0 40px rgba(59, 130, 246, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-}
-
-.dark .login-form-container {
-  background: radial-gradient(circle at top, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.9));
   box-shadow:
     0 20px 60px rgba(15, 23, 42, 0.9),
     0 0 40px rgba(56, 189, 248, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
 }
 
 /* ============================================

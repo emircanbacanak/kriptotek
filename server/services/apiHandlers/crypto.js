@@ -1134,8 +1134,8 @@ async function fetchCryptoList() {
                   continue
                     } else {
                       // HTTP hatası - sessizce retry yap
-                      retryCount++
-                      continue
+                  retryCount++
+                  continue
                     }
                   } catch (fetchError) {
                     clearTimeout(timeoutId)
