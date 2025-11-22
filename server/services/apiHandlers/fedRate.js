@@ -1,4 +1,4 @@
-export async function fetchFedRateData() {
+export async function fetchFedRateData(dbInstance = null) {
   const FRED_API_KEY = process.env.FRED_API_KEY
   
   console.log('🔍 Fed Rate: Veri çekiliyor...')
@@ -10,12 +10,141 @@ export async function fetchFedRateData() {
   let lastAnnounceDate = null
   let nextDecisionDate = null
   
-  // 1. FRED API'den mevcut ve önceki oranları çek
+  // MongoDB'den önceki kaydı al (fallback için)
+  let previousRecord = null
+  if (dbInstance) {
+    try {
+      const collection = dbInstance.collection('api_cache')
+      const cached = await collection.findOne({ _id: 'fed_rate' })
+      if (cached && cached.data) {
+        previousRecord = cached.data
+        console.log('📦 MongoDB\'den önceki Fed Rate kaydı bulundu (fallback için)')
+      }
+    } catch (mongoError) {
+      console.warn('⚠️ MongoDB\'den önceki kayıt alınamadı:', mongoError.message)
+    }
+  }
+  
+  // 1. ÖNCE RSS FEED'DEN SON AÇIKLANMA TARİHİNİ AL (önceki değer için gerekli)
+  // Bu tarihten önceki değerleri çekeceğiz
+  try {
+    console.log('📰 RSS feed\'den son açıklanma tarihi çekiliyor...')
+    const rssUrl = 'https://www.federalreserve.gov/feeds/press_monetary.xml'
+    
+    const proxyUrls = [
+      `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`,
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(rssUrl)}`,
+      `https://corsproxy.io/?${encodeURIComponent(rssUrl)}`,
+      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(rssUrl)}`,
+      `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(rssUrl)}`,
+      rssUrl
+    ]
+    
+    let rssText = null
+    
+    for (const proxyUrl of proxyUrls) {
+      try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 15000)
+        
+        try {
+          const rssResponse = await fetch(proxyUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept': 'application/xml, application/rss+xml, text/xml, */*',
+              'Accept-Language': 'en-US,en;q=0.9'
+            },
+            signal: controller.signal
+          })
+          
+          clearTimeout(timeoutId)
+          
+          if (rssResponse.ok) {
+            if (proxyUrl.includes('rss2json.com')) {
+              const json = await rssResponse.json()
+              if (json.items && json.items.length > 0) {
+                const impl = json.items.find(item => 
+                  (item.title || '').toLowerCase().includes('implementation note')
+                ) || json.items[0]
+                
+                if (impl.pubDate) {
+                  const date = new Date(impl.pubDate)
+                  if (!isNaN(date.getTime())) {
+                    lastAnnounceDate = date.toISOString()
+                    console.log(`✅ RSS feed'den son açıklanma tarihi alındı: ${lastAnnounceDate}`)
+                    break
+                  }
+                }
+              }
+            } else {
+              rssText = await rssResponse.text()
+              if (rssText && rssText.length > 0) {
+                break
+              }
+            }
+          }
+        } catch (fetchError) {
+          clearTimeout(timeoutId)
+          throw fetchError
+        }
+      } catch (proxyError) {
+        if (proxyUrl === rssUrl) {
+          console.warn(`⚠️ RSS feed hatası (${proxyUrl}):`, proxyError.message)
+        }
+        continue
+      }
+    }
+    
+    // XML parse et
+    if (rssText && !lastAnnounceDate) {
+      const itemRegex = /<item>[\s\S]*?<title>([\s\S]*?)<\/title>[\s\S]*?<pubDate>([\s\S]*?)<\/pubDate>[\s\S]*?<\/item>/gi
+      let match
+      let latestDate = null
+      
+      while ((match = itemRegex.exec(rssText))) {
+        const title = (match[1] || '').trim().replace(/<[^>]*>/g, '')
+        const pubDate = match[2] || ''
+        
+        if (title.toLowerCase().includes('implementation note')) {
+          const date = new Date(pubDate)
+          if (!isNaN(date.getTime()) && (!latestDate || date > latestDate)) {
+            latestDate = date
+          }
+        }
+      }
+      
+      if (latestDate) {
+        lastAnnounceDate = latestDate.toISOString()
+        console.log(`✅ RSS feed'den Implementation Note tarihi bulundu: ${lastAnnounceDate}`)
+      } else {
+        const allItemsRegex = /<item>[\s\S]*?<pubDate>([\s\S]*?)<\/pubDate>[\s\S]*?<\/item>/gi
+        let allMatches = []
+        let allMatch
+        while ((allMatch = allItemsRegex.exec(rssText))) {
+          const pubDate = allMatch[1] || ''
+          const date = new Date(pubDate)
+          if (!isNaN(date.getTime())) {
+            allMatches.push(date)
+          }
+        }
+        if (allMatches.length > 0) {
+          allMatches.sort((a, b) => b - a)
+          lastAnnounceDate = allMatches[0].toISOString()
+          console.log(`✅ RSS feed'den en son haber tarihi alındı: ${lastAnnounceDate}`)
+        }
+      }
+    }
+  } catch (rssError) {
+    console.warn('⚠️ RSS feed hatası (önceki değer için tarih alınamadı):', rssError.message)
+  }
+  
+  // 2. FRED API'den mevcut ve önceki oranları çek (tarih bazlı)
   if (FRED_API_KEY) {
     try {
       console.log('📊 FRED API\'den veri çekiliyor...')
       
-      const fredParams = `api_key=${FRED_API_KEY}&file_type=json&sort_order=desc&limit=50`
+      // Mevcut değerler için (en güncel)
+      const fredParams = `api_key=${FRED_API_KEY}&file_type=json&sort_order=desc&limit=1`
       
       // Upper ve Lower'ı paralel çek
       const [upperRes, lowerRes] = await Promise.all([
@@ -42,51 +171,100 @@ export async function fetchFedRateData() {
           announcedUpper = parseValue(upperObs[0]?.value)
           announcedLower = parseValue(lowerObs[0]?.value)
           
-          // Mevcut değerin tarihi (ilk gözlemin tarihi)
-          const currentDate = upperObs[0]?.date ? new Date(upperObs[0].date) : null
+          console.log(`✅ FRED API'den mevcut değerler alındı: Upper=${announcedUpper}, Lower=${announcedLower}`)
           
-          // Upper için: Mevcut tarihten önceki en son değeri bul
-          for (let i = 1; i < upperObs.length; i++) {
-            const obsDate = upperObs[i]?.date ? new Date(upperObs[i].date) : null
-            const val = parseValue(upperObs[i]?.value)
+          // ÖNCEKİ DEĞERLER: Son açıklanma tarihinden önceki en son gerçek açıklanma tarihindeki değerleri çek
+          if (lastAnnounceDate) {
+            const announceDate = new Date(lastAnnounceDate)
+            const announceDateStr = announceDate.toISOString().split('T')[0] // YYYY-MM-DD formatı
             
-            // Tarih kontrolü: Mevcut tarihten önceki ilk geçerli değeri bul
-            if (val !== null && obsDate && currentDate && obsDate < currentDate) {
-              previousUpper = val
-              break
-            }
-          }
-          
-          // Lower için: Mevcut tarihten önceki en son değeri bul
-          const currentDateLower = lowerObs[0]?.date ? new Date(lowerObs[0].date) : null
-          
-          for (let i = 1; i < lowerObs.length; i++) {
-            const obsDate = lowerObs[i]?.date ? new Date(lowerObs[i].date) : null
-            const val = parseValue(lowerObs[i]?.value)
+            console.log(`🔍 Önceki değer için: ${announceDateStr} tarihinden önceki gözlemler aranıyor...`)
             
-            // Tarih kontrolü: Mevcut tarihten önceki ilk geçerli değeri bul
-            if (val !== null && obsDate && currentDateLower && obsDate < currentDateLower) {
-              previousLower = val
-              break
+            // FRED API'den son açıklanma tarihinden önceki tüm gözlemleri çek (limit=50 yeterli olmalı)
+            const previousParams = `api_key=${FRED_API_KEY}&file_type=json&sort_order=desc&limit=50&observation_end=${announceDateStr}`
+            
+            const [previousUpperRes, previousLowerRes] = await Promise.all([
+              fetch(`https://api.stlouisfed.org/fred/series/observations?series_id=DFEDTARU&${previousParams}`),
+              fetch(`https://api.stlouisfed.org/fred/series/observations?series_id=DFEDTARL&${previousParams}`)
+            ])
+            
+            if (previousUpperRes.ok && previousLowerRes.ok) {
+              const previousUpperJson = await previousUpperRes.json()
+              const previousLowerJson = await previousLowerRes.json()
+              
+              const previousUpperObs = Array.isArray(previousUpperJson?.observations) ? previousUpperJson.observations : []
+              const previousLowerObs = Array.isArray(previousLowerJson?.observations) ? previousLowerJson.observations : []
+              
+              // Son açıklanma tarihinden önceki en son gözlemi bul
+              // (Aynı tarihli gözlemler olabilir, o yüzden farklı bir tarih bulmalıyız)
+              let foundPrevious = false
+              
+              for (let i = 0; i < previousUpperObs.length && i < previousLowerObs.length; i++) {
+                const obsDate = previousUpperObs[i]?.date
+                const obsUpper = parseValue(previousUpperObs[i]?.value)
+                const obsLower = parseValue(previousLowerObs[i]?.value)
+                
+                // Geçerli bir değer ve farklı bir tarih bul
+                if (obsUpper !== null && obsLower !== null && obsDate) {
+                  const obsDateObj = new Date(obsDate)
+                  // Son açıklanma tarihinden önceki bir tarih olmalı (en az 25 gün fark - Fed kararları genellikle 6-8 hafta arayla açıklanır)
+                  const daysDiff = (announceDate.getTime() - obsDateObj.getTime()) / (1000 * 60 * 60 * 24)
+                  
+                  if (daysDiff >= 25) {
+                    previousUpper = obsUpper
+                    previousLower = obsLower
+                    foundPrevious = true
+                    console.log(`✅ FRED API'den önceki değerler alındı (tarih bazlı): Upper=${previousUpper}, Lower=${previousLower}, Tarih: ${obsDate} (${Math.round(daysDiff)} gün önce)`)
+                    break
+                  }
+                }
+              }
+              
+              if (!foundPrevious) {
+                console.warn(`⚠️ Son açıklanma tarihinden (${announceDateStr}) önceki farklı bir tarih bulunamadı`)
+              }
+            } else {
+              console.warn('⚠️ FRED API önceki değer isteği başarısız:', {
+                upper: previousUpperRes.status,
+                lower: previousLowerRes.status
+              })
+            }
+          } else {
+            console.log('ℹ️ Son açıklanma tarihi bulunamadı, önceki değerler için ikinci gözlem kullanılacak')
+            // Fallback: Daha fazla gözlem çek ve ikinci farklı tarihi bul
+            const allParams = `api_key=${FRED_API_KEY}&file_type=json&sort_order=desc&limit=50`
+            const [allUpperRes, allLowerRes] = await Promise.all([
+              fetch(`https://api.stlouisfed.org/fred/series/observations?series_id=DFEDTARU&${allParams}`),
+              fetch(`https://api.stlouisfed.org/fred/series/observations?series_id=DFEDTARL&${allParams}`)
+            ])
+            
+            if (allUpperRes.ok && allLowerRes.ok) {
+              const allUpperJson = await allUpperRes.json()
+              const allLowerJson = await allLowerRes.json()
+              
+              const allUpperObs = Array.isArray(allUpperJson?.observations) ? allUpperJson.observations : []
+              const allLowerObs = Array.isArray(allLowerJson?.observations) ? allLowerJson.observations : []
+              
+              // İlk gözlemin tarihini al
+              const currentDate = allUpperObs[0]?.date
+              
+              // Farklı bir tarihli gözlem bul
+              for (let i = 1; i < allUpperObs.length && i < allLowerObs.length; i++) {
+                const obsDate = allUpperObs[i]?.date
+                const obsUpper = parseValue(allUpperObs[i]?.value)
+                const obsLower = parseValue(allLowerObs[i]?.value)
+                
+                if (obsUpper !== null && obsLower !== null && obsDate && obsDate !== currentDate) {
+                  previousUpper = obsUpper
+                  previousLower = obsLower
+                  console.log(`✅ FRED API'den önceki değerler alındı (farklı tarih): Upper=${previousUpper}, Lower=${previousLower}, Tarih: ${obsDate}`)
+                  break
+                }
+              }
             }
           }
-          
-          // Eğer tarih bazlı bulunamadıysa (tarih bilgisi yok veya tüm değerler aynı tarihte), ikinci gözlemi al
-          if (previousUpper === null && upperObs.length > 1) {
-            const secondVal = parseValue(upperObs[1]?.value)
-            if (secondVal !== null) {
-              previousUpper = secondVal
-              console.log(`⚠️ FRED API Upper: Tarih bazlı bulunamadı, ikinci gözlem alındı: ${secondVal} (mevcut: ${announcedUpper})`)
-            }
-          }
-          
-          if (previousLower === null && lowerObs.length > 1) {
-            const secondVal = parseValue(lowerObs[1]?.value)
-            if (secondVal !== null) {
-              previousLower = secondVal
-              console.log(`⚠️ FRED API Lower: Tarih bazlı bulunamadı, ikinci gözlem alındı: ${secondVal} (mevcut: ${announcedLower})`)
-            }
-          }
+        } else {
+          console.warn('⚠️ FRED API: Gözlem verisi boş')
         }
       } else {
         console.warn('⚠️ FRED API isteği başarısız:', {
@@ -98,134 +276,36 @@ export async function fetchFedRateData() {
       console.warn('⚠️ FRED API hatası:', fredError.message)
     }
   } else {
-    console.warn('⚠️ FRED_API_KEY bulunamadı, sadece RSS ve Calendar verileri kullanılacak')
+    console.warn('⚠️ FRED_API_KEY bulunamadı, alternatif kaynaklar kullanılacak')
   }
   
-  // 2. RSS feed'den son açıklama tarihini çek (proxy kullan)
-  try {
-    console.log('📰 RSS feed\'den veri çekiliyor...')
-    const rssUrl = 'https://www.federalreserve.gov/feeds/press_monetary.xml'
-    
-    // Daha fazla proxy URL'leri dene (daha güvenilir servisler)
-    const proxyUrls = [
-      `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`,
-      `https://api.allorigins.win/raw?url=${encodeURIComponent(rssUrl)}`,
-      `https://corsproxy.io/?${encodeURIComponent(rssUrl)}`,
-      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(rssUrl)}`,
-      `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(rssUrl)}`,
-      rssUrl // Direkt dene (son çare)
-    ]
-    
-    let rssText = null
-    let rssResponse = null
-    
-    for (const proxyUrl of proxyUrls) {
-      try {
-        // Timeout'u artır ve daha fazla retry yap
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 saniye timeout
-        
-        try {
-          rssResponse = await fetch(proxyUrl, {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Accept': 'application/xml, application/rss+xml, text/xml, */*',
-              'Accept-Language': 'en-US,en;q=0.9'
-            },
-            signal: controller.signal
-          })
-          
-          clearTimeout(timeoutId)
-          
-          if (rssResponse.ok) {
-            if (proxyUrl.includes('rss2json.com')) {
-              // JSON format
-              const json = await rssResponse.json()
-              if (json.items && json.items.length > 0) {
-                const impl = json.items.find(item => 
-                  (item.title || '').toLowerCase().includes('implementation note')
-                ) || json.items[0]
-                
-                if (impl.pubDate) {
-                  const date = new Date(impl.pubDate)
-                  if (!isNaN(date.getTime())) {
-                    lastAnnounceDate = date.toISOString()
-                    console.log(`✅ RSS feed başarıyla çekildi (${proxyUrl.includes('rss2json') ? 'rss2json' : 'proxy'})`)
-                    break
-                  }
-                }
-              }
-            } else {
-              // XML format
-              rssText = await rssResponse.text()
-              if (rssText && rssText.length > 0) {
-                console.log(`✅ RSS feed başarıyla çekildi (${proxyUrl === rssUrl ? 'direkt' : 'proxy'})`)
-                break
-              }
-            }
-          }
-        } catch (fetchError) {
-          clearTimeout(timeoutId)
-          throw fetchError
-        }
-      } catch (proxyError) {
-        // Sessizce devam et, bir sonraki proxy'yi dene
-        if (proxyUrl === rssUrl) {
-          // Son proxy (direkt) başarısız olduysa uyar
-          console.warn(`⚠️ RSS feed hatası (${proxyUrl}):`, proxyError.message)
-        }
-        continue
+  // 3. ÖNCEKİ DEĞERLER İÇİN FALLBACK (FRED API'den tarih bazlı çekilemediyse)
+  if (announcedUpper !== null || announcedLower !== null) {
+    // Fallback 1: MongoDB'deki önceki kayıt
+    if ((previousUpper === null || previousLower === null) && previousRecord) {
+      console.log('🔄 Önceki değerler hala bulunamadı, MongoDB\'deki önceki kayıttan alınıyor...')
+      if (previousUpper === null && previousRecord.previousUpper !== null && previousRecord.previousUpper !== undefined) {
+        previousUpper = previousRecord.previousUpper
+        console.log(`✅ MongoDB\'den önceki Upper değer alındı: ${previousUpper}`)
+      }
+      if (previousLower === null && previousRecord.previousLower !== null && previousRecord.previousLower !== undefined) {
+        previousLower = previousRecord.previousLower
+        console.log(`✅ MongoDB\'den önceki Lower değer alındı: ${previousLower}`)
       }
     }
     
-    // XML parse et
-    if (rssText) {
-      const itemRegex = /<item>[\s\S]*?<title>([\s\S]*?)<\/title>[\s\S]*?<pubDate>([\s\S]*?)<\/pubDate>[\s\S]*?<\/item>/gi
-      let match
-      let latestDate = null
-      
-      while ((match = itemRegex.exec(rssText))) {
-        const title = (match[1] || '').trim().replace(/<[^>]*>/g, '')
-        const pubDate = match[2] || ''
-        
-        if (title.toLowerCase().includes('implementation note')) {
-          const date = new Date(pubDate)
-          if (!isNaN(date.getTime()) && (!latestDate || date > latestDate)) {
-            latestDate = date
-          }
-        }
+    // Fallback 2: Mevcut değerleri önceki olarak kullan (Fed faiz sabit tutulmuş olabilir)
+    if ((previousUpper === null || previousLower === null) && announcedUpper !== null && announcedLower !== null) {
+      console.log('🔄 Önceki değerler bulunamadı, mevcut değerler önceki olarak kullanılıyor (Fed faiz sabit tutulmuş olabilir)...')
+      if (previousUpper === null) {
+        previousUpper = announcedUpper
+        console.log(`✅ Mevcut Upper değer önceki olarak kullanıldı: ${previousUpper}`)
       }
-      
-      if (latestDate) {
-        lastAnnounceDate = latestDate.toISOString()
-        console.log(`✅ RSS feed'den Implementation Note tarihi bulundu: ${latestDate.toISOString()}`)
-      } else {
-        // Implementation Note bulunamadıysa, en son haberin tarihini al
-        const allItemsRegex = /<item>[\s\S]*?<pubDate>([\s\S]*?)<\/pubDate>[\s\S]*?<\/item>/gi
-        let allMatches = []
-        let allMatch
-        while ((allMatch = allItemsRegex.exec(rssText))) {
-          const pubDate = allMatch[1] || ''
-          const date = new Date(pubDate)
-          if (!isNaN(date.getTime())) {
-            allMatches.push(date)
-          }
-        }
-        if (allMatches.length > 0) {
-          allMatches.sort((a, b) => b - a) // En yeni önce
-          lastAnnounceDate = allMatches[0].toISOString()
-          console.log(`✅ RSS feed'den en son haber tarihi alındı: ${allMatches[0].toISOString()}`)
-        } else {
-          console.warn('⚠️ RSS (XML): Hiçbir tarih bulunamadı')
-        }
+      if (previousLower === null) {
+        previousLower = announcedLower
+        console.log(`✅ Mevcut Lower değer önceki olarak kullanıldı: ${previousLower}`)
       }
-    } else {
-      // RSS text yoksa, sadece uyar (FRED API'den gelen veriler yeterli olabilir)
-      console.warn('⚠️ RSS: Hiçbir proxy çalışmadı, RSS verisi alınamadı (FRED API verileri kullanılacak)')
     }
-  } catch (rssError) {
-    console.warn('⚠️ RSS feed hatası:', rssError.message)
-    console.warn('⚠️ RSS error stack:', rssError.stack)
   }
   
   // 3. FOMC Calendar'dan sonraki karar tarihini çek (proxy kullan)
