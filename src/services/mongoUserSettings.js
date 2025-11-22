@@ -105,7 +105,6 @@ export const saveUserSettingsToMongo = async (userId, settings) => {
     if (response.ok) {
       const result = await response.json()
       if (result.success) {
-        logger.log('✅ [MongoDB] User settings saved to backend API')
         return {
           success: true,
           source: 'mongodb',

@@ -1,7 +1,12 @@
 let db = null
+let wss = null // WebSocket server
 
 export function setDb(database) {
   db = database
+}
+
+export function setWss(websocketServer) {
+  wss = websocketServer
 }
 
 /**
@@ -182,11 +187,9 @@ function parseRSSFeed(xml, source) {
           publishedAt = new Date()
         }
         
-        // CoinTelegraph için +3 saat ekle (UTC+3 Türkiye saati)
-        if (source === 'cointelegraph') {
-          publishedAt = new Date(publishedAt.getTime() + (3 * 60 * 60 * 1000))
-        }
-        
+        // NOT: Saat ekleme/çıkarma parseRSSFeed'de yapılmıyor
+        // MongoDB'ye kaydetmeden ÖNCE yapılacak (sadece CoinTelegraph için +3 saat)
+              
         // Son 48 saat içindeki haberleri filtrele
         if (publishedAt < cutoff) continue
         
@@ -259,7 +262,7 @@ export async function updateNews() {
         }
       })(),
       
-      // Cointelegraph RSS feed'ini çek (direkt RSS parse)
+      // CoinTelegraph RSS feed'ini çek (+3 saat eklenecek)
       (async () => {
         try {
           // Önce rss2json API'yi dene
@@ -289,9 +292,6 @@ export async function updateNews() {
                   const pubDateRaw = item.pubDate || item.pubdate || ''
                   let pubDate = pubDateRaw ? new Date(pubDateRaw) : new Date()
                   
-                  // CoinTelegraph için +3 saat ekle (UTC+3 Türkiye saati)
-                  pubDate = new Date(pubDate.getTime() + (3 * 60 * 60 * 1000))
-                  
                   // Resim URL'i çıkar
                   let imageUrl = item.enclosure?.link || item.thumbnail || ''
                   if (!imageUrl && descriptionRaw) {
@@ -307,7 +307,7 @@ export async function updateNews() {
                     url: url,
                     title: title,
                     description: description,
-                    publishedAt: pubDate,
+                    publishedAt: pubDate, // CoinTelegraph - saat değişikliği yok
                     source: 'cointelegraph',
                     category: 'crypto',
                     image: imageUrl || '/kriptotek.jpg'
@@ -317,7 +317,7 @@ export async function updateNews() {
                 .sort((a, b) => b.publishedAt - a.publishedAt)
               
               if (news.length > 0) {
-                console.log(`✅ ${news.length} Cointelegraph haberi çekildi (rss2json)`)
+                console.log(`✅ ${news.length} CoinTelegraph haberi çekildi (rss2json)`)
                 return news
               }
             } catch (jsonError) {
@@ -335,15 +335,15 @@ export async function updateNews() {
           if (response.ok) {
             const xml = await response.text()
             news = parseRSSFeed(xml, 'cointelegraph')
-            console.log(`✅ ${news.length} Cointelegraph haberi çekildi (direkt RSS)`)
+            console.log(`✅ ${news.length} CoinTelegraph haberi çekildi (direkt RSS)`)
             return news
           } else {
-            console.error(`❌ Cointelegraph RSS hatası: HTTP ${response.status}`)
+            console.error(`❌ CoinTelegraph RSS hatası: HTTP ${response.status}`)
           }
           
           return []
         } catch (err) {
-          console.error('❌ Cointelegraph RSS hatası:', err.message)
+          console.error('❌ CoinTelegraph RSS hatası:', err.message)
           return []
         }
       })(),
@@ -395,11 +395,28 @@ export async function updateNews() {
       
       for (const newsItem of allNews) {
         try {
+          // Saat ekleme/çıkarma işlemi (KESİN - veritabanına kaydetmeden önce)
+          let publishedAt = newsItem.publishedAt instanceof Date 
+            ? newsItem.publishedAt 
+            : new Date(newsItem.publishedAt)
+          
+          // SADECE CoinTelegraph için +3 saat ekle (12:00 -> 15:00 gibi)
+          // Kriptofoni ve Bitcoinsistemi için 0 saat (elleme)
+          if (newsItem.source === 'cointelegraph' && !isNaN(publishedAt.getTime())) {
+            const originalDate = publishedAt.toISOString()
+            publishedAt = new Date(publishedAt.getTime() + (3 * 60 * 60 * 1000))
+            console.log(`🕐 CoinTelegraph: "${newsItem.title.substring(0, 50)}"`)
+            console.log(`   Orijinal: ${originalDate}`)
+            console.log(`   Yeni: ${publishedAt.toISOString()} (+3 saat)`)
+          }
+          // Kriptofoni ve Bitcoinsistemi için saat değişikliği YOK (elleme)
+          
           await db.collection('crypto_news').replaceOne(
             { _id: newsItem.url },
             {
               _id: newsItem.url,
               ...newsItem,
+              publishedAt: publishedAt, // CoinTelegraph için +3 saat eklenmiş, diğerleri değişmemiş
               createdAt: new Date(),
               updatedAt: new Date()
             },
@@ -412,6 +429,30 @@ export async function updateNews() {
       }
       
       console.log(`✅ ${savedCount} haber kaydedildi (en yeni önce sıralandı), ${skippedCount} haber atlandı`)
+      
+      // Tüm haberler kaydedildikten sonra frontend'e refresh bildirimi gönder
+      if (wss && savedCount > 0) {
+        try {
+          const refreshMessage = JSON.stringify({
+            type: 'news_refreshed',
+            collection: 'crypto_news',
+            count: savedCount,
+            timestamp: new Date().toISOString()
+          })
+          
+          wss.clients.forEach((client) => {
+            if (client.readyState === 1) { // WebSocket.OPEN
+              try {
+                client.send(refreshMessage)
+              } catch (error) {
+                // Sessizce geç
+              }
+            }
+          })
+        } catch (error) {
+          // Sessizce geç
+        }
+      }
     } else {
       console.log('⚠️ Hiç haber çekilemedi')
     }

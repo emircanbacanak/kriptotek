@@ -27,6 +27,10 @@ function FedRate() {
   const [countdownTrigger, setCountdownTrigger] = useState(Date.now())
   
   useEffect(() => {
+    updatePageSEO('fedRate', language)
+  }, [language])
+  
+  useEffect(() => {
     if (!data.nextDecisionDate) return
 
     const interval = setInterval(() => {

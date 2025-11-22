@@ -71,16 +71,11 @@ class RealtimeService {
     const mongoApiUrl = getApiUrl()
     const wsUrl = mongoApiUrl.replace(/^http/, 'ws').replace(/^https/, 'wss') + '/ws'
     
-    // Sadece ilk bağlantıda log'la
-    if (!this.ws) {
-      logger.log(`🔌 WebSocket bağlantısı: ${wsUrl}`)
-    }
     
     try {
       this.ws = new WebSocket(wsUrl)
       
       this.ws.onopen = () => {
-        logger.log(`✅ WebSocket bağlantısı kuruldu: ${wsUrl}`)
         this.isConnected = true
         this.isConnecting = false
         this.reconnectAttempts = 0
@@ -222,6 +217,15 @@ class RealtimeService {
           operationType,
           documentId,
           data: fullDocument
+        }
+      }))
+    } else if (message.type === 'news_refreshed') {
+      // Haberler yenilendi - frontend'e bildir
+      window.dispatchEvent(new CustomEvent('news_refreshed', {
+        detail: {
+          collection: message.collection,
+          count: message.count,
+          timestamp: message.timestamp
         }
       }))
     }

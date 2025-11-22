@@ -1,36 +1,27 @@
 /**
- * Logger utility - Production'da sadece hataları gösterir
+ * Logger utility - Sadece hataları gösterir
  */
 
-const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development'
-
 export const logger = {
-  log: (...args) => {
-    if (isDevelopment) {
-      console.log(...args)
-    }
+  log: () => {
+    // Log mesajları gösterilmez
   },
   
-  info: (...args) => {
-    if (isDevelopment) {
-      console.info(...args)
-    }
+  info: () => {
+    // Info mesajları gösterilmez
   },
   
-  warn: (...args) => {
-    // Uyarılar her zaman gösterilir
-    console.warn(...args)
+  warn: () => {
+    // Uyarılar gösterilmez (sadece error'lar gösterilir)
   },
   
   error: (...args) => {
-    // Hatalar her zaman gösterilir
+    // Sadece hatalar gösterilir
     console.error(...args)
   },
   
-  debug: (...args) => {
-    if (isDevelopment) {
-      console.debug(...args)
-    }
+  debug: () => {
+    // Debug mesajları gösterilmez
   }
 }
 

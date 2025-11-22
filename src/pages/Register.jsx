@@ -313,7 +313,6 @@ const Register = () => {
     // MongoDB'de manuel olarak oluşturulmalı (premium/admin durumları için)
     if (result.success && result.user) {
       // Settings MongoDB'den yüklenecek (AuthContext'te)
-      console.log('✅ [Register] User registered, settings will be loaded from MongoDB')
     }
 
     setLoading(false)

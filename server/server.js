@@ -108,11 +108,133 @@ try {
 const app = express()
 const PORT = process.env.PORT || 3000
 
+// Security Headers Middleware - XSS, Clickjacking ve diğer saldırılara karşı koruma
+app.use((req, res, next) => {
+  // XSS Protection
+  res.setHeader('X-XSS-Protection', '1; mode=block')
+  
+  // Content Type Options - MIME type sniffing'i engelle
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  
+  // Frame Options - Clickjacking koruması
+  res.setHeader('X-Frame-Options', 'DENY')
+  
+  // Referrer Policy - Referrer bilgisini kontrol et
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+  
+  // Permissions Policy - Tarayıcı özelliklerini kontrol et
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()')
+  
+  // Strict Transport Security - HTTPS zorunluluğu (production'da)
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
+  }
+  
+  // Content Security Policy - XSS ve injection saldırılarına karşı
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; " +
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.googleapis.com https://*.gstatic.com; " +
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    "font-src 'self' https://fonts.gstatic.com; " +
+    "img-src 'self' data: https: blob:; " +
+    "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://localhost:3000 ws://localhost:3000; " +
+    "frame-src 'none'; " +
+    "object-src 'none'; " +
+    "base-uri 'self'; " +
+    "form-action 'self';"
+  )
+  
+  next()
+})
+
 // Middleware
-app.use(cors())
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}))
 // Body parser limit'ini artır (500 coin için yeterli olmalı)
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
+
+// Input Validation & Sanitization Middleware
+const validateUserId = (userId) => {
+  if (!userId || typeof userId !== 'string') {
+    return false
+  }
+  // Firebase UID format kontrolü: alphanumeric + bazı özel karakterler, genellikle 28 karakter
+  // Güvenli: Sadece alphanumeric, underscore, dash'e izin ver
+  if (!/^[a-zA-Z0-9_-]+$/.test(userId)) {
+    return false
+  }
+  // Uzunluk kontrolü (Firebase UID genellikle 28-30 karakter)
+  if (userId.length < 10 || userId.length > 128) {
+    return false
+  }
+  return true
+}
+
+const sanitizeObject = (obj, maxDepth = 5) => {
+  if (maxDepth <= 0) return {}
+  if (!obj || typeof obj !== 'object') return {}
+  if (Array.isArray(obj)) {
+    return obj.slice(0, 100).map(item => sanitizeObject(item, maxDepth - 1))
+  }
+  
+  const sanitized = {}
+  for (const [key, value] of Object.entries(obj)) {
+    // Key sanitization
+    const sanitizedKey = key.replace(/[^a-zA-Z0-9_]/g, '').substring(0, 50)
+    if (!sanitizedKey) continue
+    
+    // Value sanitization
+    if (typeof value === 'string') {
+      // String length limit
+      sanitized[sanitizedKey] = value.substring(0, 10000).trim()
+    } else if (typeof value === 'number') {
+      // Number validation (prevent NaN, Infinity)
+      if (isFinite(value) && !isNaN(value)) {
+        sanitized[sanitizedKey] = value
+      }
+    } else if (typeof value === 'boolean') {
+      sanitized[sanitizedKey] = value
+    } else if (value === null || value === undefined) {
+      sanitized[sanitizedKey] = null
+    } else if (typeof value === 'object') {
+      sanitized[sanitizedKey] = sanitizeObject(value, maxDepth - 1)
+    }
+  }
+  return sanitized
+}
+
+// MongoDB NoSQL Injection Protection - userId validation middleware
+app.use('/api/user-settings/:userId', (req, res, next) => {
+  const { userId } = req.params
+  if (!validateUserId(userId)) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid user ID format'
+    })
+  }
+  next()
+})
+
+app.use('/api/portfolio/:userId', (req, res, next) => {
+  const { userId } = req.params
+  if (!validateUserId(userId)) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid user ID format'
+    })
+  }
+  // Sanitize request body for POST/PUT requests
+  if (req.body && (req.method === 'POST' || req.method === 'PUT')) {
+    req.body = sanitizeObject(req.body)
+  }
+  next()
+})
 
 // MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI || ''
@@ -121,6 +243,7 @@ const COLLECTION_NAME = 'user_settings'
 
 let db = null
 let client = null
+let wss = null // WebSocket server
 
 // MongoDB bağlantısı
 async function connectToMongoDB() {
@@ -2152,6 +2275,77 @@ function calculateTrendingScores(coins) {
 export { calculateTrendingScores }
 
 // ========== NEWS ENDPOINTS ==========
+// ÖNEMLİ: Spesifik route'lar genel route'lardan ÖNCE tanımlanmalı
+// POST /api/news/refresh - Tüm haberleri sil ve yeniden çek (en başta - spesifik route)
+app.post('/api/news/refresh', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const collection = db.collection('crypto_news')
+    
+    // Tüm haberleri sil
+    const deleteResult = await collection.deleteMany({})
+    console.log(`🗑️ Tüm haberler silindi: ${deleteResult.deletedCount} haber`)
+    
+    // Haberleri yeniden çek
+    const { updateNews, setDb, setWss } = await import('./services/apiHandlers/news.js')
+    setDb(db)
+    if (wss) setWss(wss)
+    await updateNews()
+    
+    // Yeni haber sayısını al
+    const newCount = await collection.countDocuments()
+    
+    return res.json({
+      success: true,
+      message: `Tüm haberler silindi ve yeniden çekildi. ${newCount} yeni haber eklendi.`,
+      deletedCount: deleteResult.deletedCount,
+      newCount: newCount
+    })
+  } catch (error) {
+    console.error('❌ POST /api/news/refresh error:', error)
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    })
+  }
+})
+
+// POST /api/news/update - Haberleri güncelle (3 kaynaktan paralel çek) (spesifik route)
+app.post('/api/news/update', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const { updateNews, setDb, setWss } = await import('./services/apiHandlers/news.js')
+    setDb(db)
+    if (wss) setWss(wss)
+    
+    const news = await updateNews()
+    
+    return res.json({
+      success: true,
+      count: news.length,
+      message: `${news.length} haber güncellendi`
+    })
+  } catch (error) {
+    console.error('❌ POST /api/news/update error:', error)
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    })
+  }
+})
+
 // GET /api/news - MongoDB'den haberleri çek
 app.get('/api/news', async (req, res) => {
   try {
@@ -2234,35 +2428,6 @@ app.delete('/api/news/:id', async (req, res) => {
     res.json({ ok: true })
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message })
-  }
-})
-
-// POST /api/news/update - Haberleri güncelle (3 kaynaktan paralel çek)
-app.post('/api/news/update', async (req, res) => {
-  try {
-    if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
-      })
-    }
-
-    const { updateNews, setDb } = await import('./services/apiHandlers/news.js')
-    setDb(db)
-    
-    const news = await updateNews()
-    
-    return res.json({
-      success: true,
-      count: news.length,
-      message: `${news.length} haber güncellendi`
-    })
-  } catch (error) {
-    console.error('❌ POST /api/news/update error:', error)
-    return res.status(500).json({
-      success: false,
-      error: error.message
-    })
   }
 })
 
@@ -2749,7 +2914,7 @@ async function startServer() {
   const httpServer = createServer(app)
   
   // WebSocket server - path kontrolü ile
-  const wss = new WebSocketServer({ 
+  wss = new WebSocketServer({ 
     server: httpServer,
     path: '/ws' // WebSocket path'i
   })

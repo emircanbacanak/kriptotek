@@ -249,6 +249,14 @@ export function subscribeToNews(callback, limitCount = 100, errorCallback = null
     // İlk yükleme
     loadInitialNews()
     
+    // Haberler yenilendiğinde tüm haberleri yeniden yükle
+    const handleNewsRefreshed = () => {
+      loadInitialNews()
+    }
+    
+    // news_refreshed event'ini dinle
+    window.addEventListener('news_refreshed', handleNewsRefreshed)
+    
     // WebSocket'ten gelen güncellemeleri dinle
     const handleNewsUpdate = ({ operationType, documentId, data, fullDocument }) => {
       // data veya fullDocument yoksa sessizce çık
@@ -260,7 +268,9 @@ export function subscribeToNews(callback, limitCount = 100, errorCallback = null
       // Yeni haber eklendi veya güncellendi
       // Haberi formatla
       let publishedAt = newsData.publishedAt ? new Date(newsData.publishedAt) : new Date()
-      if (newsData.tzHint === 'utc') {
+      // CoinTelegraph haberleri için tzHint kontrolü yapma - backend'de zaten +2 saat ekleniyor
+      // Diğer kaynaklar için UTC ise +3 saat ekle
+      if (newsData.tzHint === 'utc' && newsData.source !== 'cointelegraph') {
         publishedAt = new Date(publishedAt.getTime() + (3 * 60 * 60 * 1000))
       }
       
@@ -293,34 +303,20 @@ export function subscribeToNews(callback, limitCount = 100, errorCallback = null
       // Callback çağır
       callback([...allNews])
       
-      // Geriye dönük uyumluluk için newsDataUpdated event'ini de tetikle
-      window.dispatchEvent(new CustomEvent('newsDataUpdated', {
-        detail: {
-          documentId,
-          data: formattedItem
-        }
-      }))
+      // NOT: window event dispatch'i kaldırıldı - sonsuz döngüye neden oluyordu
+      // WebSocket üzerinden zaten güncellemeler geliyor, window event'e gerek yok
     }
     
     // RealtimeService ile crypto_news collection'ını dinle
     const unsubscribeRealtime = realtimeService.subscribe('crypto_news', handleNewsUpdate)
     
-    // Ayrıca window event'ini de dinle (geriye dönük uyumluluk için)
-    const handleWindowEvent = (event) => {
-      if (!event || !event.detail) {
-        return
-      }
-      const { documentId, data } = event.detail
-      if (data) {
-        handleNewsUpdate({ operationType: 'insert', documentId, data })
-      }
-    }
-    window.addEventListener('newsDataUpdated', handleWindowEvent)
+    // Window event listener kaldırıldı - WebSocket zaten güncellemeleri sağlıyor
+    // Gerekirse başka bir kaynaktan window event'i dinlemek için ayrı bir handler yazılabilir
     
     // Cleanup fonksiyonu
     return () => {
       unsubscribeRealtime()
-      window.removeEventListener('newsDataUpdated', handleWindowEvent)
+      window.removeEventListener('news_refreshed', handleNewsRefreshed)
     }
   } else {
     // Firestore realtime
