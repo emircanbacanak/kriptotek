@@ -116,8 +116,12 @@ app.use((req, res, next) => {
   // Content Type Options - MIME type sniffing'i engelle
   res.setHeader('X-Content-Type-Options', 'nosniff')
   
-  // Frame Options - Clickjacking koruması
-  res.setHeader('X-Frame-Options', 'DENY')
+  // Frame Options - Clickjacking koruması (Firebase popup için esnek)
+  // Firebase Google Auth popup için DENY yerine SAMEORIGIN kullanıyoruz
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN')
+  
+  // Cross-Origin-Opener-Policy - Firebase popup auth için gerekli
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups')
   
   // Referrer Policy - Referrer bilgisini kontrol et
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
@@ -139,7 +143,7 @@ app.use((req, res, next) => {
     "font-src 'self' https://fonts.gstatic.com; " +
     "img-src 'self' data: https: blob:; " +
     "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.herokuapp.com wss://*.herokuapp.com ws://*.herokuapp.com http://localhost:3000 wss://localhost:3000 ws://localhost:3000 https://api.binance.com https://api.kucoin.com https://apis.google.com; " +
-    "frame-src 'self' https://*.googleapis.com https://*.gstatic.com https://apis.google.com; " +
+    "frame-src 'self' https://*.googleapis.com https://*.gstatic.com https://apis.google.com https://*.firebaseapp.com https://*.firebase.com; " +
     "object-src 'none'; " +
     "base-uri 'self'; " +
     "form-action 'self';"
