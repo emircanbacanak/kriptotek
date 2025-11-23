@@ -110,6 +110,7 @@ const translations = {
     displayNameLengthError: 'İsim 2-50 karakter arasında olmalıdır',
     passwordLengthError: 'Şifre en az 8 karakter olmalıdır',
     passwordStrengthError: 'Şifre en az bir büyük harf, bir küçük harf ve bir rakam içermelidir',
+    passwordsNotMatch: 'Şifreler eşleşmiyor. Lütfen tekrar kontrol edin.',
     registerError: 'Kayıt sırasında bir hata oluştu',
     emailAlreadyInUse: 'Bu e-posta adresi zaten kullanılıyor',
     googleLoginError: 'Google ile giriş yapılırken bir hata oluştu',
