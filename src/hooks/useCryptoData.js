@@ -29,44 +29,22 @@ const useCryptoData = () => {
       return () => unsubscribe()
     }
     
-    // Cache'de veri yoksa MongoDB'den hızlıca çek (max 3 saniye)
-    // Her 50ms'de bir kontrol et (çok hızlı)
-    let retryCount = 0
-    const maxRetries = 60 // 60 x 50ms = 3 saniye
-    const checkDataInterval = setInterval(() => {
-      const data = globalDataManager.getData()
-      if (data.coins && data.coins.length > 0) {
-        setCoins(data.coins)
-        setTopMovers(data.topMovers || { topGainers: [], topLosers: [] })
-        setLoading(false)
-        clearInterval(checkDataInterval)
-      } else {
-        retryCount++
-        if (retryCount >= maxRetries) {
-          // 3 saniye sonra bile veri yoksa loading'i kapat (sayfa açılsın)
-          setLoading(false)
-          clearInterval(checkDataInterval)
-        }
-      }
-    }, 50) // Her 50ms'de bir kontrol et (çok hızlı)
-    
-    // Abone ol - ANINDA GÜNCELLEME
+    // Cache'de veri yoksa MongoDB'den ANINDA çek (interval yok, direkt subscribe)
+    // Abone ol - veri geldiğinde ANINDA göster
     const unsubscribe = globalDataManager.subscribe((data) => {
       setCoins(data.coins || [])
       setTopMovers(data.topMovers || { topGainers: [], topLosers: [] })
       setIsUpdating(data.isUpdating || false)
       setLastUpdate(data.lastCryptoUpdate)
       
-      // Veri geldiğinde loading'i kapat ve interval'i temizle
+      // Veri geldiğinde loading'i kapat
       if (data.coins && data.coins.length > 0) {
         setLoading(false)
-        clearInterval(checkDataInterval)
       }
     })
 
     // Cleanup
     return () => {
-      clearInterval(checkDataInterval)
       unsubscribe()
     }
   }, [])

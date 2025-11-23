@@ -31,28 +31,8 @@ const useTrendingData = () => {
       return () => unsubscribe()
     }
     
-    // Cache'de veri yoksa MongoDB'den hızlıca çek (max 3 saniye)
-    setTrendingCoins([])
-    setLoading(true)
-    let retryCount = 0
-    const maxRetries = 60 // 60 x 50ms = 3 saniye
-    const checkDataInterval = setInterval(() => {
-      const data = globalDataManager.getData()
-      if (data.trendingCoins && data.trendingCoins.length > 0) {
-        setTrendingCoins(data.trendingCoins)
-        setLastUpdate(data.lastTrendingUpdate)
-        setLoading(false)
-        clearInterval(checkDataInterval)
-      } else {
-        retryCount++
-        if (retryCount >= maxRetries) {
-          setLoading(false)
-          clearInterval(checkDataInterval)
-        }
-      }
-    }, 50) // Her 50ms'de bir kontrol et
-
-    // Abone ol ve güncellemeleri dinle
+    // Cache'de veri yoksa MongoDB'den ANINDA çek (interval yok, direkt subscribe)
+    // Abone ol - veri geldiğinde ANINDA göster
     const unsubscribe = globalDataManager.subscribe((data) => {
       setTrendingCoins(data.trendingCoins || [])
       setLastUpdate(data.lastTrendingUpdate)

@@ -36,27 +36,8 @@ const useDominanceData = () => {
       return () => unsubscribe()
     }
     
-    // Cache'de veri yoksa MongoDB'den hızlıca çek (max 3 saniye)
-    let retryCount = 0
-    const maxRetries = 60 // 60 x 50ms = 3 saniye
-    const checkDataInterval = setInterval(() => {
-      const data = globalDataManager.getData()
-      if (data.dominanceData && data.dominanceData.global && data.dominanceData.dominanceData) {
-        setDominanceData(data.dominanceData)
-        setFearGreedIndex(data.fearGreedIndex)
-        setLoading(false)
-        setError(null)
-        clearInterval(checkDataInterval)
-      } else {
-        retryCount++
-        if (retryCount >= maxRetries) {
-          setLoading(false)
-          clearInterval(checkDataInterval)
-        }
-      }
-    }, 50) // Her 50ms'de bir kontrol et
-    
-    // Abone ol
+    // Cache'de veri yoksa MongoDB'den ANINDA çek (interval yok, direkt subscribe)
+    // Abone ol - veri geldiğinde ANINDA göster
     const unsubscribe = globalDataManager.subscribe((data) => {
       setDominanceData(data.dominanceData)
       setFearGreedIndex(data.fearGreedIndex)

@@ -76,9 +76,12 @@ class GlobalDataManager {
     // localStorage'da eksik veriler varsa MongoDB'den çek (ANINDA, öncelikli)
     // MONGO_API_URL set edildikten sonra çağrılmalı
     if (typeof window !== 'undefined') {
-      // Browser'da çalışıyorsa ANINDA çağır (setTimeout olmadan)
-      // Cache yoksa hızlıca MongoDB'den çek
-      this.loadMissingDataFromMongoDB()
+      // Browser'da çalışıyorsa ANINDA çağır (setTimeout veya Promise.resolve() olmadan)
+      // Cache yoksa ANINDA MongoDB'den çek
+      // Async olarak çalıştır ama await bekleme - anında başlat
+      this.loadMissingDataFromMongoDB().catch(() => {
+        // Hata olsa bile sessizce devam et
+      })
     }
   }
 
@@ -172,17 +175,16 @@ class GlobalDataManager {
     }
   }
 
-  // localStorage'da eksik veriler varsa MongoDB'den çek (arka planda, beklemeyecek)
+  // localStorage'da eksik veriler varsa MongoDB'den çek (ANINDA, öncelikli)
   async loadMissingDataFromMongoDB() {
     // API URL yoksa çık
     if (!this.MONGO_API_URL) {
       return
     }
     
-    // Async olarak çalıştır, beklemeyecek
-    Promise.resolve().then(async () => {
-      try {
-        const MONGO_API_URL = this.MONGO_API_URL
+    // ANINDA çalıştır - direkt başlat (Promise.resolve().then() yok)
+    try {
+      const MONGO_API_URL = this.MONGO_API_URL
         const missingData = []
         
         // Hangi veriler eksik kontrol et
@@ -369,12 +371,11 @@ class GlobalDataManager {
           )
         }
         
-        // Tüm istekleri paralel olarak çalıştır (beklemeyecek)
-        await Promise.allSettled(promises)
-      } catch (error) {
-        // Sessizce devam et
-      }
-    })
+      // Tüm istekleri ANINDA paralel olarak çalıştır (bekleme yok)
+      await Promise.allSettled(promises)
+    } catch (error) {
+      // Sessizce devam et
+    }
   }
 
   // Verileri localStorage'a kaydet
