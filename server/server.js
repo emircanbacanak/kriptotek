@@ -138,7 +138,7 @@ app.use((req, res, next) => {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src 'self' https://fonts.gstatic.com; " +
     "img-src 'self' data: https: blob:; " +
-    "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://localhost:3000 ws://localhost:3000; " +
+    "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.herokuapp.com wss://*.herokuapp.com ws://*.herokuapp.com wss://localhost:3000 ws://localhost:3000; " +
     "frame-src 'none'; " +
     "object-src 'none'; " +
     "base-uri 'self'; " +
@@ -2903,6 +2903,23 @@ app.get('/health', (req, res) => {
 // Static dosyaları serve et (Heroku için - build edilmiş frontend)
 // Bu kod server başlatılmadan önce çalışmalı, bu yüzden aşağıda startServer içinde yapıyoruz
 
+// Maintenance Mode Middleware
+// Heroku'da MAINTENANCE_MODE=true yapıldığında maintenance.html gösterilir
+app.use((req, res, next) => {
+  if (process.env.MAINTENANCE_MODE === 'true' && !req.path.startsWith('/api') && !req.path.includes('maintenance.html')) {
+    const rootDir = join(__dirname, '..')
+    const maintenancePath = join(rootDir, 'public', 'maintenance.html')
+    const distMaintenancePath = join(rootDir, 'dist', 'maintenance.html')
+    
+    if (existsSync(maintenancePath)) {
+      return res.status(503).sendFile(maintenancePath)
+    } else if (existsSync(distMaintenancePath)) {
+      return res.status(503).sendFile(distMaintenancePath)
+    }
+  }
+  next()
+})
+
 // Server başlat
 async function startServer() {
   await connectToMongoDB()
@@ -2910,17 +2927,46 @@ async function startServer() {
   // Static dosyaları serve et (Heroku için - build edilmiş frontend)
   const rootDir = join(__dirname, '..')
   const distDir = join(rootDir, 'dist')
+  const publicDir = join(rootDir, 'public')
   
+  // Public klasörünü serve et (maintenance.html ve error.html için)
+  // Development VE Production modunda her zaman serve et
+  if (existsSync(publicDir)) {
+    app.use('/public', express.static(publicDir))
+    // Development modunda public klasörünü root path'ten de serve et
+    if (process.env.NODE_ENV !== 'production') {
+      app.use(express.static(publicDir))
+    }
+  }
+  
+  // Production modunda dist klasörünü serve et
   if (existsSync(distDir)) {
     // Production: Static dosyaları serve et
     app.use(express.static(distDir))
     
     // Tüm route'ları index.html'e yönlendir (SPA için)
     // API route'larından sonra ekle (yoksa API route'ları çalışmaz)
-    app.get('*', (req, res) => {
-      // API route'ları değilse
-      if (!req.path.startsWith('/api')) {
-        res.sendFile(join(distDir, 'index.html'))
+    app.get('*', (req, res, next) => {
+      // API route'ları değilse ve maintenance/error dosyası değilse
+      if (!req.path.startsWith('/api') && 
+          !req.path.includes('maintenance.html') && 
+          !req.path.includes('error.html')) {
+        res.sendFile(join(distDir, 'index.html'), (err) => {
+          // Dosya bulunamazsa error.html göster
+          if (err) {
+            const errorPath = join(publicDir, 'error.html')
+            const distErrorPath = join(distDir, 'error.html')
+            
+            if (existsSync(errorPath)) {
+              return res.status(404).sendFile(errorPath)
+            } else if (existsSync(distErrorPath)) {
+              return res.status(404).sendFile(distErrorPath)
+            }
+            next(err)
+          }
+        })
+      } else {
+        next()
       }
     })
     
@@ -2929,6 +2975,60 @@ async function startServer() {
       console.log('✅ Static dosyalar serve ediliyor:', distDir)
     }
   }
+  
+  // Error Handler Middleware (500 vb. için) - Route'lardan SONRA
+  app.use((err, req, res, next) => {
+    console.error('❌ Server Error:', err)
+    
+    // API istekleri için JSON döndür
+    if (req.path.startsWith('/api')) {
+      return res.status(err.status || 500).json({
+        success: false,
+        error: process.env.NODE_ENV === 'production' 
+          ? 'Bir hata oluştu. Lütfen daha sonra tekrar deneyin.' 
+          : err.message
+      })
+    }
+    
+    // Frontend istekleri için error.html göster
+    const rootDir = join(__dirname, '..')
+    const errorPath = join(rootDir, 'public', 'error.html')
+    const distErrorPath = join(rootDir, 'dist', 'error.html')
+    
+    if (existsSync(errorPath)) {
+      return res.status(err.status || 500).sendFile(errorPath)
+    } else if (existsSync(distErrorPath)) {
+      return res.status(err.status || 500).sendFile(distErrorPath)
+    }
+    
+    next(err)
+  })
+  
+  // 404 Handler (API route'ları hariç) - En sonda
+  app.use((req, res) => {
+    // API route'ları için JSON döndür
+    if (req.path.startsWith('/api')) {
+      return res.status(404).json({
+        success: false,
+        error: 'Endpoint bulunamadı'
+      })
+    }
+    
+    // Frontend için 404 - error.html göster
+    const rootDir = join(__dirname, '..')
+    const errorPath = join(rootDir, 'public', 'error.html')
+    const distErrorPath = join(rootDir, 'dist', 'error.html')
+    
+    if (existsSync(errorPath)) {
+      return res.status(404).sendFile(errorPath)
+    } else if (existsSync(distErrorPath)) {
+      return res.status(404).sendFile(distErrorPath)
+    }
+    
+    // Error.html bulunamazsa basit mesaj döndür
+    res.status(404).send('404 - Sayfa bulunamadı')
+  })
+  
   // Development mode - mesaj gösterme (production'da hiçbir şey yazdırma)
   
   // HTTP server ve WebSocket server oluştur

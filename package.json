@@ -14,6 +14,7 @@
     "preview": "vite preview",
     "lint": "eslint src --ext jsx,js --report-unused-disable-directives --max-warnings 0",
     "start:heroku": "npm start --prefix server",
+    "heroku-postbuild": "npm run build",
     "postinstall": "npm install --prefix server"
   },
   "dependencies": {
