@@ -15,32 +15,24 @@ const useCryptoData = () => {
     // Mevcut veriyi al - ANINDA (cache'den)
     const currentData = globalDataManager.getData()
     if (currentData.coins && currentData.coins.length > 0) {
+      // Cache'den veri varsa ANINDA göster
       setCoins(currentData.coins)
       setTopMovers(currentData.topMovers || { topGainers: [], topLosers: [] })
       setLoading(false)
-      // Cache'den veri varsa direkt çık, MongoDB'den çekmeye gerek yok
-      // Abone ol ama (güncellemeler için)
-      const unsubscribe = globalDataManager.subscribe((data) => {
-        setCoins(data.coins || [])
-        setTopMovers(data.topMovers || { topGainers: [], topLosers: [] })
-        setIsUpdating(data.isUpdating || false)
-        setLastUpdate(data.lastCryptoUpdate)
-      })
-      return () => unsubscribe()
+    } else {
+      // Cache'de veri yoksa MongoDB'den çekilecek, loading true kalsın
+      // loadMissingDataFromMongoDB() constructor'da çağrılıyor
     }
     
-    // Cache'de veri yoksa MongoDB'den ANINDA çek (interval yok, direkt subscribe)
-    // Abone ol - veri geldiğinde ANINDA göster
+    // Abone ol - veri geldiğinde ANINDA göster (cache veya MongoDB'den)
     const unsubscribe = globalDataManager.subscribe((data) => {
-      setCoins(data.coins || [])
-      setTopMovers(data.topMovers || { topGainers: [], topLosers: [] })
+      if (data.coins && data.coins.length > 0) {
+        setCoins(data.coins)
+        setTopMovers(data.topMovers || { topGainers: [], topLosers: [] })
+        setLoading(false) // Veri geldiğinde ANINDA loading'i kapat
+      }
       setIsUpdating(data.isUpdating || false)
       setLastUpdate(data.lastCryptoUpdate)
-      
-      // Veri geldiğinde loading'i kapat
-      if (data.coins && data.coins.length > 0) {
-        setLoading(false)
-      }
     })
 
     // Cleanup

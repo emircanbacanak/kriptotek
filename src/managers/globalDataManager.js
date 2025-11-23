@@ -176,93 +176,87 @@ class GlobalDataManager {
   }
 
   // localStorage'da eksik veriler varsa MongoDB'den çek (ANINDA, öncelikli)
+  // Sidebar sırasına göre: 1. Home (crypto) -> 2. Market Overview (dominance) -> diğerleri (paralel)
   async loadMissingDataFromMongoDB() {
     // API URL yoksa çık
     if (!this.MONGO_API_URL) {
       return
     }
     
-    // ANINDA çalıştır - direkt başlat (Promise.resolve().then() yok)
     try {
       const MONGO_API_URL = this.MONGO_API_URL
-        const missingData = []
-        
-        // Hangi veriler eksik kontrol et
-        if (!this.coins || this.coins.length === 0) {
-          missingData.push('crypto')
+      
+      // ÖNCELİKLİ VERİLER (Sırayla çek):
+      // 1. Home (crypto) - EN ÖNCE
+      if (!this.coins || this.coins.length === 0) {
+        try {
+          const res = await fetch(`${MONGO_API_URL}/cache/crypto_list`, {
+            headers: { 'Accept': 'application/json' },
+            signal: AbortSignal.timeout(5000) // 5 saniye timeout
+          })
+          if (res.ok) {
+            const result = await res.json()
+            if (result.success && result.data) {
+              const coins = result.data.coins || result.data.data?.coins || []
+              if (Array.isArray(coins) && coins.length > 0) {
+                this.coins = coins.length > 500 ? coins.slice(0, 500) : coins
+                this.topMovers = this.calculateTopMovers(this.coins)
+                this.lastCryptoUpdate = new Date()
+                this.saveToLocalStorage()
+                this.notifySubscribers() // ANINDA bildir
+              }
+            }
+          }
+        } catch (error) {
+          // Sessizce devam et
         }
-        if (!this.dominanceData) {
-          missingData.push('dominance')
+      }
+      
+      // 2. Market Overview (dominance) - İKİNCİ ÖNCELİK
+      if (!this.dominanceData) {
+        try {
+          const res = await fetch(`${MONGO_API_URL}/api/cache/dominance_data`, {
+            headers: { 'Accept': 'application/json' },
+            signal: AbortSignal.timeout(5000)
+          })
+          if (res.ok) {
+            const result = await res.json()
+            if (result.success && result.data) {
+              this.dominanceData = result.data
+              this.lastDominanceUpdate = Date.now()
+              this.saveToLocalStorage()
+              this.notifySubscribers() // ANINDA bildir
+            }
+          }
+        } catch (error) {
+          // Sessizce devam et
         }
-        if (!this.fearGreedIndex) {
-          missingData.push('fearGreed')
-        }
-        if (!this.trendingCoins || this.trendingCoins.length === 0) {
-          missingData.push('trending')
-        }
-        if (!this.currencyRates) {
-          missingData.push('currency')
-        }
-        if (!this.fedRateData) {
-          missingData.push('fedRate')
-        }
-        if (!this.supplyTrackingData) {
-          missingData.push('supplyTracking')
-        }
-        
-        // Eksik veriler yoksa çık
-        if (missingData.length === 0) {
-          return
-        }
-        
-        // Eksik verileri MongoDB'den paralel olarak çek
-        const promises = []
-        
-        if (missingData.includes('crypto')) {
-          promises.push(
-            fetch(`${MONGO_API_URL}/cache/crypto_list`, {
-              headers: { 'Accept': 'application/json' },
-              signal: AbortSignal.timeout(3000) // 3 saniye timeout (daha hızlı)
-            })
-              .then(async (res) => {
-                if (res.ok) {
-                  const result = await res.json()
-                  if (result.success && result.data) {
-                    const coins = result.data.coins || result.data.data?.coins || []
-                    if (Array.isArray(coins) && coins.length > 0) {
-                      this.coins = coins.length > 500 ? coins.slice(0, 500) : coins
-                      this.topMovers = this.calculateTopMovers(this.coins)
-                      this.lastCryptoUpdate = new Date()
-                      this.saveToLocalStorage()
-                      this.notifySubscribers()
-                    }
-                  }
-                }
-              })
-              .catch(() => {})
-          )
-        }
-        
-        if (missingData.includes('dominance')) {
-          promises.push(
-            fetch(`${MONGO_API_URL}/api/cache/dominance_data`, {
-              headers: { 'Accept': 'application/json' },
-              signal: AbortSignal.timeout(3000) // 3 saniye timeout
-            })
-              .then(async (res) => {
-                if (res.ok) {
-                  const result = await res.json()
-                  if (result.success && result.data) {
-                    this.dominanceData = result.data
-                    this.lastDominanceUpdate = Date.now()
-                    this.saveToLocalStorage()
-                    this.notifySubscribers()
-                  }
-                }
-              })
-              .catch(() => {})
-          )
-        }
+      }
+      
+      // DİĞER VERİLER (Paralel çek):
+      const missingData = []
+      if (!this.fearGreedIndex) {
+        missingData.push('fearGreed')
+      }
+      if (!this.trendingCoins || this.trendingCoins.length === 0) {
+        missingData.push('trending')
+      }
+      if (!this.currencyRates) {
+        missingData.push('currency')
+      }
+      if (!this.fedRateData) {
+        missingData.push('fedRate')
+      }
+      if (!this.supplyTrackingData) {
+        missingData.push('supplyTracking')
+      }
+      
+      if (missingData.length === 0) {
+        return
+      }
+      
+      // Diğer verileri paralel olarak çek
+      const promises = []
         
         if (missingData.includes('fearGreed')) {
           promises.push(

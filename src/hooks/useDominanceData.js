@@ -16,35 +16,24 @@ const useDominanceData = () => {
     // Mevcut veriyi al - ANINDA (cache'den)
     const currentData = globalDataManager.getData()
     if (currentData.dominanceData && currentData.dominanceData.global && currentData.dominanceData.dominanceData) {
+      // Cache'den veri varsa ANINDA göster
       setDominanceData(currentData.dominanceData)
       setFearGreedIndex(currentData.fearGreedIndex)
       setLoading(false)
       setError(null)
-      // Cache'den veri varsa direkt çık, MongoDB'den çekmeye gerek yok
-      // Abone ol ama (güncellemeler için)
-      const unsubscribe = globalDataManager.subscribe((data) => {
-        setDominanceData(data.dominanceData)
-        setFearGreedIndex(data.fearGreedIndex)
-        setIsUpdating(data.isUpdating || false)
-        setLastUpdate(data.lastDominanceUpdate)
-        
-        if (data.dominanceData && data.dominanceData.global && data.dominanceData.dominanceData) {
-          setLoading(false)
-          setError(null)
-        }
-      })
-      return () => unsubscribe()
+    } else {
+      // Cache'de veri yoksa MongoDB'den çekilecek, loading true kalsın
+      // loadMissingDataFromMongoDB() constructor'da çağrılıyor
     }
     
-    // Cache'de veri yoksa MongoDB'den ANINDA çek (interval yok, direkt subscribe)
-    // Abone ol - veri geldiğinde ANINDA göster
+    // Abone ol - veri geldiğinde ANINDA göster (cache veya MongoDB'den)
     const unsubscribe = globalDataManager.subscribe((data) => {
       setDominanceData(data.dominanceData)
       setFearGreedIndex(data.fearGreedIndex)
       setIsUpdating(data.isUpdating || false)
       setLastUpdate(data.lastDominanceUpdate)
       
-      // İlk veri geldiğinde loading'i kapat
+      // Veri geldiğinde loading'i kapat
       if (data.dominanceData && data.dominanceData.global && data.dominanceData.dominanceData) {
         setLoading(false)
         setError(null)
