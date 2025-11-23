@@ -318,11 +318,8 @@ const Register = () => {
     setLoading(false)
 
     if (!result.success) {
-      if (result.code === 'auth/email-already-in-use' || result.error?.includes('auth/email-already-in-use')) {
-        setError(result.error || t('emailAlreadyInUse') || 'Bu e-posta zaten kullanılıyor.')
-      } else {
-        setError(result.error || t('registerError') || 'Kayıt olurken bir hata oluştu.')
-      }
+      // Firebase auth.js'den gelen Türkçe hata mesajını göster
+      setError(result.error || t('registerError') || 'Kayıt olurken bir hata oluştu.')
     } else {
       navigate('/login')
     }

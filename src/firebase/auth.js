@@ -77,7 +77,32 @@ export const registerWithEmailPassword = async (email, password, displayName) =>
       }
     }
   } catch (error) {
-    return { success: false, error: error.message, code: error.code }
+    // Hata kodlarına göre kullanıcı dostu Türkçe mesajlar
+    let errorMessage = error.message
+    const errorCode = error.code
+    
+    switch (errorCode) {
+      case 'auth/email-already-in-use':
+        errorMessage = 'Bu e-posta adresi zaten kullanılıyor. Lütfen giriş yapmayı deneyin veya farklı bir e-posta kullanın.'
+        break
+      case 'auth/invalid-email':
+        errorMessage = 'Geçersiz e-posta adresi. Lütfen doğru formatta bir e-posta girin.'
+        break
+      case 'auth/weak-password':
+        errorMessage = 'Şifre çok zayıf. Şifre en az 6 karakter olmalıdır.'
+        break
+      case 'auth/operation-not-allowed':
+        errorMessage = 'Bu işlem şu anda devre dışı. Lütfen daha sonra tekrar deneyin.'
+        break
+      case 'auth/network-request-failed':
+        errorMessage = 'Ağ hatası. İnternet bağlantınızı kontrol edip tekrar deneyin.'
+        break
+      default:
+        // Bilinmeyen hatalar için orijinal mesajı kullan
+        errorMessage = error.message
+    }
+    
+    return { success: false, error: errorMessage, code: errorCode }
   }
 }
 
