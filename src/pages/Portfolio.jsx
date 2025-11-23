@@ -126,17 +126,17 @@ const Portfolio = () => {
         if (isMountedRef.current) {
           setPositions([])
           setLoading(false)
-        }
+      }
         return
       }
 
       try {
-        const result = await response.json()
+      const result = await response.json()
         if (isMountedRef.current) {
-          if (result.success && result.data) {
-            setPositions(result.data.positions || [])
-          } else {
-            setPositions([])
+      if (result.success && result.data) {
+        setPositions(result.data.positions || [])
+      } else {
+        setPositions([])
           }
         }
       } catch (parseError) {
@@ -148,7 +148,7 @@ const Portfolio = () => {
     } catch (error) {
       // Tüm hatalar - sessizce handle et
       if (isMountedRef.current) {
-        setPositions([])
+      setPositions([])
       }
     } finally {
       if (isMountedRef.current) {
@@ -789,9 +789,9 @@ const Portfolio = () => {
               {/* Kaldıraç Oranı */}
               {formData.isLeveraged && (
                 <div className="animate-slide-down">
-                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">
+                  <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">
                       {t('leverage')} (1x - 100x) <span className="text-red-500">*</span>
-                    </label>
+                  </label>
                   <input
                     type="number"
                     min="1"
@@ -900,8 +900,8 @@ const Portfolio = () => {
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 font-semibold">
                     {t('currentPrice')}: {formatPriceWithCoin(selectedCoin.current_price, selectedCoin.id)}
                   </p>
-                )}
-              </div>
+                    )}
+                  </div>
 
 
               {/* Stop Loss */}
@@ -1044,14 +1044,14 @@ const Portfolio = () => {
         </div>
       )}
 
-      {/* Animated Background Elements */}
+        {/* Animated Background Elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute top-20 left-10 w-96 h-96 bg-blue-400/20 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-20 right-10 w-[500px] h-[500px] bg-purple-400/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
-        <div className="absolute top-1/2 left-1/2 w-80 h-80 bg-indigo-400/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
-      </div>
+          <div className="absolute top-20 left-10 w-96 h-96 bg-blue-400/20 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-20 right-10 w-[500px] h-[500px] bg-purple-400/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+          <div className="absolute top-1/2 left-1/2 w-80 h-80 bg-indigo-400/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
+        </div>
 
-      {/* Header */}
+          {/* Header */}
       <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
             <div className="flex items-center gap-4">
               <div className="relative">
@@ -1081,7 +1081,7 @@ const Portfolio = () => {
 
           {/* Portfolio Summary */}
           <div className="relative z-10">
-            {positionsWithData.length > 0 && (
+          {positionsWithData.length > 0 && (
               <div className="space-y-4 mb-8">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Giriş Değeri */}
@@ -1092,8 +1092,8 @@ const Portfolio = () => {
                   </span>
                   <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
                     <BarChart3 className="w-4 h-4 text-white" />
-                  </div>
-                </div>
+                    </div>
+                    </div>
                 <div className="text-2xl font-bold text-gray-900 dark:text-white">
                   {(() => {
                     const convertedPrice = convertCurrency(portfolioSummary.totalEntryValue || 0, 'USD', currency)
@@ -1105,8 +1105,8 @@ const Portfolio = () => {
                     })
                     return formatter.format(convertedPrice)
                   })()}
-                </div>
-              </div>
+                  </div>
+                  </div>
 
               {/* Mevcut Değer */}
               <div className="relative bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-xl border border-gray-200/50 dark:border-gray-700/50 p-5 hover:shadow-lg transition-all">
@@ -1116,8 +1116,8 @@ const Portfolio = () => {
                   </span>
                   <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center">
                     <BarChart3 className="w-4 h-4 text-white" />
-                  </div>
                 </div>
+              </div>
                 <div className="text-2xl font-bold text-gray-900 dark:text-white">
                   {(() => {
                     const convertedPrice = convertCurrency(portfolioSummary.totalCurrentValue || 0, 'USD', currency)
@@ -1133,7 +1133,7 @@ const Portfolio = () => {
               </div>
               {/* Net Kar/Zarar */}
               <div className={`relative bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-xl border p-5 hover:shadow-lg transition-all ${
-                portfolioSummary.totalProfitLoss >= 0 
+                  portfolioSummary.totalProfitLoss >= 0 
                   ? 'border-green-200/50 dark:border-green-700/50' 
                   : 'border-red-200/50 dark:border-red-700/50'
               }`}>
@@ -1142,22 +1142,22 @@ const Portfolio = () => {
                     {t('totalProfitLoss')}
                   </span>
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                    portfolioSummary.totalProfitLoss >= 0 
-                      ? 'bg-gradient-to-br from-green-500 to-emerald-600' 
-                      : 'bg-gradient-to-br from-red-500 to-rose-600'
-                  }`}>
-                    {portfolioSummary.totalProfitLoss >= 0 ? (
+                      portfolioSummary.totalProfitLoss >= 0 
+                        ? 'bg-gradient-to-br from-green-500 to-emerald-600' 
+                        : 'bg-gradient-to-br from-red-500 to-rose-600'
+                    }`}>
+                      {portfolioSummary.totalProfitLoss >= 0 ? (
                       <ArrowUpRight className="w-4 h-4 text-white" />
-                    ) : (
+                      ) : (
                       <ArrowDownRight className="w-4 h-4 text-white" />
-                    )}
-                  </div>
-                </div>
+                      )}
+                    </div>
+                    </div>
                 <div className={`text-2xl font-bold ${
-                  portfolioSummary.totalProfitLoss >= 0 
-                    ? 'text-green-600 dark:text-green-400' 
-                    : 'text-red-600 dark:text-red-400'
-                }`}>
+                    portfolioSummary.totalProfitLoss >= 0 
+                      ? 'text-green-600 dark:text-green-400' 
+                      : 'text-red-600 dark:text-red-400'
+                  }`}>
                   {(() => {
                     const convertedPrice = convertCurrency(Math.abs(portfolioSummary.totalProfitLoss || 0), 'USD', currency)
                     const formatter = new Intl.NumberFormat('en-US', {
@@ -1168,20 +1168,20 @@ const Portfolio = () => {
                     })
                     return `${portfolioSummary.totalProfitLoss >= 0 ? '+' : '-'}${formatter.format(convertedPrice)}`
                   })()}
-                </div>
+                  </div>
                 <div className={`text-xs mt-1 font-semibold ${
-                  portfolioSummary.totalProfitLossPercent >= 0 
-                    ? 'text-green-600 dark:text-green-400' 
-                    : 'text-red-600 dark:text-red-400'
-                }`}>
+                    portfolioSummary.totalProfitLossPercent >= 0 
+                      ? 'text-green-600 dark:text-green-400' 
+                      : 'text-red-600 dark:text-red-400'
+                  }`}>
                   {(() => {
                     const percent = portfolioSummary.totalProfitLossPercent !== undefined && !isNaN(portfolioSummary.totalProfitLossPercent) 
                       ? portfolioSummary.totalProfitLossPercent 
                       : 0
                     return `${percent >= 0 ? '+' : ''}${percent.toFixed(2)}%`
                   })()}
+                  </div>
                 </div>
-              </div>
               {/* Pozisyon Sayısı */}
               <div className="relative bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-xl border border-gray-200/50 dark:border-gray-700/50 p-5 hover:shadow-lg transition-all">
                 <div className="flex items-center justify-between mb-3">
@@ -1190,13 +1190,13 @@ const Portfolio = () => {
                   </span>
                   <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
                     <Activity className="w-4 h-4 text-white" />
-                  </div>
-                </div>
+              </div>
+                    </div>
                 <div className="text-2xl font-bold text-gray-900 dark:text-white">
                   {positionsWithData.length}
-                </div>
-              </div>
-              </div>
+                    </div>
+                  </div>
+                  </div>
 
               {/* Kar/Zarar Detayları */}
               {(portfolioSummary.totalProfit > 0 || portfolioSummary.totalLoss > 0) && (
@@ -1206,7 +1206,7 @@ const Portfolio = () => {
                     <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                       Detaylı Kar/Zarar Analizi
                     </span>
-                  </div>
+                </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {portfolioSummary.totalProfit > 0 && (
                       <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800/50">
@@ -1215,7 +1215,7 @@ const Portfolio = () => {
                           <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                             Toplam Kar
                           </span>
-                        </div>
+              </div>
                         <span className="text-lg font-bold text-green-600 dark:text-green-400">
                           {(() => {
                             const convertedPrice = convertCurrency(portfolioSummary.totalProfit || 0, 'USD', currency)
@@ -1228,8 +1228,8 @@ const Portfolio = () => {
                             return `+${formatter.format(convertedPrice)}`
                           })()}
                         </span>
-                      </div>
-                    )}
+            </div>
+          )}
                     {portfolioSummary.totalLoss > 0 && (
                       <div className="flex items-center justify-between p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800/50">
                         <div className="flex items-center gap-2">
@@ -1261,7 +1261,7 @@ const Portfolio = () => {
 
           {/* Positions List */}
           <div className="relative z-10">
-            {positionsWithData.length === 0 ? (
+          {positionsWithData.length === 0 ? (
             <div className="relative bg-white dark:bg-gray-800/95 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-gray-700/50 p-16 text-center overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-br from-gray-50 via-gray-100/50 to-gray-50 dark:from-gray-800/50 dark:via-gray-700/30 dark:to-gray-800/50"></div>
               <div className="relative">
@@ -1306,17 +1306,17 @@ const Portfolio = () => {
                 const triggerType = position.takeProfitStatus === 'triggered' ? 'takeProfit' : (position.stopLossStatus === 'triggered' ? 'stopLoss' : null)
 
                 return (
-                  <div
-                    key={position.id}
+                <div
+                  key={position.id}
                     className="group relative bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-2xl border-2 border-gray-200/50 dark:border-gray-700/50 p-5 hover:shadow-2xl transition-all transform hover:scale-[1.02] overflow-hidden"
-                    style={{ animation: `fadeInUp 0.6s ease-out ${index * 0.1}s both` }}
-                  >
+                  style={{ animation: `fadeInUp 0.6s ease-out ${index * 0.1}s both` }}
+                >
                     <div className={`absolute top-0 right-0 w-48 h-48 rounded-full blur-3xl opacity-10 group-hover:opacity-20 transition-opacity ${
-                      position.profitLoss >= 0 
-                        ? 'bg-gradient-to-br from-green-400 to-emerald-400' 
-                        : 'bg-gradient-to-br from-red-400 to-rose-400'
-                    }`}></div>
-                    
+                    position.profitLoss >= 0 
+                      ? 'bg-gradient-to-br from-green-400 to-emerald-400' 
+                      : 'bg-gradient-to-br from-red-400 to-rose-400'
+                  }`}></div>
+                  
                     {/* Stop/Take Profit Overlay */}
                     {isTriggered && (
                       <div className={`absolute inset-0 flex items-center justify-center z-30 pointer-events-none ${
@@ -1337,7 +1337,7 @@ const Portfolio = () => {
                     )}
                     
                     {/* İçerik - Blur uygulanacak (butonlar hariç) */}
-                    <div className="relative">
+                  <div className="relative">
                       <div className={isTriggered ? 'blur-[1px] pointer-events-none' : ''}>
                         {/* Row 1: Symbol/Icon + Position Type */}
                         <div className="grid grid-cols-2 gap-4 mb-4">
@@ -1345,12 +1345,12 @@ const Portfolio = () => {
                           <div className="flex items-center gap-3">
                             <div className="relative flex-shrink-0">
                               <div className="absolute inset-0 bg-gradient-to-br from-blue-400/30 to-indigo-400/30 rounded-full blur-lg"></div>
-                              <img
-                                src={position.coin.image}
-                                alt={position.coin.name}
+                            <img
+                              src={position.coin.image}
+                              alt={position.coin.name}
                                 className="relative w-12 h-12 rounded-full ring-2 ring-gray-100 dark:ring-gray-700"
-                              />
-                            </div>
+                            />
+                          </div>
                             <div className="min-w-0 flex-1">
                               <div className="text-sm font-extrabold text-gray-900 dark:text-white truncate">
                                 {position.coin.symbol.toUpperCase()}
@@ -1371,12 +1371,12 @@ const Portfolio = () => {
                               </span>
                               {position.isLeveraged ? (
                                 <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
-                                  position.type === 'long'
+                                position.type === 'long' 
                                     ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
                                     : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
-                                }`}>
+                              }`}>
                                   {position.type === 'long' ? t('long') : t('short')}
-                                </span>
+                              </span>
                               ) : (
                                 <span className="text-xs font-bold px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
                                   {t('spot')}
@@ -1398,8 +1398,8 @@ const Portfolio = () => {
                                 })()}
                               </div>
                             )}
+                              </div>
                           </div>
-                        </div>
 
                         {/* Row 2: Entry Price (Left) + Current Price (Right) */}
                         <div className="mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
@@ -1408,24 +1408,24 @@ const Portfolio = () => {
                             <div>
                               <div className="text-xs text-gray-500 dark:text-gray-400 font-bold mb-1">
                                 {t('entryPrice')}
-                              </div>
+                            </div>
                               <div className="text-lg font-extrabold text-gray-900 dark:text-white">
                                 {position.coin ? formatPriceWithCoin(position.entryPrice, position.coin.id) : formatPrice(position.entryPrice)}
-                              </div>
+                            </div>
                             </div>
                             {/* Right: Current Price */}
                             {position.coin && position.currentPrice && (
                               <div className="text-right">
                                 <div className="text-xs text-gray-500 dark:text-gray-400 font-bold mb-1">
                                   {t('currentPrice')}
-                                </div>
+                          </div>
                                 <div className="text-lg font-extrabold text-gray-900 dark:text-white">
                                   {formatPriceWithCoin(position.currentPrice, position.coin.id)}
-                                </div>
-                              </div>
+                            </div>
+                            </div>
                             )}
+                            </div>
                           </div>
-                        </div>
 
                         {/* Row 3: Target Price + Stop Price */}
                         <div className="grid grid-cols-2 gap-3 mb-4">
@@ -1436,20 +1436,20 @@ const Portfolio = () => {
                             </div>
                             <div className="text-sm font-extrabold text-green-600 dark:text-green-400">
                               {position.takeProfit ? (position.coin ? formatPriceWithCoin(position.takeProfit, position.coin.id) : formatPrice(position.takeProfit)) : '-'}
-                            </div>
                           </div>
-                          
+                        </div>
+
                           {/* Col 2: Stop Price (Red) */}
                           <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-3 border border-red-200 dark:border-red-800">
                             <div className="text-xs text-red-700 dark:text-red-400 font-bold mb-1">
                               {t('stopLossShort')}
-                            </div>
+                                </div>
                             <div className="text-sm font-extrabold text-red-600 dark:text-red-400">
                               {position.stopLoss ? (position.coin ? formatPriceWithCoin(position.stopLoss, position.coin.id) : formatPrice(position.stopLoss)) : '-'}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                                </div>
+                              </div>
+                                </div>
+                                </div>
                       
                       {/* Action Buttons - Blur'dan muaf */}
                       <div className={`flex items-center gap-2 pt-3 border-t border-gray-200 dark:border-gray-700 ${isTriggered ? 'relative z-40' : ''}`} style={isTriggered ? { filter: 'none' } : {}}>
@@ -1475,8 +1475,8 @@ const Portfolio = () => {
                 )
               })}
             </div>
-            )}
-          </div>
+          )}
+      </div>
 
       <style>{`
         @keyframes fade-in {

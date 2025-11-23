@@ -67,7 +67,26 @@ export const loginWithEmailPassword = async (email, password) => {
 export const loginWithGoogleAuth = async () => {
   try {
     const result = await signInWithPopup(auth, googleProvider)
-    return { success: true, user: result.user }
+    const user = result.user
+    
+    // Eğer displayName yoksa, email'den otomatik oluştur (@gmail.com'dan önceki kısım)
+    if (!user.displayName && user.email) {
+      const emailLocalPart = user.email.split('@')[0]
+      if (emailLocalPart && emailLocalPart.length >= 2) {
+        // İlk harfi büyük, geri kalanını küçük yap
+        const displayName = emailLocalPart.charAt(0).toUpperCase() + emailLocalPart.slice(1).toLowerCase()
+        try {
+          await updateProfile(user, { displayName })
+          // Kullanıcı bilgilerini yenile
+          await user.reload()
+        } catch (updateError) {
+          console.warn('⚠️ Display name güncellenemedi:', updateError)
+          // Hata olsa bile login başarılı sayılır
+        }
+      }
+    }
+    
+    return { success: true, user: auth.currentUser || user }
   } catch (error) {
     // Hata kodlarına göre kullanıcı dostu Türkçe mesajlar
     let errorMessage = error.message

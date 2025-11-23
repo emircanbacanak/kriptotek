@@ -882,7 +882,7 @@ async function fetchCryptoList() {
     // Eğer hala 615'ten az coin varsa, uyarı ver
     if (limitedData.length < 615) {
       console.warn(`⚠️ UYARI: Sadece ${limitedData.length} coin çekilebildi (615 hedeflendi - 3 batch x 195 coin).`)
-    } else {
+              } else {
       console.log(`✅ Başarılı: ${limitedData.length} coin çekildi (615 hedeflendi - 3 batch x 195 coin)`)
     }
     
@@ -1265,14 +1265,14 @@ async function fetchOHLCData(coinId, days = 1) {
       try {
         const agent = new ProxyAgent(selectedProxy)
         const response = await fetch(url, {
-          headers: {
+        headers: {
             'Accept': 'application/json',
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-          },
+        },
           dispatcher: agent,
-          signal: AbortSignal.timeout(30000) // 30 saniye timeout
+        signal: AbortSignal.timeout(30000) // 30 saniye timeout
         })
-        
+
         if (response && response.ok) {
           const data = await response.json()
           if (Array.isArray(data)) {

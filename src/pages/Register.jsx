@@ -319,7 +319,7 @@ const Register = () => {
 
     if (!result.success) {
       // Firebase auth.js'den gelen Türkçe hata mesajını göster
-      setError(result.error || t('registerError') || 'Kayıt olurken bir hata oluştu.')
+        setError(result.error || t('registerError') || 'Kayıt olurken bir hata oluştu.')
     } else {
       navigate('/login')
     }

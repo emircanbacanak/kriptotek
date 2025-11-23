@@ -438,7 +438,19 @@ const UserCard = ({ user, onTogglePremium, onToggleActive, onToggleAdmin }) => {
           <div className="flex-1 min-w-0">
             <div className="flex items-center space-x-2">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
-                {user.displayName || (user.email && user.email !== t('unknown') ? user.email.split('@')[0].charAt(0).toUpperCase() + user.email.split('@')[0].slice(1) : t('user'))}
+                {(() => {
+                  // Kullanıcı adı varsa göster
+                  if (user.displayName) {
+                    return user.displayName
+                  }
+                  // Email'den kullanıcı adı oluştur
+                  if (user.email) {
+                    const emailPart = user.email.split('@')[0]
+                    return emailPart.charAt(0).toUpperCase() + emailPart.slice(1).toLowerCase()
+                  }
+                  // Hiçbiri yoksa varsayılan
+                  return t('user')
+                })()}
               </h3>
               {user.isPremium && <Crown className="w-4 h-4 text-yellow-500 flex-shrink-0" />}
               {user.isAdmin && <Shield className="w-4 h-4 text-red-500 flex-shrink-0" />}

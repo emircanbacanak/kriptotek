@@ -636,14 +636,47 @@ app.get('/api/admin/users', async (req, res) => {
     const collection = db.collection(COLLECTION_NAME)
     const mongoUsers = await collection.find({}).toArray()
     
-    // MongoDB kullanıcılarını işle
+    // Firebase'den tüm kullanıcıları çek (email/displayName için)
+    let firebaseUsersMap = new Map()
+    if (firebaseAdmin) {
+      try {
+        const listUsersResult = await firebaseAdmin.auth().listUsers(1000) // Max 1000 kullanıcı
+        listUsersResult.users.forEach(fbUser => {
+          // Firebase kullanıcı bilgilerini map'e ekle
+          firebaseUsersMap.set(fbUser.uid, {
+            email: fbUser.email || null,
+            displayName: fbUser.displayName || (fbUser.email ? fbUser.email.split('@')[0].charAt(0).toUpperCase() + fbUser.email.split('@')[0].slice(1).toLowerCase() : null),
+            photoURL: fbUser.photoURL || null
+          })
+        })
+      } catch (firebaseError) {
+        console.warn('⚠️ Firebase kullanıcıları çekilemedi:', firebaseError.message)
+      }
+    }
+    
+    // MongoDB kullanıcılarını işle - Firebase bilgileriyle tamamla
     const mongoUsersList = mongoUsers.map(user => {
       const { _id, ...userWithoutId } = user
+      const userId = userWithoutId.userId
+      
+      // Firebase'den kullanıcı bilgilerini al (varsa)
+      const fbUserData = firebaseUsersMap.get(userId) || {}
+      
+      // Email: Önce MongoDB'den, yoksa Firebase'den, yoksa null
+      const email = userWithoutId.email || fbUserData.email || null
+      
+      // DisplayName: Önce MongoDB'den, yoksa Firebase'den, yoksa email'den oluştur, yoksa null
+      let displayName = userWithoutId.displayName || fbUserData.displayName || null
+      if (!displayName && email) {
+        const emailPart = email.split('@')[0]
+        displayName = emailPart.charAt(0).toUpperCase() + emailPart.slice(1).toLowerCase()
+      }
+      
       return {
-        uid: userWithoutId.userId,
-        email: userWithoutId.email || 'Bilinmiyor',
-        displayName: userWithoutId.displayName || 'Kullanıcı',
-        photoURL: userWithoutId.photoURL || null,
+        uid: userId,
+        email: email,
+        displayName: displayName,
+        photoURL: userWithoutId.photoURL || fbUserData.photoURL || null,
         isPremium: userWithoutId.isPremium === true || userWithoutId.isPremium === 'true',
         adminEncrypted: userWithoutId.adminEncrypted || null,
         isActive: userWithoutId.isActive !== false, // Varsayılan true
@@ -653,7 +686,7 @@ app.get('/api/admin/users', async (req, res) => {
       }
     })
     
-    // Firebase'den Google provider'ı olan kullanıcıları çek
+    // Firebase'den Google provider'ı olan kullanıcıları çek (MongoDB'de olmayanlar)
     let firebaseGoogleUsers = []
     if (firebaseAdmin) {
       try {
@@ -671,10 +704,13 @@ app.get('/api/admin/users', async (req, res) => {
             }
             
             // MongoDB'de yoksa Firebase'den ekle
+            const email = fbUser.email || null
+            const displayName = fbUser.displayName || (email ? email.split('@')[0].charAt(0).toUpperCase() + email.split('@')[0].slice(1).toLowerCase() : null)
+            
             return {
               uid: fbUser.uid,
-              email: fbUser.email || 'Bilinmiyor',
-              displayName: fbUser.displayName || (fbUser.email ? fbUser.email.split('@')[0] : 'Kullanıcı'),
+              email: email,
+              displayName: displayName,
               photoURL: fbUser.photoURL || null,
               isPremium: false, // Varsayılan
               adminEncrypted: null, // Varsayılan
@@ -1945,8 +1981,8 @@ app.post('/api/crypto/update', async (req, res) => {
         // Memory cache'i güncelle (hızlı erişim için)
         memoryCache.crypto_list = result.data
         memoryCache.crypto_list_timestamp = now
-        
-        // Debug: Kaydedildikten sonra MongoDB'den kontrol
+    
+    // Debug: Kaydedildikten sonra MongoDB'den kontrol
     const savedDoc = await collection.findOne({ _id: 'crypto_list' });
     if (savedDoc && savedDoc.data && savedDoc.data.length > 0) {
       const sampleCoin = savedDoc.data[0];
