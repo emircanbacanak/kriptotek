@@ -297,7 +297,7 @@ const Register = () => {
     }
 
     if (formData.password !== formData.confirmPassword) {
-      setError(t('passwordsNotMatch'))
+      setError(t('passwordsNotMatch') || 'Şifreler eşleşmiyor. Lütfen tekrar kontrol edin.')
       return
     }
 
@@ -329,7 +329,12 @@ const Register = () => {
     setError('')
     const result = await loginWithGoogleAuth()
     if (!result.success) {
-      setError(result.error || t('googleLoginError') || 'Google ile giriş başarısız.')
+      // Popup kullanıcı tarafından kapatıldıysa hata gösterme (normal davranış)
+      if (result.cancelled || result.code === 'auth/popup-closed-by-user') {
+        return
+      }
+      // Firebase auth.js'den gelen Türkçe hata mesajını göster
+      setError(result.error || t('googleLoginError') || 'Google ile kayıt olurken bir hata oluştu.')
     }
   }
 

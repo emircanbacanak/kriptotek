@@ -325,27 +325,8 @@ const Login = () => {
       setFailedAttempts((prev) => prev + 1)
       bruteForceProtection.recordFailedAttempt(formData.email)
 
-      let errorMessage = result.error || t('loginErrorOccurred')
-      const errorCode = result.code || ''
-
-      // Detaylı hata mesajları
-      if (errorCode === 'auth/invalid-credential' || errorMessage.includes('auth/invalid-credential')) {
-        errorMessage = t('invalidCredential') || 'Email veya şifre hatalı'
-      } else if (errorCode === 'auth/user-not-found') {
-        errorMessage = t('userNotFound') || 'Bu email adresi ile kayıtlı kullanıcı bulunamadı'
-      } else if (errorCode === 'auth/wrong-password') {
-        errorMessage = t('wrongPassword') || 'Şifre hatalı'
-      } else if (errorCode === 'auth/invalid-email') {
-        errorMessage = t('invalidEmail') || 'Geçersiz email adresi'
-      } else if (errorCode === 'auth/weak-password') {
-        errorMessage = t('weakPassword') || 'Şifre en az 6 karakter olmalı'
-      } else if (errorCode === 'auth/too-many-requests') {
-        errorMessage = t('tooManyRequests') || 'Çok fazla deneme. Lütfen daha sonra tekrar deneyin'
-      } else if (errorMessage.includes('400') || errorMessage.includes('Bad Request')) {
-        errorMessage = t('badRequest') || 'Geçersiz istek. Lütfen email ve şifrenizi kontrol edin'
-        console.error('❌ Firebase 400 Bad Request - Full error:', result)
-      }
-
+      // Firebase auth.js'den gelen Türkçe hata mesajını direkt kullan
+      const errorMessage = result.error || t('loginErrorOccurred') || 'Giriş yapılırken bir hata oluştu.'
       setError(errorMessage)
 
       if (failedAttempts >= 2 && !showCaptcha) {
@@ -381,9 +362,11 @@ const Login = () => {
     setError('')
     const result = await loginWithGoogleAuth()
     if (!result.success) {
-      if (result.error && (result.error.includes(t('popupClosedByUser')) || result.error.includes('Login cancelled'))) {
+      // Popup kullanıcı tarafından kapatıldıysa hata gösterme (normal davranış)
+      if (result.cancelled || result.code === 'auth/popup-closed-by-user') {
         return
       }
+      // Firebase auth.js'den gelen Türkçe hata mesajını göster
       setError(result.error || t('googleLoginError') || 'Google ile giriş yapılırken bir hata oluştu.')
     } else {
       // Google girişi başarılı - MongoDB'den kullanıcı ayarlarını yükle

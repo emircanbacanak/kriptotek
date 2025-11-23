@@ -18,17 +18,49 @@ export const loginWithEmailPassword = async (email, password) => {
   try {
     // Email ve password validasyonu
     if (!email || !email.trim()) {
-      return { success: false, error: 'Email is required', code: 'auth/invalid-email' }
+      return { success: false, error: 'E-posta adresi gereklidir', code: 'auth/invalid-email' }
     }
     if (!password || password.length < 6) {
-      return { success: false, error: 'Password must be at least 6 characters', code: 'auth/weak-password' }
+      return { success: false, error: 'Şifre en az 6 karakter olmalıdır', code: 'auth/weak-password' }
     }
     
     const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password)
     return { success: true, user: userCredential.user }
   } catch (error) {
     console.error('❌ Firebase login error:', error.code, error.message)
-    return { success: false, error: error.message, code: error.code }
+    
+    // Hata kodlarına göre kullanıcı dostu Türkçe mesajlar
+    let errorMessage = error.message
+    const errorCode = error.code
+    
+    switch (errorCode) {
+      case 'auth/user-not-found':
+        errorMessage = 'Bu e-posta adresine kayıtlı kullanıcı bulunamadı. Lütfen e-posta adresinizi kontrol edin.'
+        break
+      case 'auth/wrong-password':
+        errorMessage = 'Hatalı şifre. Lütfen şifrenizi kontrol edin.'
+        break
+      case 'auth/invalid-credential':
+        errorMessage = 'E-posta veya şifre hatalı. Lütfen tekrar deneyin.'
+        break
+      case 'auth/invalid-email':
+        errorMessage = 'Geçersiz e-posta adresi. Lütfen doğru formatta bir e-posta girin.'
+        break
+      case 'auth/user-disabled':
+        errorMessage = 'Bu hesap devre dışı bırakılmış. Lütfen destek ile iletişime geçin.'
+        break
+      case 'auth/too-many-requests':
+        errorMessage = 'Çok fazla başarısız giriş denemesi. Lütfen bir süre sonra tekrar deneyin.'
+        break
+      case 'auth/network-request-failed':
+        errorMessage = 'Ağ hatası. İnternet bağlantınızı kontrol edip tekrar deneyin.'
+        break
+      default:
+        // Bilinmeyen hatalar için orijinal mesajı kullan
+        errorMessage = error.message
+    }
+    
+    return { success: false, error: errorMessage, code: errorCode }
   }
 }
 
@@ -37,7 +69,32 @@ export const loginWithGoogleAuth = async () => {
     const result = await signInWithPopup(auth, googleProvider)
     return { success: true, user: result.user }
   } catch (error) {
-    return { success: false, error: error.message }
+    // Hata kodlarına göre kullanıcı dostu Türkçe mesajlar
+    let errorMessage = error.message
+    const errorCode = error.code
+    
+    switch (errorCode) {
+      case 'auth/popup-closed-by-user':
+        // Popup kullanıcı tarafından kapatıldıysa sessizce dön (normal davranış)
+        return { success: false, error: '', code: errorCode, cancelled: true }
+      case 'auth/popup-blocked':
+        errorMessage = 'Popup penceresi engellenmiş. Lütfen popup engelleyicisini kapatıp tekrar deneyin.'
+        break
+      case 'auth/cancelled-popup-request':
+        errorMessage = 'Popup isteği iptal edildi. Lütfen tekrar deneyin.'
+        break
+      case 'auth/account-exists-with-different-credential':
+        errorMessage = 'Bu e-posta adresi farklı bir giriş yöntemi ile kayıtlı. Lütfen e-posta/şifre ile giriş yapmayı deneyin.'
+        break
+      case 'auth/network-request-failed':
+        errorMessage = 'Ağ hatası. İnternet bağlantınızı kontrol edip tekrar deneyin.'
+        break
+      default:
+        // Bilinmeyen hatalar için orijinal mesajı kullan
+        errorMessage = error.message
+    }
+    
+    return { success: false, error: errorMessage, code: errorCode }
   }
 }
 
