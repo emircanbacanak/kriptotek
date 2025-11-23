@@ -94,7 +94,12 @@ class GlobalDataManager {
         const { coins, topMovers, lastCryptoUpdate } = JSON.parse(cryptoCache)
         if (coins && Array.isArray(coins) && coins.length > 0) {
           this.coins = coins
-          this.topMovers = topMovers || { topGainers: [], topLosers: [] }
+          // topMovers yoksa veya boşsa hemen hesapla (MongoDB'den bekleme)
+          if (!topMovers || !topMovers.topGainers || topMovers.topGainers.length === 0 || !topMovers.topLosers || topMovers.topLosers.length === 0) {
+            this.topMovers = this.calculateTopMovers(coins)
+          } else {
+            this.topMovers = topMovers
+          }
           this.lastCryptoUpdate = lastCryptoUpdate ? new Date(lastCryptoUpdate) : null
         }
       }
@@ -192,7 +197,7 @@ class GlobalDataManager {
         try {
           const res = await fetch(`${MONGO_API_URL}/cache/crypto_list`, {
             headers: { 'Accept': 'application/json' },
-            signal: AbortSignal.timeout(5000) // 5 saniye timeout
+            signal: AbortSignal.timeout(8000) // 8 saniye timeout (daha uzun)
           })
           if (res.ok) {
             const result = await res.json()
@@ -200,16 +205,21 @@ class GlobalDataManager {
               const coins = result.data.coins || result.data.data?.coins || []
               if (Array.isArray(coins) && coins.length > 0) {
                 this.coins = coins.length > 500 ? coins.slice(0, 500) : coins
-                this.topMovers = this.calculateTopMovers(this.coins)
+                this.topMovers = this.calculateTopMovers(this.coins) // ANINDA hesapla
                 this.lastCryptoUpdate = new Date()
-                this.saveToLocalStorage()
-                this.notifySubscribers() // ANINDA bildir
+                this.saveToLocalStorage() // ANINDA kaydet
+                this.notifySubscribers() // ANINDA bildir (topMovers ile birlikte)
               }
             }
           }
         } catch (error) {
           // Sessizce devam et
         }
+      } else if (!this.topMovers || !this.topMovers.topGainers || this.topMovers.topGainers.length === 0 || !this.topMovers.topLosers || this.topMovers.topLosers.length === 0) {
+        // Coins var ama topMovers eksikse hemen hesapla (MongoDB'den bekleme yok)
+        this.topMovers = this.calculateTopMovers(this.coins)
+        this.saveToLocalStorage() // Hesaplanmış topMovers'ı kaydet
+        this.notifySubscribers() // ANINDA bildir
       }
       
       // 2. Market Overview (dominance) - İKİNCİ ÖNCELİK
@@ -217,7 +227,7 @@ class GlobalDataManager {
         try {
           const res = await fetch(`${MONGO_API_URL}/api/cache/dominance_data`, {
             headers: { 'Accept': 'application/json' },
-            signal: AbortSignal.timeout(5000)
+            signal: AbortSignal.timeout(8000) // 8 saniye timeout (daha uzun)
           })
           if (res.ok) {
             const result = await res.json()
