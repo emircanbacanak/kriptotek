@@ -5,11 +5,33 @@
 export const formatCurrency = (amount, currency = 'USD') => {
   if (amount === null || amount === undefined || isNaN(amount)) return 'N/A'
   
+  // Fiyata göre ondalık basamak sayısını belirle
+  let minFractionDigits = 2
+  let maxFractionDigits = 2
+  
+  if (amount >= 1000) {
+    // 1000'den büyük fiyatlar için 2 ondalık basamak
+    minFractionDigits = 2
+    maxFractionDigits = 2
+  } else if (amount >= 1) {
+    // 1-1000 arası için 2-4 ondalık basamak
+    minFractionDigits = 2
+    maxFractionDigits = 4
+  } else if (amount >= 0.01) {
+    // 0.01-1 arası için 4-6 ondalık basamak
+    minFractionDigits = 4
+    maxFractionDigits = 6
+  } else {
+    // 0.01'den küçük için 6-8 ondalık basamak
+    minFractionDigits = 6
+    maxFractionDigits = 8
+  }
+  
   const formatter = new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 8
+    minimumFractionDigits: minFractionDigits,
+    maximumFractionDigits: maxFractionDigits
   })
   
   return formatter.format(amount)

@@ -1229,33 +1229,78 @@ async function fetchCryptoList() {
 }
 
 /**
- * CoinGecko API'den OHLC verisi çek
+ * CoinId'ye göre benzersiz proxy index'i hesapla (hash fonksiyonu)
+ */
+function getProxyIndexForCoin(coinId) {
+  // Basit bir hash fonksiyonu: coinId'yi string'e çevirip karakterlerini topla
+  let hash = 0
+  const coinIdStr = String(coinId)
+  for (let i = 0; i < coinIdStr.length; i++) {
+    const char = coinIdStr.charCodeAt(i)
+    hash = ((hash << 5) - hash) + char
+    hash = hash & hash // 32-bit integer'a dönüştür
+  }
+  // Mutlak değer al ve proxy listesi uzunluğuna göre mod al
+  return Math.abs(hash) % FREE_PROXIES.length
+}
+
+/**
+ * CoinGecko API'den OHLC verisi çek (her coin için benzersiz proxy ile, retry mekanizması ile)
  */
 async function fetchOHLCData(coinId, days = 1) {
   try {
-    const { fetch } = await import('undici')
+    const { fetch, ProxyAgent } = await import('undici')
     
-    const response = await fetch(
-      `${COINGECKO_API}/coins/${coinId}/ohlc?vs_currency=usd&days=${days}`,
-      {
-        headers: {
-          'Accept': 'application/json'
-        },
-        signal: AbortSignal.timeout(30000) // 30 saniye timeout
+    const url = `${COINGECKO_API}/coins/${coinId}/ohlc?vs_currency=usd&days=${days}`
+    const maxProxyRetries = Math.min(15, FREE_PROXIES.length) // En fazla 15 farklı proxy dene
+    
+    // CoinId'ye göre benzersiz başlangıç proxy index'i
+    const startProxyIndex = getProxyIndexForCoin(coinId)
+    
+    // Önce proxy'lerle dene (her coin için farklı proxy'ler)
+    for (let attempt = 0; attempt < maxProxyRetries && attempt < FREE_PROXIES.length; attempt++) {
+      const proxyIndex = (startProxyIndex + attempt) % FREE_PROXIES.length
+      const selectedProxy = FREE_PROXIES[proxyIndex]
+      
+      try {
+        const agent = new ProxyAgent(selectedProxy)
+        const response = await fetch(url, {
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          },
+          dispatcher: agent,
+          signal: AbortSignal.timeout(30000) // 30 saniye timeout
+        })
+        
+        if (response && response.ok) {
+          const data = await response.json()
+          if (Array.isArray(data)) {
+            console.log(`✅ OHLC data fetched for ${coinId} via proxy ${selectedProxy} (attempt ${attempt + 1})`)
+            return data
+          }
+        }
+        
+        // 429 hatası alındıysa bir sonraki proxy'yi dene
+        if (response && response.status === 429) {
+          console.warn(`⚠️ 429 error for ${coinId} via proxy ${selectedProxy}, trying next proxy...`)
+          continue
+        }
+        
+        // Diğer hatalar için de bir sonraki proxy'yi dene
+        if (response && !response.ok) {
+          console.warn(`⚠️ HTTP ${response.status} for ${coinId} via proxy ${selectedProxy}, trying next proxy...`)
+          continue
+        }
+      } catch (proxyError) {
+        // Proxy hatası, bir sonraki proxy'yi dene
+        console.warn(`⚠️ Proxy ${selectedProxy} failed for ${coinId} (attempt ${attempt + 1}): ${proxyError.message}`)
+        continue
       }
-    )
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
-
-    const data = await response.json()
     
-    if (!Array.isArray(data)) {
-      throw new Error('Invalid OHLC data format')
-    }
-
-    return data
+    // Tüm proxy'ler başarısız olduysa hata fırlat (normal fetch kullanma, zaten 429 veriyor)
+    throw new Error(`All ${maxProxyRetries} proxies failed for ${coinId}. Cannot fetch OHLC data.`)
   } catch (error) {
     throw new Error(`CoinGecko OHLC error: ${error.message}`)
   }

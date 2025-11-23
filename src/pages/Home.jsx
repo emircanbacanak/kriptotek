@@ -491,14 +491,23 @@ const Home = () => {
             <table className="w-full min-w-0 table-auto">
               <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
                 <tr>
-                  <th className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">#</th>
-                  <th className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('crypto')}</th>
-                  <th className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-right text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('priceAndChange')}</th>
-                  <th className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-right text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell">{t('marketCap')}</th>
-                  <th className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-right text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden lg:table-cell">{t('circulatingSupply')}</th>
-                  <th className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-right text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell">{t('volume24h')}</th>
-                  <th className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-center text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-10 sm:w-12">⭐</th>
-                  <th className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-center text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-10 sm:w-12">▼</th>
+                  <th className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider table-col-rank">#</th>
+                  <th className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider crypto-name-column">{t('crypto')}</th>
+                  <th className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-right text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider table-col-price">{t('priceAndChange')}</th>
+                  <th className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-right text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell table-col-marketcap">
+                    <span className="market-cap-full">{t('marketCap')}</span>
+                    <span className="market-cap-short">Piyasa D.</span>
+                  </th>
+                  <th className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-right text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden lg:table-cell table-col-supply">
+                    <span className="supply-full">{t('circulatingSupply')}</span>
+                    <span className="supply-short">Arz</span>
+                  </th>
+                  <th className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-right text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell table-col-volume">
+                    <span className="volume-full">{t('volume24h')}</span>
+                    <span className="volume-short">24S/Hacim</span>
+                  </th>
+                  <th className="px-1 sm:px-2 py-1.5 sm:py-2 md:py-3 text-center text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-8 sm:w-10 table-col-favorite">⭐</th>
+                  <th className="px-1 sm:px-2 py-1.5 sm:py-2 md:py-3 text-center text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-8 sm:w-10 table-col-expand">▼</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -510,10 +519,10 @@ const Home = () => {
                   return (
                     <React.Fragment key={coin.id}>
                       <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                        <td className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-[10px] sm:text-xs md:text-sm text-gray-500 dark:text-gray-400">
+                        <td className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-[10px] sm:text-xs md:text-sm text-gray-500 dark:text-gray-400 table-col-rank">
                           {coin.market_cap_rank || index + 1}
                         </td>
-                        <td className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3">
+                        <td className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 crypto-name-column">
                           <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3">
                             <img 
                               src={coin.image}
@@ -539,16 +548,16 @@ const Home = () => {
                               loading="lazy"
                             />
                             <div className="min-w-0">
-                              {coin.name.split(' ').length <= 3 ? (
+                              {coin.name.split(' ').length <= 2 ? (
                                 <div className="text-xs md:text-sm font-semibold text-gray-900 dark:text-white truncate">{coin.name}</div>
                               ) : null}
-                              <div className={`text-[10px] md:text-xs ${coin.name.split(' ').length > 3 ? 'font-semibold text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'} truncate`}>
+                              <div className={`text-[10px] md:text-xs ${coin.name.split(' ').length > 2 ? 'font-semibold text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'} truncate`}>
                                 {coin.symbol?.toUpperCase()}
                               </div>
                             </div>
                           </div>
                         </td>
-                        <td className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-right">
+                        <td className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-right table-col-price">
                           <div className="flex flex-col items-end gap-0.5 sm:gap-1">
                             <div className="text-[10px] sm:text-xs md:text-sm font-semibold text-gray-900 dark:text-white whitespace-nowrap">
                               {coin.current_price >= 1000 ? formatLargeCurrency(coin.current_price, currency) : formatCurrency(coin.current_price, currency)}
@@ -558,43 +567,45 @@ const Home = () => {
                             </div>
                           </div>
                         </td>
-                        <td className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-right text-[10px] sm:text-xs md:text-sm text-gray-900 dark:text-white whitespace-nowrap hidden md:table-cell">
+                        <td className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-right text-[10px] sm:text-xs md:text-sm text-gray-900 dark:text-white whitespace-nowrap hidden md:table-cell table-col-marketcap">
                           {formatLargeCurrency(coin.market_cap, currency)}
                         </td>
-                        <td className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-right text-[10px] sm:text-xs md:text-sm text-gray-900 dark:text-white whitespace-nowrap hidden lg:table-cell">
+                        <td className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-right text-[10px] sm:text-xs md:text-sm text-gray-900 dark:text-white whitespace-nowrap hidden lg:table-cell table-col-supply">
                           {formatLargeNumber(coin.circulating_supply)}
                         </td>
-                        <td className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-right text-[10px] sm:text-xs md:text-sm text-gray-900 dark:text-white whitespace-nowrap hidden md:table-cell">
+                        <td className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-right text-[10px] sm:text-xs md:text-sm text-gray-900 dark:text-white whitespace-nowrap hidden md:table-cell table-col-volume">
                           {formatLargeCurrency(coin.total_volume, currency)}
                         </td>
-                        <td className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-center">
+                        <td className="px-1 sm:px-2 py-1.5 sm:py-2 md:py-3 text-center table-col-favorite">
                           <button
                             onClick={() => handleToggleFavorite(coin.id)}
-                            className="p-0.5 sm:p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                            className="p-0.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
                             title={isFavorite ? t('removeFavorite') : t('addFavorite')}
                           >
                             <Star 
-                              className={`w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 ${isFavorite ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} 
+                              className={`w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 ${isFavorite ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} 
                             />
                           </button>
                         </td>
-                        <td className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-center">
+                        <td className="px-1 sm:px-2 py-1.5 sm:py-2 md:py-3 text-center table-col-expand">
                           <button
                             onClick={() => {
-                              const newExpanded = new Set(expandedRows)
                               if (isExpanded) {
+                                // Grafik zaten açıksa kapat
+                                const newExpanded = new Set(expandedRows)
                                 newExpanded.delete(coin.id)
+                                setExpandedRows(newExpanded)
                               } else {
-                                newExpanded.add(coin.id)
+                                // Yeni grafik açılırken diğer açık grafikleri kapat
+                                setExpandedRows(new Set([coin.id]))
                               }
-                              setExpandedRows(newExpanded)
                             }}
-                            className="p-0.5 sm:p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                            className="p-0.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
                           >
                             {isExpanded ? (
-                              <ChevronUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-400" />
+                              <ChevronUp className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 text-gray-400" />
                             ) : (
-                              <ChevronDown className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-400" />
+                              <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 text-gray-400" />
                             )}
                           </button>
                         </td>
@@ -602,7 +613,7 @@ const Home = () => {
                       {isExpanded && (
                         <tr style={{ backgroundColor: '#1a1a1a' }}>
                           <td colSpan={8} className="px-4 py-4" style={{ backgroundColor: '#1a1a1a' }}>
-                            <div className="w-full h-[200px]" style={{ backgroundColor: '#1a1a1a' }}>
+                            <div className="w-full h-[300px]" style={{ backgroundColor: '#1a1a1a' }}>
                               <MiniChart 
                                 coinId={coin.id} 
                                 coinSymbol={coin.symbol} 
@@ -697,13 +708,15 @@ const Home = () => {
                             </button>
                             <button
                               onClick={() => {
-                                const newExpanded = new Set(expandedRows)
                                 if (isExpanded) {
+                                  // Grafik zaten açıksa kapat
+                                  const newExpanded = new Set(expandedRows)
                                   newExpanded.delete(coin.id)
+                                  setExpandedRows(newExpanded)
                                 } else {
-                                  newExpanded.add(coin.id)
+                                  // Yeni grafik açılırken diğer açık grafikleri kapat
+                                  setExpandedRows(new Set([coin.id]))
                                 }
-                                setExpandedRows(newExpanded)
                               }}
                               className="p-1 sm:p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                             >
@@ -736,7 +749,7 @@ const Home = () => {
                       {/* Expanded Details - Chart Only */}
                       {isExpanded && (
                         <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
-                          <div className="w-full h-[200px] rounded-lg overflow-hidden" style={{ backgroundColor: '#1a1a1a' }}>
+                          <div className="w-full h-[300px] rounded-lg overflow-hidden" style={{ backgroundColor: '#1a1a1a' }}>
                             <MiniChart 
                               coinId={coin.id} 
                               coinSymbol={coin.symbol} 

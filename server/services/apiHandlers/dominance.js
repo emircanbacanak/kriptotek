@@ -1,9 +1,3 @@
-/**
- * Dominance Data Handler
- * CoinMarketCap API'den dominance verilerini çeker
- * 429 hatası durumunda proxy ve alternatif yöntemlerle retry yapar
- */
-
 const COINMARKETCAP_API = 'https://pro-api.coinmarketcap.com/v1'
 const COINGECKO_API = 'https://api.coingecko.com/api/v3'
 
@@ -155,13 +149,13 @@ async function fetchDominanceData(apiKey, maxRetries = 3) {
 
   // Normal fetch (retry mekanizması ile)
   async function fetchWithRetry(url, retryCount = 0) {
-    try {
+  try {
       const response = await fetch(url, {
-        headers: {
-          'X-CMC_PRO_API_KEY': apiKey,
-          'Accept': 'application/json'
-        }
-      })
+      headers: {
+        'X-CMC_PRO_API_KEY': apiKey,
+        'Accept': 'application/json'
+      }
+    })
 
       // Rate limit hatası (429) - özel handling
       if (response.status === 429) {
@@ -171,7 +165,7 @@ async function fetchDominanceData(apiKey, maxRetries = 3) {
 
       if (!response.ok) {
         throw new Error(`CoinMarketCap API error: ${response.status}`)
-      }
+    }
 
       return response
     } catch (error) {

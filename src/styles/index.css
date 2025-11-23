@@ -488,6 +488,144 @@ body::-webkit-scrollbar {
   background: linear-gradient(180deg, rgba(196, 181, 253, 1) 0%, rgba(167, 139, 250, 1) 100%);
 }
 
+/* Responsive table headers - 1285px altında kısa versiyonlar */
+.market-cap-full,
+.supply-full,
+.volume-full {
+  display: inline;
+}
+
+.market-cap-short,
+.supply-short,
+.volume-short {
+  display: none;
+}
+
+/* 1285px üstü: Normal genişlikler - CSS kurallarını devre dışı bırak */
+@media (min-width: 1286px) {
+  .table-col-rank {
+    width: 3rem !important; /* w-12 = 3rem */
+    min-width: 3rem !important;
+    max-width: 3rem !important;
+  }
+  
+  .crypto-name-column {
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    flex: 1 1 0% !important;
+  }
+  
+  .table-col-price {
+    width: 9rem !important; /* w-36 = 9rem */
+    min-width: 9rem !important;
+    max-width: 9rem !important;
+  }
+  
+  .table-col-marketcap {
+    width: 7rem !important; /* w-28 = 7rem */
+    min-width: 7rem !important;
+    max-width: 7rem !important;
+  }
+  
+  .table-col-supply {
+    width: 7rem !important; /* w-28 = 7rem */
+    min-width: 7rem !important;
+    max-width: 7rem !important;
+  }
+  
+  .table-col-volume {
+    width: 7rem !important; /* w-28 = 7rem */
+    min-width: 7rem !important;
+    max-width: 7rem !important;
+  }
+  
+  .table-col-ai {
+    width: 7rem !important; /* w-28 = 7rem */
+    min-width: 7rem !important;
+    max-width: 7rem !important;
+  }
+  
+  .table-col-delete {
+    width: 4rem !important; /* w-16 = 4rem */
+    min-width: 4rem !important;
+    max-width: 4rem !important;
+  }
+}
+
+/* 1025px - 1285px arası: Dinamik tablo genişlikleri */
+@media (min-width: 1025px) and (max-width: 1285px) {
+  .market-cap-full,
+  .supply-full,
+  .volume-full {
+    display: none;
+  }
+  
+  .market-cap-short,
+  .supply-short,
+  .volume-short {
+    display: inline;
+  }
+  
+  /* Tüm sütunların genişliklerini orantılı olarak azalt */
+  .table-col-rank {
+    width: 3% !important;
+    min-width: 30px;
+    max-width: 40px;
+  }
+  
+  .crypto-name-column {
+    width: 15% !important;
+    min-width: 100px;
+    max-width: 130px;
+  }
+  
+  .table-col-price {
+    width: 12% !important;
+    min-width: 100px;
+    max-width: 120px;
+  }
+  
+  .table-col-marketcap {
+    width: 14% !important;
+    min-width: 110px;
+    max-width: 140px;
+  }
+  
+  .table-col-supply {
+    width: 11% !important;
+    min-width: 90px;
+    max-width: 110px;
+  }
+  
+  .table-col-volume {
+    width: 11% !important;
+    min-width: 90px;
+    max-width: 110px;
+  }
+  
+  .table-col-ai {
+    width: 11% !important;
+    min-width: 100px;
+    max-width: 120px;
+  }
+  
+  .table-col-delete {
+    width: 3% !important;
+    min-width: 35px;
+    max-width: 45px;
+  }
+  
+  .table-col-favorite,
+  .table-col-expand {
+    width: 3% !important;
+    min-width: 28px;
+    max-width: 35px;
+    padding-left: 0.25rem !important;
+    padding-right: 0.25rem !important;
+  }
+}
+
 /* Dark mode support - class-based */
 .dark body {
   background-color: #020617;

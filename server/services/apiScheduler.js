@@ -323,14 +323,58 @@ async function updateTrendingModelScheduled() {
 }
 
 /**
- * Trending model tahminleri için sonraki güncellemeyi planla (30 dakika)
+ * Trending model tahminleri için sonraki güncellemeyi planla (sabit saatler: 00:00, 00:30, 01:00, 01:30, ...)
  */
 function scheduleTrendingModelNext() {
   if (trendingModelSchedulerInterval) {
     clearTimeout(trendingModelSchedulerInterval)
   }
 
-  const delay = getNextUpdateTime(30) // 30 dakika
+  const now = new Date()
+  const currentMinutes = now.getMinutes()
+  const currentSeconds = now.getSeconds()
+  
+  // Bir sonraki sabit saati hesapla (00:00, 00:30, 01:00, 01:30, ...)
+  const nextUpdate = new Date(now)
+  
+  if (currentMinutes < 30) {
+    // 00:00-00:29 arasındaysa, 00:30'a git
+    nextUpdate.setMinutes(30)
+    nextUpdate.setSeconds(0)
+    nextUpdate.setMilliseconds(0)
+  } else {
+    // 00:30-00:59 arasındaysa, bir sonraki saatin 00:00'ına git
+    nextUpdate.setHours(nextUpdate.getHours() + 1)
+    nextUpdate.setMinutes(0)
+    nextUpdate.setSeconds(0)
+    nextUpdate.setMilliseconds(0)
+  }
+  
+  // Eğer şu anda tam 00:00 veya 00:30 ise ve henüz 10 saniye geçmediyse, hemen çalıştır
+  // Aksi halde bir sonraki sabit saate kadar bekle
+  let delay = nextUpdate.getTime() - now.getTime()
+  
+  // Delay çok kısa ise (0-10 saniye arası) ve henüz geçmediyse hemen çalıştır
+  if (delay > 0 && delay < 10000 && (currentMinutes === 0 || currentMinutes === 30) && currentSeconds < 10) {
+    delay = 1000 // 1 saniye sonra çalıştır
+  }
+  
+  // Delay negatif veya çok küçükse, bir sonraki 30 dakikalık slot'a geç
+  if (delay < 1000) {
+    if (currentMinutes < 30) {
+      nextUpdate.setMinutes(30)
+    } else {
+      nextUpdate.setHours(nextUpdate.getHours() + 1)
+      nextUpdate.setMinutes(0)
+    }
+    nextUpdate.setSeconds(0)
+    nextUpdate.setMilliseconds(0)
+    delay = nextUpdate.getTime() - now.getTime()
+  }
+  
+  const nextTimeStr = nextUpdate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+  console.log(`⏰ Trending Model: Bir sonraki güncelleme ${nextTimeStr} (${Math.round(delay / 1000 / 60)} dakika sonra)`)
+  
   trendingModelSchedulerInterval = setTimeout(() => {
     updateTrendingModelScheduled()
   }, delay)

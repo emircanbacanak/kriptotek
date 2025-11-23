@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { loadUserFavorites, subscribeToFavorites, removeFavorite, clearAllFavorites } from '../services/userFavorites'
 import useCryptoData from '../hooks/useCryptoData'
-import { convertCurrency, formatCurrency, formatLargeNumber } from '../utils/currencyConverter'
+import { convertCurrency, formatCurrency, formatLargeNumber, formatLargeCurrency } from '../utils/currencyConverter'
 import { Star, TrendingUp, TrendingDown, Trash2 } from 'lucide-react'
 import { updatePageSEO } from '../utils/seoMetaTags'
 
@@ -230,13 +230,19 @@ const Favorites = () => {
   }
   
   const formatPrice = useCallback((price) => {
+    if (!price || isNaN(price)) return 'N/A'
     const convertedPrice = convertCurrency(price, 'USD', currency)
+    // Home.jsx'teki gibi: 1000'den büyükse formatLargeCurrency, değilse formatCurrency kullan
+    if (convertedPrice >= 1000) {
+      return formatLargeCurrency(convertedPrice, currency)
+    }
     return formatCurrency(convertedPrice, currency)
   }, [currency])
 
   const formatBigNumber = useCallback((num) => {
+    if (!num || isNaN(num)) return 'N/A'
     const convertedNum = convertCurrency(num, 'USD', currency)
-    return formatLargeNumber(convertedNum, currency)
+    return formatLargeCurrency(convertedNum, currency)
   }, [currency])
 
   // Get gradient classes based on theme
@@ -357,16 +363,25 @@ const Favorites = () => {
         ) : (
           <div className="lg:border lg:border-gray-200 lg:dark:border-gray-700 lg:rounded-lg lg:overflow-hidden">
             {isDesktop && (
-              <div className="bg-gray-50 dark:bg-gray-800 px-6 py-3">
+              <div className="bg-gray-50 dark:bg-gray-800 px-3 py-3">
                 <div className="flex items-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  <div className="w-12 text-center">#</div>
-                  <div className="flex-1 min-w-0">{t('crypto')}</div>
-                  <div className="w-36 text-right">{t('priceAndChange')}</div>
-                  <div className="w-28 text-right">{t('aiPrediction')}</div>
-                  <div className="w-28 text-right">{t('marketCapShort')}</div>
-                  <div className="w-28 text-right">{t('circulatingSupplyShort')}</div>
-                  <div className="w-28 text-right">{t('volume24hShort')}</div>
-                  <div className="w-16 text-center"><Trash2 className="w-4 h-4 mx-auto" /></div>
+                  <div className="w-12 text-center table-col-rank">#</div>
+                  <div className="flex-1 min-w-0 crypto-name-column">{t('crypto')}</div>
+                  <div className="w-36 text-right table-col-price">{t('priceAndChange')}</div>
+                  <div className="w-28 text-right table-col-ai">{t('aiPrediction')}</div>
+                  <div className="w-28 text-right table-col-marketcap">
+                    <span className="market-cap-full">{t('marketCap')}</span>
+                    <span className="market-cap-short">{t('marketCapShort')}</span>
+                  </div>
+                  <div className="w-28 text-right table-col-supply">
+                    <span className="supply-full">{t('circulatingSupply')}</span>
+                    <span className="supply-short">{t('circulatingSupplyShort')}</span>
+                  </div>
+                  <div className="w-28 text-right table-col-volume">
+                    <span className="volume-full">{t('volume24h')}</span>
+                    <span className="volume-short">{t('volume24hShort')}</span>
+                  </div>
+                  <div className="w-16 text-center table-col-delete"><Trash2 className="w-4 h-4 mx-auto" /></div>
                 </div>
               </div>
             )}
@@ -374,32 +389,32 @@ const Favorites = () => {
             <div className="space-y-3 lg:space-y-0 lg:divide-y lg:divide-gray-200 lg:dark:divide-gray-700">
               {favoriteCoins.map((coin) => (
                 isDesktop ? (
-                  <div key={coin.id} className="flex items-center px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-800">
-                    <div className="w-12 text-sm text-gray-900 dark:text-white text-center">{coin.market_cap_rank}</div>
-                    <div className="flex items-center flex-1 min-w-0">
+                  <div key={coin.id} className="flex items-center px-3 py-4 hover:bg-gray-50 dark:hover:bg-gray-800">
+                    <div className="w-12 text-sm text-gray-900 dark:text-white text-center table-col-rank">{coin.market_cap_rank}</div>
+                    <div className="flex items-center flex-1 min-w-0 crypto-name-column">
                       <img className="h-8 w-8 rounded-full" src={coin.image} alt={coin.name} referrerPolicy="no-referrer" />
                       <div className="ml-3">
                         <div className="text-sm font-medium text-gray-900 dark:text-white">{coin.name}</div>
                         <div className="text-sm text-gray-500 dark:text-gray-400">{coin.symbol?.toUpperCase()}</div>
                       </div>
                     </div>
-                    <div className="w-36 text-right">
+                    <div className="w-36 text-right table-col-price">
                       <div className="text-sm text-gray-900 dark:text-white">{formatPrice(coin.current_price)}</div>
                       <div className={`flex items-center justify-end text-xs ${(coin.price_change_percentage_24h || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {(coin.price_change_percentage_24h || 0) >= 0 ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}
                         {(coin.price_change_percentage_24h || 0).toFixed(2)}%
                       </div>
                     </div>
-                    <div className="w-28 text-right">
+                    <div className="w-28 text-right table-col-ai">
                       <div className="text-sm text-gray-900 dark:text-white">{formatPrice(coin.estimated_price)}</div>
                       <div className={`text-xs font-bold ${(coin.ai_prediction || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                         {(coin.ai_prediction || 0) >= 0 ? '+' : ''}{coin.ai_prediction}%
                       </div>
                     </div>
-                    <div className="w-28 text-sm text-gray-900 dark:text-white text-right">{formatBigNumber(coin.market_cap)}</div>
-                    <div className="w-28 text-sm text-gray-900 dark:text-white text-right">{coin.circulating_supply ? formatLargeNumber(coin.circulating_supply, '', true) : t('notAvailable')}</div>
-                    <div className="w-28 text-sm text-gray-900 dark:text-white text-right">{formatBigNumber(coin.total_volume)}</div>
-                    <div className="w-16 text-center">
+                    <div className="w-28 text-sm text-gray-900 dark:text-white text-right table-col-marketcap">{formatBigNumber(coin.market_cap)}</div>
+                    <div className="w-28 text-sm text-gray-900 dark:text-white text-right table-col-supply">{coin.circulating_supply ? formatLargeNumber(coin.circulating_supply, '', true) : t('notAvailable')}</div>
+                    <div className="w-28 text-sm text-gray-900 dark:text-white text-right table-col-volume">{formatBigNumber(coin.total_volume)}</div>
+                    <div className="w-16 text-center table-col-delete">
                       <button onClick={() => handleRemoveFavorite(coin.id)} className="text-red-500 hover:text-red-600" title={t('removeFavorite')}>
                         <Trash2 className="w-5 h-5" />
                       </button>

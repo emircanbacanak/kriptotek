@@ -279,6 +279,9 @@ const Trending = () => {
   const filteredAndSortedCoins = useMemo(() => {
     let filtered = processedCoins
 
+    // Trend skoru 0 olan coin'leri filtrele
+    filtered = filtered.filter(coin => (coin.trend_score || 0) > 0)
+
     // Arama filtresi
     if (searchTerm) {
       const term = searchTerm.toLowerCase()
@@ -566,7 +569,28 @@ const Trending = () => {
                     {/* Trend Score */}
                     <div className="mb-1.5 sm:mb-3 lg:mb-4">
                       <div className="flex justify-between items-center text-[10px] sm:text-xs lg:text-sm mb-0.5 sm:mb-1.5 lg:mb-2">
-                        <span className="text-[9px] sm:text-xs text-gray-600 dark:text-gray-400">{t('trendScore')}</span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[9px] sm:text-xs text-gray-600 dark:text-gray-400">{t('trendScore')}</span>
+                          <div className="relative">
+                            <button
+                              type="button"
+                              className="w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 flex items-center justify-center text-[8px] sm:text-[10px] font-bold hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors"
+                              onMouseEnter={(e) => {
+                                const tooltip = e.currentTarget.nextElementSibling
+                                if (tooltip) tooltip.style.display = 'block'
+                              }}
+                              onMouseLeave={(e) => {
+                                const tooltip = e.currentTarget.nextElementSibling
+                                if (tooltip) tooltip.style.display = 'none'
+                              }}
+                            >
+                              ?
+                            </button>
+                            <div className="hidden absolute left-0 top-full mt-1 z-50 w-48 sm:w-56 p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl text-[10px] sm:text-xs text-gray-700 dark:text-gray-300 whitespace-pre-line leading-relaxed">
+                              {t('trendScoreDescription')}
+                            </div>
+                          </div>
+                        </div>
                         <div className="flex items-center space-x-2">
                           <span className="text-sm sm:text-base">{coin.trend_emoji}</span>
                           <span className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white">
@@ -607,6 +631,25 @@ const Trending = () => {
                           <span className="text-xs sm:text-sm font-semibold text-purple-700 dark:text-purple-300">
                             {getPositionBadge(coin.position_type)}
                           </span>
+                          <div className="relative">
+                            <button
+                              type="button"
+                              className="w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-purple-200 dark:bg-purple-700 text-purple-700 dark:text-purple-300 flex items-center justify-center text-[8px] sm:text-[10px] font-bold hover:bg-purple-300 dark:hover:bg-purple-600 transition-colors"
+                              onMouseEnter={(e) => {
+                                const tooltip = e.currentTarget.nextElementSibling
+                                if (tooltip) tooltip.style.display = 'block'
+                              }}
+                              onMouseLeave={(e) => {
+                                const tooltip = e.currentTarget.nextElementSibling
+                                if (tooltip) tooltip.style.display = 'none'
+                              }}
+                            >
+                              ?
+                            </button>
+                            <div className="hidden absolute left-0 top-full mt-1 z-50 w-48 sm:w-56 p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl text-[10px] sm:text-xs text-gray-700 dark:text-gray-300 whitespace-pre-line leading-relaxed">
+                              {t('positionDescription')}
+                            </div>
+                          </div>
                         </div>
                         <div className="flex items-center space-x-1">
                           <span className="text-lg sm:text-xl">{coin.ai_emoji}</span>

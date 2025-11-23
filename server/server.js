@@ -138,7 +138,7 @@ app.use((req, res, next) => {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src 'self' https://fonts.gstatic.com; " +
     "img-src 'self' data: https: blob:; " +
-    "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.herokuapp.com wss://*.herokuapp.com ws://*.herokuapp.com http://localhost:3000 wss://localhost:3000 ws://localhost:3000; " +
+    "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.herokuapp.com wss://*.herokuapp.com ws://*.herokuapp.com http://localhost:3000 wss://localhost:3000 ws://localhost:3000 https://api.binance.com https://api.kucoin.com; " +
     "frame-src 'none'; " +
     "object-src 'none'; " +
     "base-uri 'self'; " +
@@ -266,6 +266,16 @@ let db = null
 let client = null
 let wss = null // WebSocket server
 
+// In-memory cache (hızlı erişim için)
+const memoryCache = {
+  crypto_list: null,
+  crypto_list_timestamp: null,
+  crypto_list_ttl: 5 * 60 * 1000, // 5 dakika TTL
+  dominance_data: null,
+  dominance_data_timestamp: null,
+  dominance_data_ttl: 5 * 60 * 1000
+}
+
 // MongoDB bağlantısı
 async function connectToMongoDB() {
   try {
@@ -280,6 +290,43 @@ async function connectToMongoDB() {
     console.log('✅ MongoDB bağlantısı başarılı!')
   } catch (error) {
     console.error('❌ MongoDB bağlantı hatası:', error.message)
+  }
+}
+
+// Memory cache'i MongoDB'den yükle (backend başlatıldığında)
+async function loadMemoryCache() {
+  if (!db) {
+    console.warn('⚠️ MongoDB bağlantısı yok, memory cache yüklenemedi')
+    return
+  }
+  
+  try {
+    const timeStr = new Date().toLocaleTimeString('tr-TR')
+    console.log(`📥 [${timeStr}] Memory cache yükleniyor...`)
+    const startTime = Date.now()
+    
+    const collection = db.collection('api_cache')
+    
+    // Crypto list
+    const cryptoDoc = await collection.findOne({ _id: 'crypto_list' })
+    if (cryptoDoc && cryptoDoc.data && Array.isArray(cryptoDoc.data) && cryptoDoc.data.length > 0) {
+      memoryCache.crypto_list = cryptoDoc.data
+      memoryCache.crypto_list_timestamp = cryptoDoc.updatedAt || cryptoDoc.lastUpdate || Date.now()
+      console.log(`✅ [${timeStr}] Memory cache'e ${cryptoDoc.data.length} coin yüklendi`)
+    }
+    
+    // Dominance data
+    const dominanceDoc = await collection.findOne({ _id: 'dominance_data' })
+    if (dominanceDoc && dominanceDoc.data) {
+      memoryCache.dominance_data = dominanceDoc.data
+      memoryCache.dominance_data_timestamp = dominanceDoc.updatedAt || dominanceDoc.lastUpdate || Date.now()
+      console.log(`✅ [${timeStr}] Memory cache'e dominance data yüklendi`)
+    }
+    
+    const duration = Date.now() - startTime
+    console.log(`⚡ [${timeStr}] Memory cache yükleme tamamlandı (${duration}ms)`)
+  } catch (error) {
+    console.error('❌ Memory cache yükleme hatası:', error.message)
   }
 }
 
@@ -929,23 +976,55 @@ app.get('/api/cache/dominance_data', async (req, res) => {
 })
 
 // Crypto List - GET (MongoDB'den çek) - /cache/crypto_list endpoint'i
+// In-memory cache ile optimize edilmiş (ilk istek MongoDB'den, sonraki istekler memory'den)
 app.get('/cache/crypto_list', async (req, res) => {
+  const startTime = Date.now()
+  const timeStr = new Date().toLocaleTimeString('tr-TR')
+  console.log(`📥 [${timeStr}] GET /cache/crypto_list isteği geldi`)
+  
   try {
+    // Önce memory cache'i kontrol et (çok hızlı - <1ms)
+    const now = Date.now()
+    if (memoryCache.crypto_list && memoryCache.crypto_list_timestamp && 
+        (now - memoryCache.crypto_list_timestamp) < memoryCache.crypto_list_ttl) {
+      const cacheDuration = Date.now() - startTime
+      console.log(`⚡ [${timeStr}] Memory cache'den döndürüldü (${cacheDuration}ms) - ${memoryCache.crypto_list.length} coin`)
+      return res.json({
+        success: true,
+        data: {
+          coins: memoryCache.crypto_list,
+          lastUpdate: memoryCache.crypto_list_timestamp
+        }
+      })
+    }
+    
     if (!db) {
+      console.error(`❌ [${timeStr}] MongoDB bağlantısı yok`)
       return res.status(503).json({ 
         success: false, 
         error: 'MongoDB bağlantısı yok' 
       })
     }
 
+    console.log(`🔍 [${timeStr}] MongoDB'den crypto_list verisi çekiliyor... (memory cache'de yok)`)
     const collection = db.collection('api_cache')
+    const findStartTime = Date.now()
     const cacheDoc = await collection.findOne({ _id: 'crypto_list' })
+    const findDuration = Date.now() - findStartTime
+    console.log(`📊 [${timeStr}] MongoDB findOne süresi: ${findDuration}ms`)
     
     if (cacheDoc && cacheDoc.data && Array.isArray(cacheDoc.data) && cacheDoc.data.length > 0) {
+      // Memory cache'e kaydet (sonraki istekler için)
+      memoryCache.crypto_list = cacheDoc.data
+      memoryCache.crypto_list_timestamp = cacheDoc.updatedAt || cacheDoc.lastUpdate || Date.now()
+      
       // Debug: MongoDB'den okunurken total_supply ve max_supply kontrolü
       const sampleCoin = cacheDoc.data[0];
       const coinsWithTotalSupply = cacheDoc.data.filter(c => c.total_supply !== null && c.total_supply !== undefined).length;
       const coinsWithMaxSupply = cacheDoc.data.filter(c => c.max_supply !== null && c.max_supply !== undefined).length;
+      const totalDuration = Date.now() - startTime
+      
+      console.log(`✅ [${timeStr}] ${cacheDoc.data.length} coin bulundu, ${coinsWithTotalSupply} coin'de total_supply var, toplam süre: ${totalDuration}ms (memory cache'e kaydedildi)`)
 
       return res.json({
         success: true,
@@ -955,13 +1034,16 @@ app.get('/cache/crypto_list', async (req, res) => {
         }
       })
     } else {
+      const totalDuration = Date.now() - startTime
+      console.warn(`⚠️ [${timeStr}] Crypto list verisi bulunamadı (cacheDoc: ${!!cacheDoc}), toplam süre: ${totalDuration}ms`)
       return res.status(404).json({ 
         success: false, 
         error: 'Crypto list verisi bulunamadı' 
       })
     }
   } catch (error) {
-    console.error('❌ GET /cache/crypto_list error:', error)
+    const totalDuration = Date.now() - startTime
+    console.error(`❌ [${timeStr}] GET /cache/crypto_list error (${totalDuration}ms):`, error.message || error)
     return res.status(500).json({
       success: false,
       error: error.message
@@ -1656,6 +1738,7 @@ app.post('/api/fear-greed/update', async (req, res) => {
 
 // ========== CRYPTO ENDPOINT ==========
 // GET /api/crypto/list - MongoDB'den kripto para listesi çek (cache)
+// In-memory cache ile optimize edilmiş
 app.get('/api/crypto/list', async (req, res) => {
   try {
     if (!db) {
@@ -1665,15 +1748,29 @@ app.get('/api/crypto/list', async (req, res) => {
       })
     }
 
+    // Önce memory cache'i kontrol et (çok hızlı - <1ms)
+    const cacheCheckNow = Date.now()
+    if (memoryCache.crypto_list && memoryCache.crypto_list_timestamp && 
+        (cacheCheckNow - memoryCache.crypto_list_timestamp) < memoryCache.crypto_list_ttl) {
+      return res.json({
+        success: true,
+        data: memoryCache.crypto_list,
+        apiStatuses: [
+          { name: 'Memory Cache', success: true }
+        ],
+        source: 'memory_cache'
+      })
+    }
+
     const collection = db.collection('api_cache')
     const cacheDoc = await collection.findOne({ _id: 'crypto_list' })
     
     // MongoDB'de veri var mı ve taze mi? (5 dakikadan eski değilse)
     const CACHE_DURATION = 5 * 60 * 1000 // 5 dakika
-    const now = Date.now()
+    const checkNow = Date.now()
     
     if (cacheDoc && cacheDoc.data && Array.isArray(cacheDoc.data) && cacheDoc.data.length > 0) {
-      const cacheAge = now - (cacheDoc.updatedAt || cacheDoc.lastUpdate || 0)
+      const cacheAge = checkNow - (cacheDoc.updatedAt || cacheDoc.lastUpdate || 0)
       
       if (cacheAge < CACHE_DURATION) {
         
@@ -1703,17 +1800,22 @@ app.get('/api/crypto/list', async (req, res) => {
         }
         
         // MongoDB'ye kaydet
+        const saveNow = Date.now()
         await collection.updateOne(
           { _id: 'crypto_list' },
           { 
             $set: {
               data: result.data,
-              updatedAt: now,
-              lastUpdate: now
+              updatedAt: saveNow,
+              lastUpdate: saveNow
             }
           },
           { upsert: true }
         )
+        
+        // Memory cache'i güncelle (hızlı erişim için)
+        memoryCache.crypto_list = result.data
+        memoryCache.crypto_list_timestamp = saveNow
         
         // Debug: Kaydedildikten sonra MongoDB'den kontrol
         const savedDoc = await collection.findOne({ _id: 'crypto_list' });
@@ -1818,19 +1920,29 @@ app.post('/api/crypto/update', async (req, res) => {
       const coinsWithMaxSupply = result.data.filter(c => c.max_supply !== null && c.max_supply !== undefined).length;
     }
     
+    const now = Date.now()
     await collection.updateOne(
       { _id: 'crypto_list' },
       { 
         $set: {
           data: result.data, // Bu array içinde her coin'de total_supply, max_supply, circulating_supply var
-          updatedAt: Date.now(),
-          lastUpdate: Date.now()
+          updatedAt: now,
+          lastUpdate: now
         }
       },
       { upsert: true }
     )
     
-    // Debug: Kaydedildikten sonra MongoDB'den kontrol
+    // Memory cache'i güncelle (hızlı erişim için - sonraki istekler <1ms'de dönecek)
+    memoryCache.crypto_list = result.data
+    memoryCache.crypto_list_timestamp = now
+    console.log(`⚡ [${timeStr}] Memory cache güncellendi (${result.data.length} coin) - sonraki istekler <1ms'de dönecek`        )
+        
+        // Memory cache'i güncelle (hızlı erişim için)
+        memoryCache.crypto_list = result.data
+        memoryCache.crypto_list_timestamp = now
+        
+        // Debug: Kaydedildikten sonra MongoDB'den kontrol
     const savedDoc = await collection.findOne({ _id: 'crypto_list' });
     if (savedDoc && savedDoc.data && savedDoc.data.length > 0) {
       const sampleCoin = savedDoc.data[0];
@@ -2944,6 +3056,9 @@ app.use((req, res, next) => {
 // Server başlat
 async function startServer() {
   await connectToMongoDB()
+  
+  // Memory cache'i yükle (ilk kullanıcı için hızlı erişim)
+  await loadMemoryCache()
   
   // Static dosyaları serve et (Heroku için - build edilmiş frontend)
   const rootDir = join(__dirname, '..')

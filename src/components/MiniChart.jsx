@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import Chart from 'react-apexcharts'
 import { useTheme } from '../contexts/ThemeContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -11,12 +11,14 @@ const MiniChart = React.memo(function MiniChart({ coinId, coinSymbol, sparklineD
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [dataFetched, setDataFetched] = useState(false)
+  const [xaxisRange, setXaxisRange] = useState(null) // Son 1 haftalık zoom için
 
   useEffect(() => {
     setDataFetched(false)
     setLoading(false)
     setError(null)
     setSeries([])
+    setXaxisRange(null) // Coin değiştiğinde zoom aralığını sıfırla
   }, [coinId])
 
   useEffect(() => {
@@ -55,6 +57,16 @@ const MiniChart = React.memo(function MiniChart({ coinId, coinSymbol, sparklineD
             ]
           }))
 
+          // Son 1 haftalık zoom için zaman aralığını hesapla
+          if (candleData.length > 0) {
+            const lastTimestamp = candleData[candleData.length - 1].x
+            const oneWeekAgo = lastTimestamp - (7 * 24 * 60 * 60 * 1000) // 7 gün = 604800000 ms
+            setXaxisRange({
+              min: oneWeekAgo,
+              max: lastTimestamp
+            })
+          }
+
           setSeries([{
             name: 'Price',
             data: candleData
@@ -79,13 +91,14 @@ const MiniChart = React.memo(function MiniChart({ coinId, coinSymbol, sparklineD
     }
   }, [isVisible, coinId, coinSymbol, dataFetched])
 
-  const options = {
+  const options = useMemo(() => ({
     chart: {
       type: 'candlestick',
-      height: 200,
+      height: 300,
       background: '#1a1a1a',
       toolbar: {
         show: true,
+        autoSelected: 'pan', // Varsayılan olarak pan (hareket ettirme) seçili
         tools: {
           zoom: true,
           zoomin: true,
@@ -121,6 +134,8 @@ const MiniChart = React.memo(function MiniChart({ coinId, coinSymbol, sparklineD
     },
     xaxis: {
       type: 'datetime',
+      min: xaxisRange?.min, // Son 1 haftalık zoom için başlangıç
+      max: xaxisRange?.max, // Son 1 haftalık zoom için bitiş
       labels: {
         style: {
           colors: '#888888',
@@ -190,11 +205,11 @@ const MiniChart = React.memo(function MiniChart({ coinId, coinSymbol, sparklineD
     fill: {
       opacity: 1
     }
-  }
+  }), [isDark, xaxisRange])
 
   if (!isVisible) {
     return (
-      <div className="w-full h-[200px] flex items-center justify-center" style={{ backgroundColor: '#1a1a1a' }}>
+      <div className="w-full h-[300px] flex items-center justify-center" style={{ backgroundColor: '#1a1a1a' }}>
         <p className="text-gray-300 text-sm">
           {t('chartClickToView')}
         </p>
@@ -204,7 +219,7 @@ const MiniChart = React.memo(function MiniChart({ coinId, coinSymbol, sparklineD
 
   if (loading) {
     return (
-      <div className="w-full h-[200px] flex items-center justify-center" style={{ backgroundColor: '#1a1a1a' }}>
+      <div className="w-full h-[300px] flex items-center justify-center" style={{ backgroundColor: '#1a1a1a' }}>
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400"></div>
       </div>
     )
@@ -212,7 +227,7 @@ const MiniChart = React.memo(function MiniChart({ coinId, coinSymbol, sparklineD
 
   if (error) {
     return (
-      <div className="w-full h-[200px] flex items-center justify-center" style={{ backgroundColor: '#1a1a1a' }}>
+      <div className="w-full h-[300px] flex items-center justify-center" style={{ backgroundColor: '#1a1a1a' }}>
         <p className="text-gray-300 text-sm">{error}</p>
       </div>
     )
@@ -220,19 +235,19 @@ const MiniChart = React.memo(function MiniChart({ coinId, coinSymbol, sparklineD
 
   if (!series || series.length === 0 || !series[0].data || series[0].data.length === 0) {
     return (
-      <div className="w-full h-[200px] flex items-center justify-center" style={{ backgroundColor: '#1a1a1a' }}>
+      <div className="w-full h-[300px] flex items-center justify-center" style={{ backgroundColor: '#1a1a1a' }}>
         <p className="text-gray-300 text-sm">{t('chartDataLoading')}</p>
       </div>
     )
   }
 
   return (
-    <div className="w-full h-[200px]" style={{ backgroundColor: '#1a1a1a' }}>
+    <div className="w-full h-[300px]" style={{ backgroundColor: '#1a1a1a' }}>
       <Chart
         options={options}
         series={series}
         type="candlestick"
-        height={200}
+        height={300}
       />
     </div>
   )

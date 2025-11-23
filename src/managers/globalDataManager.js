@@ -79,7 +79,8 @@ class GlobalDataManager {
       // Browser'da çalışıyorsa ANINDA çağır (setTimeout veya Promise.resolve() olmadan)
       // Cache yoksa ANINDA MongoDB'den çek
       // Async olarak çalıştır ama await bekleme - anında başlat
-      this.loadMissingDataFromMongoDB().catch(() => {
+      this.loadMissingDataFromMongoDB().catch((error) => {
+        console.error('❌ loadMissingDataFromMongoDB hatası:', error)
         // Hata olsa bile sessizce devam et
       })
     }
@@ -192,34 +193,133 @@ class GlobalDataManager {
       const MONGO_API_URL = this.MONGO_API_URL
       
       // ÖNCELİKLİ VERİLER (Sırayla çek):
-      // 1. Home (crypto) - EN ÖNCE
+      // 1. Home (crypto) - EN ÖNCE (retry mekanizması ile)
       if (!this.coins || this.coins.length === 0) {
-        try {
-          const res = await fetch(`${MONGO_API_URL}/cache/crypto_list`, {
-            headers: { 'Accept': 'application/json' },
-            signal: AbortSignal.timeout(8000) // 8 saniye timeout (daha uzun)
-          })
-          if (res.ok) {
-            const result = await res.json()
-            if (result.success && result.data) {
-              const coins = result.data.coins || result.data.data?.coins || []
-              if (Array.isArray(coins) && coins.length > 0) {
-                this.coins = coins.length > 500 ? coins.slice(0, 500) : coins
-                this.topMovers = this.calculateTopMovers(this.coins) // ANINDA hesapla
-                this.lastCryptoUpdate = new Date()
-                this.saveToLocalStorage() // ANINDA kaydet
-                this.notifySubscribers() // ANINDA bildir (topMovers ile birlikte)
+        console.log('📥 MongoDB\'den crypto verileri çekiliyor...', `${MONGO_API_URL}/cache/crypto_list`)
+        let retryCount = 0
+        const maxRetries = 2 // 2 kez dene
+        let success = false
+        
+        while (retryCount < maxRetries && !success) {
+          try {
+            console.log(`📥 Deneme ${retryCount + 1}/${maxRetries}...`)
+            const res = await fetch(`${MONGO_API_URL}/cache/crypto_list`, {
+              headers: { 'Accept': 'application/json' },
+              signal: AbortSignal.timeout(30000) // 30 saniye timeout (MongoDB query 17+ saniye sürebiliyor)
+            })
+            console.log('📥 Crypto fetch sonucu:', res.status, res.ok)
+            if (res.ok) {
+              const result = await res.json()
+              console.log('📥 Crypto veri alındı:', result)
+              console.log('📥 result.success:', result.success)
+              console.log('📥 result.data:', result.data ? 'var' : 'yok')
+              console.log('📥 result.data.coins:', result.data?.coins?.length || 0)
+              
+              if (result.success && result.data) {
+                // Backend formatı: { success: true, data: { coins: [...], lastUpdate: ... } }
+                const coins = result.data.coins || []
+                console.log('📥 Parsed coins:', coins.length)
+                
+                if (Array.isArray(coins) && coins.length > 0) {
+                  console.log(`✅ ${coins.length} coin yüklendi`)
+                  this.coins = coins.length > 500 ? coins.slice(0, 500) : coins
+                  this.topMovers = this.calculateTopMovers(this.coins) // ANINDA hesapla
+                  this.lastCryptoUpdate = new Date()
+                  this.saveToLocalStorage() // ANINDA kaydet
+                  console.log('✅ topMovers hesaplandı:', this.topMovers.topGainers.length, 'gainers,', this.topMovers.topLosers.length, 'losers')
+                  this.notifySubscribers() // ANINDA bildir (topMovers ile birlikte)
+                  console.log('✅ Subscribers bildirildi')
+                  success = true
+                } else {
+                  console.warn('⚠️ Coin array boş veya geçersiz, length:', coins?.length || 0, 'isArray:', Array.isArray(coins))
+                  break // Retry yapma, veri yok
+                }
+              } else {
+                console.warn('⚠️ API success=false veya data yok, result:', result)
+                // 404 ise veri yok, retry yapma
+                if (result.error === 'Crypto list verisi bulunamadı') {
+                  console.warn('⚠️ MongoDB\'de veri yok, backend\'den veri çekilmeli')
+                  break
+                }
+                retryCount++
+                if (retryCount < maxRetries) {
+                  await new Promise(resolve => setTimeout(resolve, 1000)) // 1 saniye bekle
+                }
+              }
+            } else {
+              const errorText = await res.text().catch(() => '')
+              console.warn('⚠️ API response OK değil:', res.status, res.statusText, errorText)
+              // 404 veya 503 ise retry yapma
+              if (res.status === 404 || res.status === 503) {
+                console.warn('⚠️ Backend veri yok veya MongoDB bağlantısı yok')
+                break
+              }
+              retryCount++
+              if (retryCount < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, 1000)) // 1 saniye bekle
               }
             }
+          } catch (error) {
+            console.error(`❌ Crypto fetch hatası (deneme ${retryCount + 1}/${maxRetries}):`, error.message || error)
+            retryCount++
+            if (retryCount < maxRetries && error.name === 'TimeoutError') {
+              console.log(`⏳ Timeout oldu, ${retryCount + 1}. deneme yapılıyor...`)
+              await new Promise(resolve => setTimeout(resolve, 2000)) // 2 saniye bekle
+            } else {
+              break // Timeout değilse veya max retry'ye ulaştıysak dur
+            }
           }
-        } catch (error) {
-          // Sessizce devam et
+        }
+        
+        if (!success) {
+          console.error('❌ Tüm denemeler başarısız, crypto verisi yüklenemedi')
+          // Backend timeout oluyorsa, backend'e veri çekme isteği gönder
+          console.log('🔄 Backend\'e veri çekme isteği gönderiliyor...')
+          try {
+            const updateRes = await fetch(`${MONGO_API_URL}/api/crypto/update`, {
+              method: 'POST',
+              headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+              signal: AbortSignal.timeout(30000) // 30 saniye timeout (veri çekme uzun sürebilir)
+            })
+            if (updateRes.ok) {
+              console.log('✅ Backend veri çekme isteği gönderildi, 2 saniye bekleniyor...')
+              await new Promise(resolve => setTimeout(resolve, 2000)) // 2 saniye bekle, backend veri çeksin
+              
+              // Tekrar dene
+              console.log('🔄 Veri çekildikten sonra tekrar deneme yapılıyor...')
+              const retryRes = await fetch(`${MONGO_API_URL}/cache/crypto_list`, {
+                headers: { 'Accept': 'application/json' },
+                signal: AbortSignal.timeout(30000) // 30 saniye timeout (MongoDB query 17+ saniye sürebiliyor)
+              })
+              if (retryRes.ok) {
+                const retryResult = await retryRes.json()
+                if (retryResult.success && retryResult.data) {
+                  const coins = retryResult.data.coins || []
+                  if (Array.isArray(coins) && coins.length > 0) {
+                    console.log(`✅ ${coins.length} coin yüklendi (backend'den veri çekme sonrası)`)
+                    this.coins = coins.length > 500 ? coins.slice(0, 500) : coins
+                    this.topMovers = this.calculateTopMovers(this.coins)
+                    this.lastCryptoUpdate = new Date()
+                    this.saveToLocalStorage()
+                    this.notifySubscribers()
+                    console.log('✅ Subscribers bildirildi (backend veri çekme sonrası)')
+                  }
+                }
+              }
+            } else {
+              console.error('❌ Backend veri çekme isteği başarısız:', updateRes.status, updateRes.statusText)
+            }
+          } catch (updateError) {
+            console.error('❌ Backend veri çekme isteği hatası:', updateError.message || updateError)
+          }
         }
       } else if (!this.topMovers || !this.topMovers.topGainers || this.topMovers.topGainers.length === 0 || !this.topMovers.topLosers || this.topMovers.topLosers.length === 0) {
         // Coins var ama topMovers eksikse hemen hesapla (MongoDB'den bekleme yok)
+        console.log('📊 topMovers hesaplanıyor (coins var ama topMovers eksik)')
         this.topMovers = this.calculateTopMovers(this.coins)
         this.saveToLocalStorage() // Hesaplanmış topMovers'ı kaydet
         this.notifySubscribers() // ANINDA bildir
+        console.log('✅ topMovers hesaplandı ve bildirildi:', this.topMovers.topGainers.length, 'gainers,', this.topMovers.topLosers.length, 'losers')
       }
       
       // 2. Market Overview (dominance) - İKİNCİ ÖNCELİK
@@ -510,7 +610,7 @@ class GlobalDataManager {
       try {
         callback(data)
       } catch (error) {
-        console.error('Error notifying global subscriber:', error)
+        console.error('❌ Error notifying global subscriber:', error)
       }
     })
     
