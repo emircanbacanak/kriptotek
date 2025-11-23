@@ -138,7 +138,7 @@ app.use((req, res, next) => {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src 'self' https://fonts.gstatic.com; " +
     "img-src 'self' data: https: blob:; " +
-    "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.herokuapp.com wss://*.herokuapp.com ws://*.herokuapp.com wss://localhost:3000 ws://localhost:3000; " +
+    "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.herokuapp.com wss://*.herokuapp.com ws://*.herokuapp.com http://localhost:3000 wss://localhost:3000 ws://localhost:3000; " +
     "frame-src 'none'; " +
     "object-src 'none'; " +
     "base-uri 'self'; " +
@@ -149,8 +149,29 @@ app.use((req, res, next) => {
 })
 
 // Middleware
+// CORS: Development ve Production domain'lerini destekle
+const allowedOrigins = [
+  'http://localhost:5173', // Development
+  'https://kriptotek.net', // Production domain
+  'https://www.kriptotek.net', // Production domain with www
+  'https://kriptotek-emir-43f89840627c.herokuapp.com' // Heroku app
+]
+
+// FRONTEND_URL env var varsa ekle
+if (process.env.FRONTEND_URL) {
+  const frontendUrls = process.env.FRONTEND_URL.split(',').map(url => url.trim())
+  allowedOrigins.push(...frontendUrls)
+}
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    // Origin yoksa (Postman, mobile app vb.) veya allowed origins içindeyse izin ver
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true)
+    } else {
+      callback(new Error('Not allowed by CORS'))
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
