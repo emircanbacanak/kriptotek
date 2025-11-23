@@ -73,13 +73,12 @@ class GlobalDataManager {
     // Constructor'da localStorage'dan verileri yükle (anında göster)
     this.loadFromLocalStorage()
     
-    // localStorage'da eksik veriler varsa MongoDB'den çek (arka planda, beklemeyecek)
+    // localStorage'da eksik veriler varsa MongoDB'den çek (ANINDA, öncelikli)
     // MONGO_API_URL set edildikten sonra çağrılmalı
     if (typeof window !== 'undefined') {
-      // Browser'da çalışıyorsa hemen çağır
-      setTimeout(() => {
-        this.loadMissingDataFromMongoDB()
-      }, 0)
+      // Browser'da çalışıyorsa ANINDA çağır (setTimeout olmadan)
+      // Cache yoksa hızlıca MongoDB'den çek
+      this.loadMissingDataFromMongoDB()
     }
   }
 
@@ -221,7 +220,7 @@ class GlobalDataManager {
           promises.push(
             fetch(`${MONGO_API_URL}/cache/crypto_list`, {
               headers: { 'Accept': 'application/json' },
-              signal: AbortSignal.timeout(5000)
+              signal: AbortSignal.timeout(3000) // 3 saniye timeout (daha hızlı)
             })
               .then(async (res) => {
                 if (res.ok) {
@@ -244,7 +243,10 @@ class GlobalDataManager {
         
         if (missingData.includes('dominance')) {
           promises.push(
-            fetch(`${MONGO_API_URL}/api/cache/dominance_data`)
+            fetch(`${MONGO_API_URL}/api/cache/dominance_data`, {
+              headers: { 'Accept': 'application/json' },
+              signal: AbortSignal.timeout(3000) // 3 saniye timeout
+            })
               .then(async (res) => {
                 if (res.ok) {
                   const result = await res.json()
@@ -262,7 +264,10 @@ class GlobalDataManager {
         
         if (missingData.includes('fearGreed')) {
           promises.push(
-            fetch(`${MONGO_API_URL}/api/cache/fear_greed`)
+            fetch(`${MONGO_API_URL}/api/cache/fear_greed`, {
+              headers: { 'Accept': 'application/json' },
+              signal: AbortSignal.timeout(3000) // 3 saniye timeout
+            })
               .then(async (res) => {
                 if (res.ok) {
                   const result = await res.json()
@@ -279,7 +284,10 @@ class GlobalDataManager {
         
         if (missingData.includes('trending')) {
           promises.push(
-            fetch(`${MONGO_API_URL}/api/trending`)
+            fetch(`${MONGO_API_URL}/api/trending`, {
+              headers: { 'Accept': 'application/json' },
+              signal: AbortSignal.timeout(3000) // 3 saniye timeout
+            })
               .then(async (res) => {
                 if (res.ok) {
                   const result = await res.json()
@@ -297,7 +305,10 @@ class GlobalDataManager {
         
         if (missingData.includes('currency')) {
           promises.push(
-            fetch(`${MONGO_API_URL}/api/cache/currency_rates`)
+            fetch(`${MONGO_API_URL}/api/cache/currency_rates`, {
+              headers: { 'Accept': 'application/json' },
+              signal: AbortSignal.timeout(3000) // 3 saniye timeout
+            })
               .then(async (res) => {
                 if (res.ok) {
                   const result = await res.json()
@@ -320,7 +331,7 @@ class GlobalDataManager {
           promises.push(
             fetch(`${MONGO_API_URL}/api/fed-rate`, {
               headers: { 'Accept': 'application/json' },
-              signal: AbortSignal.timeout(10000)
+              signal: AbortSignal.timeout(3000) // 3 saniye timeout
             })
               .then(async (res) => {
                 if (res.ok) {
@@ -341,7 +352,7 @@ class GlobalDataManager {
           promises.push(
             fetch(`${MONGO_API_URL}/cache/supply_tracking`, {
               headers: { 'Accept': 'application/json' },
-              signal: AbortSignal.timeout(10000)
+              signal: AbortSignal.timeout(3000) // 3 saniye timeout
             })
               .then(async (res) => {
                 if (res.ok) {
@@ -1039,7 +1050,7 @@ class GlobalDataManager {
     try {
       const MONGO_API_URL = this.MONGO_API_URL
       
-      // TÜM VERİLERİ PARALEL YÜKLE (anında gelmesi için)
+      // TÜM VERİLERİ PARALEL YÜKLE (anında gelmesi için) - 3 saniye timeout ile
       const [
         cryptoResponse,
         dominanceResponse,
@@ -1050,25 +1061,32 @@ class GlobalDataManager {
         supplyTrackingResponse
       ] = await Promise.allSettled([
         fetch(`${MONGO_API_URL}/cache/crypto_list`, {
-          headers: { 'Accept': 'application/json' }
+          headers: { 'Accept': 'application/json' },
+          signal: AbortSignal.timeout(3000) // 3 saniye timeout
         }).catch(() => null),
         fetch(`${MONGO_API_URL}/api/cache/dominance_data`, {
-          headers: { 'Accept': 'application/json' }
+          headers: { 'Accept': 'application/json' },
+          signal: AbortSignal.timeout(3000) // 3 saniye timeout
         }).catch(() => null),
         fetch(`${MONGO_API_URL}/api/cache/fear_greed`, {
-          headers: { 'Accept': 'application/json' }
+          headers: { 'Accept': 'application/json' },
+          signal: AbortSignal.timeout(3000) // 3 saniye timeout
         }).catch(() => null),
         fetch(`${MONGO_API_URL}/api/trending`, {
-          headers: { 'Accept': 'application/json' }
+          headers: { 'Accept': 'application/json' },
+          signal: AbortSignal.timeout(3000) // 3 saniye timeout
         }).catch(() => null),
         fetch(`${MONGO_API_URL}/api/cache/currency_rates`, {
-          headers: { 'Accept': 'application/json' }
+          headers: { 'Accept': 'application/json' },
+          signal: AbortSignal.timeout(3000) // 3 saniye timeout
         }).catch(() => null),
         fetch(`${MONGO_API_URL}/api/fed-rate`, {
-          headers: { 'Accept': 'application/json' }
+          headers: { 'Accept': 'application/json' },
+          signal: AbortSignal.timeout(3000) // 3 saniye timeout
         }).catch(() => null),
         fetch(`${MONGO_API_URL}/cache/supply_tracking`, {
-          headers: { 'Accept': 'application/json' }
+          headers: { 'Accept': 'application/json' },
+          signal: AbortSignal.timeout(3000) // 3 saniye timeout
         }).catch(() => null)
       ])
       

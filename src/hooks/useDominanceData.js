@@ -13,13 +13,48 @@ const useDominanceData = () => {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    // Mevcut veriyi al
+    // Mevcut veriyi al - ANINDA (cache'den)
     const currentData = globalDataManager.getData()
     if (currentData.dominanceData && currentData.dominanceData.global && currentData.dominanceData.dominanceData) {
       setDominanceData(currentData.dominanceData)
       setFearGreedIndex(currentData.fearGreedIndex)
       setLoading(false)
+      setError(null)
+      // Cache'den veri varsa direkt çık, MongoDB'den çekmeye gerek yok
+      // Abone ol ama (güncellemeler için)
+      const unsubscribe = globalDataManager.subscribe((data) => {
+        setDominanceData(data.dominanceData)
+        setFearGreedIndex(data.fearGreedIndex)
+        setIsUpdating(data.isUpdating || false)
+        setLastUpdate(data.lastDominanceUpdate)
+        
+        if (data.dominanceData && data.dominanceData.global && data.dominanceData.dominanceData) {
+          setLoading(false)
+          setError(null)
+        }
+      })
+      return () => unsubscribe()
     }
+    
+    // Cache'de veri yoksa MongoDB'den hızlıca çek (max 3 saniye)
+    let retryCount = 0
+    const maxRetries = 60 // 60 x 50ms = 3 saniye
+    const checkDataInterval = setInterval(() => {
+      const data = globalDataManager.getData()
+      if (data.dominanceData && data.dominanceData.global && data.dominanceData.dominanceData) {
+        setDominanceData(data.dominanceData)
+        setFearGreedIndex(data.fearGreedIndex)
+        setLoading(false)
+        setError(null)
+        clearInterval(checkDataInterval)
+      } else {
+        retryCount++
+        if (retryCount >= maxRetries) {
+          setLoading(false)
+          clearInterval(checkDataInterval)
+        }
+      }
+    }, 50) // Her 50ms'de bir kontrol et
     
     // Abone ol
     const unsubscribe = globalDataManager.subscribe((data) => {

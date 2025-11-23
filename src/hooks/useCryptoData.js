@@ -12,18 +12,27 @@ const useCryptoData = () => {
   const [lastUpdate, setLastUpdate] = useState(null)
 
   useEffect(() => {
-    // Mevcut veriyi al - ANINDA
+    // Mevcut veriyi al - ANINDA (cache'den)
     const currentData = globalDataManager.getData()
     if (currentData.coins && currentData.coins.length > 0) {
       setCoins(currentData.coins)
       setTopMovers(currentData.topMovers || { topGainers: [], topLosers: [] })
       setLoading(false)
-      return // Veri varsa direkt çık
+      // Cache'den veri varsa direkt çık, MongoDB'den çekmeye gerek yok
+      // Abone ol ama (güncellemeler için)
+      const unsubscribe = globalDataManager.subscribe((data) => {
+        setCoins(data.coins || [])
+        setTopMovers(data.topMovers || { topGainers: [], topLosers: [] })
+        setIsUpdating(data.isUpdating || false)
+        setLastUpdate(data.lastCryptoUpdate)
+      })
+      return () => unsubscribe()
     }
     
-    // Veri yoksa backend'den veri yüklenene kadar bekle (max 5 saniye, hızlı kontrol)
+    // Cache'de veri yoksa MongoDB'den hızlıca çek (max 3 saniye)
+    // Her 50ms'de bir kontrol et (çok hızlı)
     let retryCount = 0
-    const maxRetries = 50 // 50 x 100ms = 5 saniye
+    const maxRetries = 60 // 60 x 50ms = 3 saniye
     const checkDataInterval = setInterval(() => {
       const data = globalDataManager.getData()
       if (data.coins && data.coins.length > 0) {
@@ -34,12 +43,12 @@ const useCryptoData = () => {
       } else {
         retryCount++
         if (retryCount >= maxRetries) {
-          // 5 saniye sonra bile veri yoksa loading'i kapat (sayfa açılsın)
+          // 3 saniye sonra bile veri yoksa loading'i kapat (sayfa açılsın)
           setLoading(false)
           clearInterval(checkDataInterval)
         }
       }
-    }, 100) // Her 100ms'de bir kontrol et (çok hızlı)
+    }, 50) // Her 50ms'de bir kontrol et (çok hızlı)
     
     // Abone ol - ANINDA GÜNCELLEME
     const unsubscribe = globalDataManager.subscribe((data) => {
