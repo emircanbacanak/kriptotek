@@ -3207,16 +3207,28 @@ async function startServer() {
     
     // Tüm route'ları index.html'e yönlendir (SPA için)
     // API route'larından sonra ekle (yoksa API route'ları çalışmaz)
-    app.get('*', (req, res, next) => {
-      // API route'ları değilse ve maintenance/error dosyası değilse
-      if (!req.path.startsWith('/api') && 
-          !req.path.includes('maintenance.html') && 
-          !req.path.includes('error.html')) {
-        const indexPath = join(distDir, 'index.html')
-        if (existsSync(indexPath)) {
+    // Health check ve static dosyalar zaten tanımlı, bu route en sona eklenmeli
+    const indexPath = join(distDir, 'index.html')
+    if (existsSync(indexPath)) {
+      app.get('*', (req, res, next) => {
+        // API route'ları, health check, static dosyalar ve maintenance/error dosyaları değilse
+        const path = req.path
+        const isApiRoute = path.startsWith('/api')
+        const isHealthCheck = path === '/health'
+        const isStaticFile = path.startsWith('/assets') || 
+                           path.startsWith('/icons') || 
+                           path.startsWith('/public') ||
+                           path.startsWith('/kriptotek.jpg') ||
+                           path === '/favicon.ico' ||
+                           /\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/i.test(path)
+        const isMaintenanceOrError = path.includes('maintenance.html') || path.includes('error.html')
+        
+        if (!isApiRoute && !isHealthCheck && !isStaticFile && !isMaintenanceOrError) {
+          // SPA route'u - index.html gönder
           res.sendFile(indexPath, (err) => {
             // Dosya bulunamazsa error.html göster
             if (err) {
+              console.error('❌ index.html sendFile hatası:', err.message, 'Path:', path)
               const errorPath = join(publicDir, 'error.html')
               const distErrorPath = join(distDir, 'error.html')
               
@@ -3225,22 +3237,30 @@ async function startServer() {
               } else if (existsSync(distErrorPath)) {
                 return res.status(404).sendFile(distErrorPath)
               } else {
-                return res.status(404).json({ error: 'File not found' })
+                return res.status(404).json({ error: 'File not found', path: path })
               }
             }
           })
         } else {
-          // index.html yoksa error göster
+          next()
+        }
+      })
+    } else {
+      console.error('❌ index.html bulunamadı:', indexPath)
+      // index.html yoksa tüm route'lar için 503 döndür (API route'ları hariç)
+      app.get('*', (req, res, next) => {
+        if (!req.path.startsWith('/api') && req.path !== '/health') {
           res.status(503).json({ 
             error: 'Frontend build not found',
             message: 'Please ensure the build process completed successfully',
-            mongodb: db ? 'connected' : 'disconnected'
+            mongodb: db ? 'connected' : 'disconnected',
+            indexPath: indexPath
           })
+        } else {
+          next()
         }
-      } else {
-        next()
-      }
-    })
+      })
+    }
   } else {
     console.warn('⚠️ dist klasörü bulunamadı - Production modunda frontend dosyaları serve edilemiyor')
     console.warn('⚠️ Heroku build sürecini kontrol edin: npm run build')
