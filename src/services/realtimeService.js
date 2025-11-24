@@ -86,12 +86,12 @@ class RealtimeService {
         // Message handler'ı asenkron yap (performans uyarılarını önlemek için)
         // requestAnimationFrame kullanarak callback'leri bir sonraki frame'de çalıştır
         requestAnimationFrame(() => {
-          try {
-            const message = JSON.parse(event.data)
-            this.handleMessage(message)
-          } catch (error) {
-            console.error('❌ WebSocket mesaj parse hatası:', error)
-          }
+        try {
+          const message = JSON.parse(event.data)
+          this.handleMessage(message)
+        } catch (error) {
+          console.error('❌ WebSocket mesaj parse hatası:', error)
+        }
         })
       }
       
@@ -204,41 +204,41 @@ class RealtimeService {
         callbacks.forEach(callback => {
           // Her callback'i ayrı bir microtask'te çalıştır
           Promise.resolve().then(() => {
-            try {
-              callback({
-                operationType,
-                documentId,
-                data: fullDocument,
-                fullDocument
-              })
-            } catch (error) {
-              console.error('❌ Subscription callback hatası:', error)
-            }
+          try {
+            callback({
+              operationType,
+              documentId,
+              data: fullDocument,
+              fullDocument
+            })
+          } catch (error) {
+            console.error('❌ Subscription callback hatası:', error)
+          }
           })
         })
       }
       
       // Global event dispatch (asenkron olarak)
       Promise.resolve().then(() => {
-        window.dispatchEvent(new CustomEvent(`mongodb:${collection}:${operationType}`, {
-          detail: {
-            collection,
-            operationType,
-            documentId,
-            data: fullDocument
-          }
-        }))
+      window.dispatchEvent(new CustomEvent(`mongodb:${collection}:${operationType}`, {
+        detail: {
+          collection,
+          operationType,
+          documentId,
+          data: fullDocument
+        }
+      }))
       })
     } else if (message.type === 'news_refreshed') {
       // Haberler yenilendi - frontend'e bildir (asenkron olarak)
       Promise.resolve().then(() => {
-        window.dispatchEvent(new CustomEvent('news_refreshed', {
-          detail: {
-            collection: message.collection,
-            count: message.count,
-            timestamp: message.timestamp
-          }
-        }))
+      window.dispatchEvent(new CustomEvent('news_refreshed', {
+        detail: {
+          collection: message.collection,
+          count: message.count,
+          timestamp: message.timestamp
+        }
+      }))
       })
     }
   }

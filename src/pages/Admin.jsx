@@ -166,22 +166,22 @@ const Admin = () => {
     // Backend'e gönder (await yapmadan, arka planda çalışsın)
     adminService.toggleUserPremium(userId, newPremiumStatus)
       .then((result) => {
-        if (result.success) {
+    if (result.success) {
           // Kullanıcı listesini sessizce yenile (loading gösterme) - arka planda
           loadUsers(false).catch(() => {
             // Hata olsa bile optimistic update zaten yapıldı
           })
-          
+      
           // Eğer kullanıcı kendisini premium yapıyorsa, backend'den doğrulama yap (arka planda)
-          if (user && user.uid === userId) {
+      if (user && user.uid === userId) {
             // Kısa bir süre bekleyip refresh yap (backend'in güncellemesi için)
             setTimeout(() => {
               refreshUserSettings().catch(() => {
                 // Hata olsa bile optimistic update zaten yapıldı
               })
             }, 500) // 0.5 saniye sonra doğrulama yap
-          }
-        } else {
+      }
+    } else {
           // Hata durumunda geri al (rollback)
           setUsers(prevUsers => 
             prevUsers.map(u => 
@@ -194,8 +194,8 @@ const Admin = () => {
             updatePremiumStatus(currentPremium)
           }
           
-          alert(t('togglePremiumError') + ': ' + result.error)
-        }
+      alert(t('togglePremiumError') + ': ' + result.error)
+    }
       })
       .catch((error) => {
         // Network hatası durumunda geri al (rollback)
@@ -231,20 +231,20 @@ const Admin = () => {
     
     serviceCall
       .then((result) => {
-        if (result.success) {
+    if (result.success) {
           // Kullanıcı listesini sessizce yenile (loading gösterme) - arka planda
           loadUsers(false).catch(() => {
             // Hata olsa bile optimistic update zaten yapıldı
           })
-        } else {
+    } else {
           // Hata durumunda geri al (rollback)
           setUsers(prevUsers => 
             prevUsers.map(u => 
               u.uid === userId ? { ...u, isActive: currentActive } : u
             )
           )
-          alert(t('toggleActiveError') + ': ' + result.error)
-        }
+      alert(t('toggleActiveError') + ': ' + result.error)
+    }
       })
       .catch((error) => {
         // Network hatası durumunda geri al (rollback)
@@ -275,22 +275,22 @@ const Admin = () => {
     // Backend'e gönder (await yapmadan, arka planda çalışsın)
     adminService.setUserAsAdmin(userId, newAdminStatus)
       .then((result) => {
-        if (result.success) {
+    if (result.success) {
           // Kullanıcı listesini sessizce yenile (loading gösterme) - arka planda
           loadUsers(false).catch(() => {
             // Hata olsa bile optimistic update zaten yapıldı
           })
-          
+      
           // Eğer kullanıcı kendisini admin yapıyorsa, backend'den doğrulama yap (arka planda)
-          if (user && user.uid === userId) {
+      if (user && user.uid === userId) {
             // Kısa bir süre bekleyip refresh yap (backend'in güncellemesi için)
             setTimeout(() => {
               refreshUserSettings().catch(() => {
                 // Hata olsa bile optimistic update zaten yapıldı
               })
             }, 500) // 0.5 saniye sonra doğrulama yap
-          }
-        } else {
+      }
+    } else {
           // Hata durumunda geri al (rollback)
           setUsers(prevUsers => 
             prevUsers.map(u => 
@@ -303,8 +303,8 @@ const Admin = () => {
             updateAdminStatus(currentAdmin)
           }
           
-          alert(t('toggleAdminError') + ': ' + result.error)
-        }
+      alert(t('toggleAdminError') + ': ' + result.error)
+    }
       })
       .catch((error) => {
         // Network hatası durumunda geri al (rollback)

@@ -71,7 +71,7 @@ const Login = () => {
         setError(t('accountDeactivated') || 'Hesabınız pasif edilmiştir. Giriş yapamazsınız.')
         // Navigate yapma, bildirim componenti Layout'ta çalışacak
       } else {
-        navigate('/', { replace: true })
+      navigate('/', { replace: true })
       }
     }
   }, [isAuthenticated, isActive, navigate, t])
