@@ -18,6 +18,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true)
   const [isPremium, setIsPremium] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isActive, setIsActive] = useState(true) // Varsayılan aktif
   const [userSettings, setUserSettings] = useState(null)
   const settingsPollIntervalRef = useRef(null)
 
@@ -27,6 +28,7 @@ export const AuthProvider = ({ children }) => {
       setUserSettings(null)
       setIsPremium(false)
       setIsAdmin(false)
+      setIsActive(true)
       return
     }
 
@@ -67,10 +69,21 @@ export const AuthProvider = ({ children }) => {
         
         setIsPremium(prevIsPremium => {
           const newIsPremium = settings.isPremium === true || settings.isPremium === 'true'
+          // Eğer state zaten güncellenmişse (optimistic update), backend'den gelen eski veriyi kullanma
+          // Sadece state değişmemişse güncelle
           if (prevIsPremium !== newIsPremium) {
             return newIsPremium
           }
           return prevIsPremium
+        })
+        
+        // isActive kontrolü
+        setIsActive(prevIsActive => {
+          const newIsActive = settings.isActive !== false // Varsayılan true
+          if (prevIsActive !== newIsActive) {
+            return newIsActive
+          }
+          return prevIsActive
         })
         
         // Admin kontrolü (adminEncrypted varsa ve deşifrelenebiliyorsa admin)
@@ -156,6 +169,7 @@ export const AuthProvider = ({ children }) => {
               const settings = reloadResult.settings
               setUserSettings(settings)
               setIsPremium(settings.isPremium === true || settings.isPremium === 'true')
+              setIsActive(settings.isActive !== false)
               setIsAdmin(!!settings.adminEncrypted)
               
               // Display ayarlarını context'lere uygula
@@ -190,12 +204,14 @@ export const AuthProvider = ({ children }) => {
         setUserSettings(null)
         setIsPremium(false)
         setIsAdmin(false)
+        setIsActive(true) // Varsayılan aktif
       }
     } catch (error) {
       console.warn('⚠️ Kullanıcı ayarları yüklenemedi:', error)
       setUserSettings(null)
       setIsPremium(false)
       setIsAdmin(false)
+      setIsActive(true) // Varsayılan aktif
     }
   }
 
@@ -213,18 +229,19 @@ export const AuthProvider = ({ children }) => {
       if (firebaseUser) {
         await loadAndUpdateSettings(firebaseUser.uid)
         
-        // Real-time güncelleme için polling başlat (her 30 saniyede bir kontrol et - sayfa yenilenmesini önlemek için)
+        // Real-time güncelleme için polling başlat (her 5 saniyede bir kontrol et)
         settingsPollIntervalRef.current = setInterval(() => {
           // Sessizce güncelle (console log yok, sadece state güncelle)
           loadAndUpdateSettings(firebaseUser.uid).catch(() => {
             // Hata durumunda sessizce devam et
           })
-        }, 30000) // 30 saniye (10 saniyeden 30 saniyeye çıkarıldı)
+        }, 5000) // 5 saniye
       } else {
         // Kullanıcı yok
         setUserSettings(null)
         setIsPremium(false)
         setIsAdmin(false)
+        setIsActive(true)
       }
       
       setLoading(false)
@@ -264,6 +281,74 @@ export const AuthProvider = ({ children }) => {
   const refreshUserSettings = async () => {
     if (user) {
       await loadAndUpdateSettings(user.uid)
+    }
+  }
+
+  // Premium durumunu anında güncelle (optimistic update)
+  const updatePremiumStatus = (newPremiumStatus) => {
+    // State'i hemen güncelle
+    setIsPremium(newPremiumStatus)
+    // userSettings'i de güncelle
+    setUserSettings(prevSettings => {
+      if (prevSettings) {
+        return {
+          ...prevSettings,
+          isPremium: newPremiumStatus,
+          updatedAt: Date.now() // Timestamp güncelle ki backend'den gelen eski veri kullanılmasın
+        }
+      }
+      return prevSettings
+    })
+    
+    // Polling'i geçici olarak durdur (backend response gelene kadar)
+    if (settingsPollIntervalRef.current && user) {
+      clearInterval(settingsPollIntervalRef.current)
+      settingsPollIntervalRef.current = null
+      
+      // 2 saniye sonra polling'i tekrar başlat (backend güncellemesi için yeterli süre)
+      setTimeout(() => {
+        if (user && !settingsPollIntervalRef.current) {
+          settingsPollIntervalRef.current = setInterval(() => {
+            loadAndUpdateSettings(user.uid).catch(() => {
+              // Hata durumunda sessizce devam et
+            })
+          }, 5000) // 5 saniye
+        }
+      }, 2000) // 2 saniye
+    }
+  }
+
+  // Admin durumunu anında güncelle (optimistic update)
+  const updateAdminStatus = (newAdminStatus) => {
+    // State'i hemen güncelle
+    setIsAdmin(newAdminStatus)
+    // userSettings'i de güncelle
+    setUserSettings(prevSettings => {
+      if (prevSettings) {
+        return {
+          ...prevSettings,
+          adminEncrypted: newAdminStatus ? prevSettings.adminEncrypted || 'admin=true' : null,
+          updatedAt: Date.now() // Timestamp güncelle ki backend'den gelen eski veri kullanılmasın
+        }
+      }
+      return prevSettings
+    })
+    
+    // Polling'i geçici olarak durdur (backend response gelene kadar)
+    if (settingsPollIntervalRef.current && user) {
+      clearInterval(settingsPollIntervalRef.current)
+      settingsPollIntervalRef.current = null
+      
+      // 2 saniye sonra polling'i tekrar başlat (backend güncellemesi için yeterli süre)
+      setTimeout(() => {
+        if (user && !settingsPollIntervalRef.current) {
+          settingsPollIntervalRef.current = setInterval(() => {
+            loadAndUpdateSettings(user.uid).catch(() => {
+              // Hata durumunda sessizce devam et
+            })
+          }, 5000) // 5 saniye
+        }
+      }, 2000) // 2 saniye
     }
   }
 
@@ -326,8 +411,11 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated: !!user,
     isPremium,
     isAdmin,
+    isActive,
     userSettings,
     refreshUserSettings,
+    updatePremiumStatus,
+    updateAdminStatus,
     loginWithEmailPassword,
     loginWithGoogleAuth,
     registerWithEmailPassword,
@@ -351,7 +439,28 @@ export const AuthProvider = ({ children }) => {
 
 export const useAuth = () => {
   const context = useContext(AuthContext)
-  // Context null ise null döndür (hata fırlatma, çünkü provider henüz yüklenmemiş olabilir)
+  // Context null ise varsayılan değerler döndür (provider henüz yüklenmemiş olabilir)
+  if (!context) {
+    return {
+      user: null,
+      isAuthenticated: false,
+      isPremium: false,
+      isAdmin: false,
+      isActive: true,
+      userSettings: null,
+      refreshUserSettings: async () => {},
+      updatePremiumStatus: () => {},
+      updateAdminStatus: () => {},
+      loginWithEmailPassword: async () => ({ success: false, error: 'Auth context not available' }),
+      loginWithGoogleAuth: async () => ({ success: false, error: 'Auth context not available' }),
+      registerWithEmailPassword: async () => ({ success: false, error: 'Auth context not available' }),
+      logout: async () => {},
+      logoutUser: async () => {},
+      updateProfile: async () => ({ success: false, error: 'Auth context not available' }),
+      deleteAccount: async () => ({ success: false, error: 'Auth context not available' }),
+      refreshUser: async () => ({ success: false, error: 'Auth context not available' })
+    }
+  }
   return context
 }
 

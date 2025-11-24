@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import Footer from './Footer';
+import AccountDeactivationNotification from './AccountDeactivationNotification';
 import { useLanguage } from '../contexts/LanguageContext';
 import globalDataManager from '../managers/globalDataManager';
 import realtimeService from '../services/realtimeService';
@@ -32,6 +33,7 @@ const Layout = () => {
 
   return (
     <div className="flex flex-col h-screen bg-white dark:bg-gray-900">
+      <AccountDeactivationNotification />
       <Header onMenuClick={() => setSidebarOpen(!sidebarOpen)} className="flex-shrink-0 z-20" />
 
       <div className="flex flex-1 overflow-hidden">

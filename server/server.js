@@ -177,7 +177,7 @@ app.use(cors({
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }))
 // Body parser limit'ini artır (500 coin için yeterli olmalı)
@@ -936,28 +936,74 @@ app.patch('/api/admin/users/:userId/active', async (req, res) => {
     const { userId } = req.params
     const { isActive } = req.body
     
+    // isActive değerini boolean'a çevir
+    const isActiveBoolean = isActive === true || isActive === 'true'
+    
     const collection = db.collection(COLLECTION_NAME)
     
+    // Önce kullanıcıyı kontrol et
+    let existingUser = await collection.findOne({ userId })
+    console.log(`🔍 [Active Toggle] Kullanıcı kontrolü: ${userId}, MongoDB'de var mı: ${!!existingUser}`)
+    
+    // Eğer kullanıcı yoksa, Firebase'den bilgilerini çek ve MongoDB'de oluştur
+    if (!existingUser) {
+      if (firebaseAdmin) {
+        try {
+          const fbUser = await firebaseAdmin.auth().getUser(userId)
+          if (fbUser) {
+            // Firebase'den gelen kullanıcı için MongoDB'de settings oluştur
+            const defaultSettings = {
+              userId: userId,
+              email: fbUser.email || null,
+              displayName: fbUser.displayName || (fbUser.email ? fbUser.email.split('@')[0] : 'Kullanıcı'),
+              photoURL: fbUser.photoURL || null,
+              display: {
+                currency: 'USD',
+                language: 'tr',
+                theme: 'light'
+              },
+              isPremium: false,
+              isActive: isActiveBoolean,
+              createdAt: fbUser.metadata.creationTime ? new Date(fbUser.metadata.creationTime).getTime() : Date.now(),
+              updatedAt: Date.now()
+            }
+            
+            await collection.insertOne(defaultSettings)
+            existingUser = defaultSettings
+            console.log(`✅ [Active Toggle] Firebase kullanıcısı MongoDB'ye eklendi: ${userId}`)
+          }
+        } catch (fbError) {
+          console.error(`❌ [Active Toggle] Firebase kullanıcısı bulunamadı: ${userId}`, fbError.message)
+          console.error(`❌ [Active Toggle] Firebase hatası detayı:`, fbError)
+        }
+      } else {
+        console.warn(`⚠️ [Active Toggle] Firebase Admin SDK başlatılmamış, kullanıcı oluşturulamıyor: ${userId}`)
+      }
+    }
+    
+    // Kullanıcı hala yoksa hata döndür
+    if (!existingUser) {
+      console.error(`❌ [Active Toggle] Kullanıcı bulunamadı (MongoDB ve Firebase'de yok): ${userId}`)
+      return res.status(404).json({
+        success: false,
+        error: `User not found: ${userId}. Kullanıcı ne MongoDB'de ne de Firebase'de bulunamadı.`
+      })
+    }
+    
+    // Kullanıcıyı güncelle
     const result = await collection.updateOne(
       { userId },
       { 
         $set: { 
-          isActive: isActive !== false,
+          isActive: isActiveBoolean,
           updatedAt: Date.now()
         }
       }
     )
     
-    if (result.matchedCount === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'User not found'
-      })
-    }
-    
     return res.json({
       success: true,
-      message: `Kullanıcı ${isActive ? 'aktif' : 'pasif'} olarak güncellendi`
+      message: `Kullanıcı ${isActiveBoolean ? 'aktif' : 'pasif'} olarak güncellendi`
     })
   } catch (error) {
     console.error('❌ PATCH /api/admin/users/:userId/active error:', error)

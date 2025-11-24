@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -20,7 +20,7 @@ import { useAuth } from './contexts/AuthContext'
 import './services/supplyHistoryService' // Supply history service'i yükle (window'a ekler)
 
 const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth()
+  const { isAuthenticated, isActive, loading } = useAuth()
   
   if (loading) {
     return (
@@ -33,6 +33,14 @@ const ProtectedRoute = ({ children }) => {
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
   }
+  
+  // Pasif kullanıcı kontrolü - Bildirim componenti Layout'ta çalışacak, burada sadece içeriği gösterme
+  // Bildirim componenti geri sayım yapıp logout yapacak
+  if (isActive === false) {
+    // Bildirim componenti Layout'ta gösterilecek, burada sadece boş bir div döndür
+    return <div>{children}</div>
+  }
+  
   return children
 }
 

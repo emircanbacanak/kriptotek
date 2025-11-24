@@ -15,7 +15,7 @@ import {
 } from '../utils/advancedSecurity'
 
 const Login = () => {
-  const { loginWithEmailPassword, loginWithGoogleAuth, isAuthenticated, refreshUserSettings } = useAuth()
+  const { loginWithEmailPassword, loginWithGoogleAuth, isAuthenticated, refreshUserSettings, isActive, logoutUser, user } = useAuth()
   const { t, language, changeLanguage } = useLanguage()
 
   // Bu sayfa sadece dark tema kullanır
@@ -66,9 +66,15 @@ const Login = () => {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/', { replace: true })
+      // Pasif kontrolü - eğer kullanıcı pasif ise sadece hata mesajı göster, logout yapma (bildirim componenti Layout'ta çalışacak)
+      if (isActive === false) {
+        setError(t('accountDeactivated') || 'Hesabınız pasif edilmiştir. Giriş yapamazsınız.')
+        // Navigate yapma, bildirim componenti Layout'ta çalışacak
+      } else {
+        navigate('/', { replace: true })
+      }
     }
-  }, [isAuthenticated, navigate])
+  }, [isAuthenticated, isActive, navigate, t])
 
   const handleDoubleClick = useCallback((e) => {
     e.preventDefault()

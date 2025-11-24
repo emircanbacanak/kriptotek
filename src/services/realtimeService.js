@@ -83,12 +83,16 @@ class RealtimeService {
       }
       
       this.ws.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data)
-          this.handleMessage(message)
-        } catch (error) {
-          console.error('❌ WebSocket mesaj parse hatası:', error)
-        }
+        // Message handler'ı asenkron yap (performans uyarılarını önlemek için)
+        // requestAnimationFrame kullanarak callback'leri bir sonraki frame'de çalıştır
+        requestAnimationFrame(() => {
+          try {
+            const message = JSON.parse(event.data)
+            this.handleMessage(message)
+          } catch (error) {
+            console.error('❌ WebSocket mesaj parse hatası:', error)
+          }
+        })
       }
       
       this.ws.onerror = (error) => {
@@ -193,41 +197,49 @@ class RealtimeService {
     if (message.type === 'change') {
       const { collection, operationType, documentId, fullDocument } = message
       
-      // Collection bazlı subscription'ları çağır
+      // Collection bazlı subscription'ları çağır (asenkron olarak)
       const callbacks = this.subscriptions.get(collection)
       if (callbacks) {
+        // Callback'leri asenkron olarak çağır (performans için)
         callbacks.forEach(callback => {
-          try {
-            callback({
-              operationType,
-              documentId,
-              data: fullDocument,
-              fullDocument
-            })
-          } catch (error) {
-            console.error('❌ Subscription callback hatası:', error)
-          }
+          // Her callback'i ayrı bir microtask'te çalıştır
+          Promise.resolve().then(() => {
+            try {
+              callback({
+                operationType,
+                documentId,
+                data: fullDocument,
+                fullDocument
+              })
+            } catch (error) {
+              console.error('❌ Subscription callback hatası:', error)
+            }
+          })
         })
       }
       
-      // Global event dispatch
-      window.dispatchEvent(new CustomEvent(`mongodb:${collection}:${operationType}`, {
-        detail: {
-          collection,
-          operationType,
-          documentId,
-          data: fullDocument
-        }
-      }))
+      // Global event dispatch (asenkron olarak)
+      Promise.resolve().then(() => {
+        window.dispatchEvent(new CustomEvent(`mongodb:${collection}:${operationType}`, {
+          detail: {
+            collection,
+            operationType,
+            documentId,
+            data: fullDocument
+          }
+        }))
+      })
     } else if (message.type === 'news_refreshed') {
-      // Haberler yenilendi - frontend'e bildir
-      window.dispatchEvent(new CustomEvent('news_refreshed', {
-        detail: {
-          collection: message.collection,
-          count: message.count,
-          timestamp: message.timestamp
-        }
-      }))
+      // Haberler yenilendi - frontend'e bildir (asenkron olarak)
+      Promise.resolve().then(() => {
+        window.dispatchEvent(new CustomEvent('news_refreshed', {
+          detail: {
+            collection: message.collection,
+            count: message.count,
+            timestamp: message.timestamp
+          }
+        }))
+      })
     }
   }
 

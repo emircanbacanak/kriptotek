@@ -18,7 +18,7 @@ import {
 const Admin = () => {
   const { t, language } = useLanguage()
   const { theme } = useTheme()
-  const { user, isAdmin, refreshUserSettings } = useAuth()
+  const { user, isAdmin, refreshUserSettings, updatePremiumStatus, updateAdminStatus } = useAuth()
   
   const [users, setUsers] = useState([])
   const [filteredUsers, setFilteredUsers] = useState([])
@@ -149,59 +149,178 @@ const Admin = () => {
   }, [searchTerm, filterType, users])
   
   const handleTogglePremium = async (userId, currentPremium, userSource) => {
-    // Backend artık Firebase kullanıcıları için otomatik MongoDB'de settings oluşturuyor
-    // Bu yüzden source kontrolüne gerek yok, direkt backend'e gönder
-    const result = await adminService.toggleUserPremium(userId, !currentPremium)
-    if (result.success) {
-      // Kullanıcı listesini sessizce yenile (loading gösterme)
-      await loadUsers(false)
-      
-      // Eğer kullanıcı kendisini premium yapıyorsa, AuthContext'i güncelle
-      if (user && user.uid === userId) {
-        // Kısa bir süre sonra refreshUserSettings'i çağır (MongoDB güncellemesi için)
-        setTimeout(async () => {
-          await refreshUserSettings()
-        }, 500)
-      }
-    } else {
-      alert(t('togglePremiumError') + ': ' + result.error)
+    const newPremiumStatus = !currentPremium
+    
+    // Önce local state'i anında güncelle (optimistic update)
+    setUsers(prevUsers => 
+      prevUsers.map(u => 
+        u.uid === userId ? { ...u, isPremium: newPremiumStatus } : u
+      )
+    )
+    
+    // Eğer kullanıcı kendisini premium yapıyorsa, AuthContext'i HEMEN güncelle
+    if (user && user.uid === userId) {
+      updatePremiumStatus(newPremiumStatus)
     }
+    
+    // Backend'e gönder (await yapmadan, arka planda çalışsın)
+    adminService.toggleUserPremium(userId, newPremiumStatus)
+      .then((result) => {
+        if (result.success) {
+          // Kullanıcı listesini sessizce yenile (loading gösterme) - arka planda
+          loadUsers(false).catch(() => {
+            // Hata olsa bile optimistic update zaten yapıldı
+          })
+          
+          // Eğer kullanıcı kendisini premium yapıyorsa, backend'den doğrulama yap (arka planda)
+          if (user && user.uid === userId) {
+            // Kısa bir süre bekleyip refresh yap (backend'in güncellemesi için)
+            setTimeout(() => {
+              refreshUserSettings().catch(() => {
+                // Hata olsa bile optimistic update zaten yapıldı
+              })
+            }, 500) // 0.5 saniye sonra doğrulama yap
+          }
+        } else {
+          // Hata durumunda geri al (rollback)
+          setUsers(prevUsers => 
+            prevUsers.map(u => 
+              u.uid === userId ? { ...u, isPremium: currentPremium } : u
+            )
+          )
+          
+          // Eğer kullanıcı kendisiyse AuthContext'i de geri al
+          if (user && user.uid === userId) {
+            updatePremiumStatus(currentPremium)
+          }
+          
+          alert(t('togglePremiumError') + ': ' + result.error)
+        }
+      })
+      .catch((error) => {
+        // Network hatası durumunda geri al (rollback)
+        setUsers(prevUsers => 
+          prevUsers.map(u => 
+            u.uid === userId ? { ...u, isPremium: currentPremium } : u
+          )
+        )
+        
+        // Eğer kullanıcı kendisiyse AuthContext'i de geri al
+        if (user && user.uid === userId) {
+          updatePremiumStatus(currentPremium)
+        }
+        
+        alert(t('togglePremiumError') + ': ' + error.message)
+      })
   }
   
   const handleToggleActive = async (userId, currentActive, userSource) => {
-    // Backend artık Firebase kullanıcıları için otomatik MongoDB'de settings oluşturuyor
-    let result
-    if (currentActive) {
-      result = await adminService.deactivateUser(userId)
-    } else {
-      result = await adminService.activateUser(userId)
-    }
+    const newActiveStatus = !currentActive
     
-    if (result.success) {
-      // Kullanıcı listesini sessizce yenile (loading gösterme)
-      await loadUsers(false)
-    } else {
-      alert(t('toggleActiveError') + ': ' + result.error)
-    }
+    // Önce local state'i anında güncelle (optimistic update)
+    setUsers(prevUsers => 
+      prevUsers.map(u => 
+        u.uid === userId ? { ...u, isActive: newActiveStatus } : u
+      )
+    )
+    
+    // Backend'e gönder (await yapmadan, arka planda çalışsın)
+    const serviceCall = currentActive 
+      ? adminService.deactivateUser(userId)
+      : adminService.activateUser(userId)
+    
+    serviceCall
+      .then((result) => {
+        if (result.success) {
+          // Kullanıcı listesini sessizce yenile (loading gösterme) - arka planda
+          loadUsers(false).catch(() => {
+            // Hata olsa bile optimistic update zaten yapıldı
+          })
+        } else {
+          // Hata durumunda geri al (rollback)
+          setUsers(prevUsers => 
+            prevUsers.map(u => 
+              u.uid === userId ? { ...u, isActive: currentActive } : u
+            )
+          )
+          alert(t('toggleActiveError') + ': ' + result.error)
+        }
+      })
+      .catch((error) => {
+        // Network hatası durumunda geri al (rollback)
+        setUsers(prevUsers => 
+          prevUsers.map(u => 
+            u.uid === userId ? { ...u, isActive: currentActive } : u
+          )
+        )
+        alert(t('toggleActiveError') + ': ' + error.message)
+      })
   }
   
   const handleToggleAdmin = async (userId, currentAdmin, userSource) => {
-    // Backend artık Firebase kullanıcıları için otomatik MongoDB'de settings oluşturuyor
-    const result = await adminService.setUserAsAdmin(userId, !currentAdmin)
-    if (result.success) {
-      // Kullanıcı listesini sessizce yenile (loading gösterme)
-      await loadUsers(false)
-      
-      // Eğer kullanıcı kendisini admin yapıyorsa, AuthContext'i güncelle
-      if (user && user.uid === userId) {
-        // Kısa bir süre sonra refreshUserSettings'i çağır (MongoDB güncellemesi için)
-        setTimeout(async () => {
-          await refreshUserSettings()
-        }, 500)
-      }
-    } else {
-      alert(t('toggleAdminError') + ': ' + result.error)
+    const newAdminStatus = !currentAdmin
+    
+    // Önce local state'i anında güncelle (optimistic update)
+    setUsers(prevUsers => 
+      prevUsers.map(u => 
+        u.uid === userId ? { ...u, isAdmin: newAdminStatus } : u
+      )
+    )
+    
+    // Eğer kullanıcı kendisini admin yapıyorsa, AuthContext'i HEMEN güncelle
+    if (user && user.uid === userId) {
+      updateAdminStatus(newAdminStatus)
     }
+    
+    // Backend'e gönder (await yapmadan, arka planda çalışsın)
+    adminService.setUserAsAdmin(userId, newAdminStatus)
+      .then((result) => {
+        if (result.success) {
+          // Kullanıcı listesini sessizce yenile (loading gösterme) - arka planda
+          loadUsers(false).catch(() => {
+            // Hata olsa bile optimistic update zaten yapıldı
+          })
+          
+          // Eğer kullanıcı kendisini admin yapıyorsa, backend'den doğrulama yap (arka planda)
+          if (user && user.uid === userId) {
+            // Kısa bir süre bekleyip refresh yap (backend'in güncellemesi için)
+            setTimeout(() => {
+              refreshUserSettings().catch(() => {
+                // Hata olsa bile optimistic update zaten yapıldı
+              })
+            }, 500) // 0.5 saniye sonra doğrulama yap
+          }
+        } else {
+          // Hata durumunda geri al (rollback)
+          setUsers(prevUsers => 
+            prevUsers.map(u => 
+              u.uid === userId ? { ...u, isAdmin: currentAdmin } : u
+            )
+          )
+          
+          // Eğer kullanıcı kendisiyse AuthContext'i de geri al
+          if (user && user.uid === userId) {
+            updateAdminStatus(currentAdmin)
+          }
+          
+          alert(t('toggleAdminError') + ': ' + result.error)
+        }
+      })
+      .catch((error) => {
+        // Network hatası durumunda geri al (rollback)
+        setUsers(prevUsers => 
+          prevUsers.map(u => 
+            u.uid === userId ? { ...u, isAdmin: currentAdmin } : u
+          )
+        )
+        
+        // Eğer kullanıcı kendisiyse AuthContext'i de geri al
+        if (user && user.uid === userId) {
+          updateAdminStatus(currentAdmin)
+        }
+        
+        alert(t('toggleAdminError') + ': ' + error.message)
+      })
   }
   
   if (loading) {
