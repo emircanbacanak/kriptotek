@@ -127,6 +127,9 @@ try {
 const app = express()
 const PORT = process.env.PORT || 3000
 
+// Global HTTP server (hata durumunda da başlatılabilmesi için)
+let httpServer = null
+
 // Security Headers Middleware - XSS, Clickjacking ve diğer saldırılara karşı koruma
 app.use((req, res, next) => {
   // XSS Protection
@@ -3165,8 +3168,14 @@ app.use((req, res, next) => {
 
 // Server başlat
 async function startServer() {
-  // MongoDB bağlantısını başlat (başarısız olsa bile server başlamalı)
-  await connectToMongoDB()
+  try {
+    // HTTP server'ı önce oluştur (hata durumunda da kullanılabilmesi için)
+    if (!httpServer) {
+      httpServer = createServer(app)
+    }
+    
+    // MongoDB bağlantısını başlat (başarısız olsa bile server başlamalı)
+    await connectToMongoDB()
   
   // Memory cache'i yükle (MongoDB varsa - ilk kullanıcı için hızlı erişim)
   if (db) {
@@ -3301,8 +3310,10 @@ async function startServer() {
   
   // Development mode - mesaj gösterme (production'da hiçbir şey yazdırma)
   
-  // HTTP server ve WebSocket server oluştur
-  const httpServer = createServer(app)
+  // HTTP server zaten oluşturuldu (yukarıda), sadece WebSocket server oluştur
+  if (!httpServer) {
+    httpServer = createServer(app)
+  }
   
   // WebSocket server - path kontrolü ile
   wss = new WebSocketServer({ 
@@ -3349,28 +3360,47 @@ async function startServer() {
   }
   
   // API Scheduler'ı import et
-  const { start, setDbInstance } = await import('./services/apiScheduler.js')
-  
-  // MongoDB db instance'ını scheduler'a geç
-  if (db) {
-    setDbInstance(db)
-    // API Scheduler'ı başlat (sadece MongoDB varsa)
-    start()
-  } else {
-    console.warn('⚠️ MongoDB bağlantısı yok, API Scheduler atlanıyor')
+  try {
+    const { start, setDbInstance } = await import('./services/apiScheduler.js')
+    
+    // MongoDB db instance'ını scheduler'a geç
+    if (db) {
+      setDbInstance(db)
+      // API Scheduler'ı başlat (sadece MongoDB varsa)
+      start()
+    } else {
+      console.warn('⚠️ MongoDB bağlantısı yok, API Scheduler atlanıyor')
+    }
+  } catch (error) {
+    console.warn('⚠️ API Scheduler import/başlatma hatası:', error.message)
   }
   
   // Server'ı başlat (MongoDB olsun ya da olmasın)
-  httpServer.listen(PORT, () => {
-    console.log(`✅ Backend API çalışıyor: http://localhost:${PORT}`)
-    console.log(`✅ WebSocket server çalışıyor: ws://localhost:${PORT}/ws`)
-    if (process.env.NODE_ENV === 'production') {
-      console.log(`✅ Frontend static dosyalar serve ediliyor`)
+  // Eğer httpServer zaten dinliyorsa, tekrar başlatma
+  if (httpServer && !httpServer.listening) {
+    httpServer.listen(PORT, () => {
+      console.log(`✅ Backend API çalışıyor: http://localhost:${PORT}`)
+      console.log(`✅ WebSocket server çalışıyor: ws://localhost:${PORT}/ws`)
+      if (process.env.NODE_ENV === 'production') {
+        console.log(`✅ Frontend static dosyalar serve ediliyor`)
+      }
+      if (!db) {
+        console.warn('⚠️ MongoDB bağlantısı yok - bazı özellikler çalışmayabilir')
+      }
+    })
+  }
+  } catch (error) {
+    console.error('❌ startServer() içinde hata:', error)
+    console.error('❌ Stack trace:', error.stack)
+    // Hata olsa bile httpServer'ı başlat
+    if (httpServer && !httpServer.listening) {
+      const PORT = process.env.PORT || 3000
+      httpServer.listen(PORT, () => {
+        console.log(`⚠️ Server hata ile başlatıldı (startServer içinde hata): http://localhost:${PORT}`)
+        console.log(`⚠️ Bazı özellikler çalışmayabilir`)
+      })
     }
-    if (!db) {
-      console.warn('⚠️ MongoDB bağlantısı yok - bazı özellikler çalışmayabilir')
-    }
-  })
+  }
 }
 
 // Server'ı başlat - hata olsa bile process'i çalışır tut (Heroku için kritik)
@@ -3379,12 +3409,16 @@ startServer().catch((error) => {
   console.error('❌ Stack trace:', error.stack)
   // Heroku'da process'in çalışır kalması için server'ı yine de başlat
   // Health check endpoint'i çalışmalı
-  const PORT = process.env.PORT || 3000
-  const httpServer = createServer(app)
-  httpServer.listen(PORT, () => {
-    console.log(`⚠️ Server hata ile başlatıldı, sadece health check çalışıyor: http://localhost:${PORT}`)
-    console.log(`⚠️ MongoDB ve diğer özellikler çalışmıyor olabilir`)
-  })
+  if (!httpServer) {
+    httpServer = createServer(app)
+  }
+  if (!httpServer.listening) {
+    const PORT = process.env.PORT || 3000
+    httpServer.listen(PORT, () => {
+      console.log(`⚠️ Server hata ile başlatıldı, sadece health check çalışıyor: http://localhost:${PORT}`)
+      console.log(`⚠️ MongoDB ve diğer özellikler çalışmıyor olabilir`)
+    })
+  }
 })
 
 // Graceful shutdown
