@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { createServer } from 'http'
 import { WebSocketServer } from 'ws'
+import rateLimit from 'express-rate-limit'
 import { fetchDominanceData } from './services/apiHandlers/dominance.js'
 import { fetchFearGreedData } from './services/apiHandlers/fearGreed.js'
 
@@ -206,6 +207,50 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
+// Rate Limiting Middleware (100-200 kullanıcı için optimize)
+// Genel API rate limit
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 dakika
+  max: 100, // Her IP için 15 dakikada 100 istek
+  message: {
+    success: false,
+    error: 'Too many requests from this IP, please try again later.'
+  },
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  skip: (req) => {
+    // Health check endpoint'ini rate limit'ten muaf tut
+    return req.path === '/health'
+  }
+})
+
+// Daha sıkı rate limit (cache endpoint'leri için)
+const cacheLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 dakika
+  max: 30, // Her IP için 1 dakikada 30 istek
+  message: {
+    success: false,
+    error: 'Too many cache requests, please try again later.'
+  }
+})
+
+// Çok sıkı rate limit (update endpoint'leri için)
+const updateLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 dakika
+  max: 10, // Her IP için 5 dakikada 10 istek
+  message: {
+    success: false,
+    error: 'Too many update requests, please try again later.'
+  }
+})
+
+// API route'larına rate limiting uygula
+app.use('/api/', apiLimiter)
+app.use('/cache/', cacheLimiter)
+app.use('/api/crypto/update', updateLimiter)
+app.use('/api/currency/update', updateLimiter)
+app.use('/api/trending/update', updateLimiter)
+
 // Input Validation & Sanitization Middleware
 const validateUserId = (userId) => {
   if (!userId || typeof userId !== 'string') {
@@ -292,14 +337,62 @@ let db = null
 let client = null
 let wss = null // WebSocket server
 
-// In-memory cache (hızlı erişim için)
+// In-memory cache (hızlı erişim için) - 100-200 kullanıcı için optimize
 const memoryCache = {
   crypto_list: null,
   crypto_list_timestamp: null,
-  crypto_list_ttl: 5 * 60 * 1000, // 5 dakika TTL
+  crypto_list_ttl: 5 * 60 * 1000, // 5 dakika TTL (100-200 kullanıcı için optimize)
   dominance_data: null,
   dominance_data_timestamp: null,
-  dominance_data_ttl: 5 * 60 * 1000
+  dominance_data_ttl: 10 * 60 * 1000, // 10 dakika TTL (dominance daha az sık değişir)
+  // Cache invalidation için son güncelleme zamanları
+  lastInvalidation: {
+    crypto_list: 0,
+    dominance_data: 0
+  }
+}
+
+// Memory cache invalidation helper (100-200 kullanıcı için optimize)
+function invalidateMemoryCache(cacheKey) {
+  if (cacheKey === 'crypto_list') {
+    memoryCache.crypto_list = null
+    memoryCache.crypto_list_timestamp = null
+    memoryCache.lastInvalidation.crypto_list = Date.now()
+  } else if (cacheKey === 'dominance_data') {
+    memoryCache.dominance_data = null
+    memoryCache.dominance_data_timestamp = null
+    memoryCache.lastInvalidation.dominance_data = Date.now()
+  }
+}
+
+// Memory cache warming (server başlatılırken cache'i doldur)
+async function warmMemoryCache() {
+  if (!db) {
+    console.warn('⚠️ MongoDB bağlantısı yok, memory cache warming atlanıyor')
+    return
+  }
+
+  try {
+    const collection = db.collection('api_cache')
+    
+    // Crypto list cache warming
+    const cryptoDoc = await collection.findOne({ _id: 'crypto_list' })
+    if (cryptoDoc && cryptoDoc.data && Array.isArray(cryptoDoc.data) && cryptoDoc.data.length > 0) {
+      memoryCache.crypto_list = cryptoDoc.data
+      memoryCache.crypto_list_timestamp = cryptoDoc.updatedAt || cryptoDoc.lastUpdate || Date.now()
+      console.log(`✅ Memory cache warmed: crypto_list (${cryptoDoc.data.length} coin)`)
+    }
+    
+    // Dominance data cache warming
+    const dominanceDoc = await collection.findOne({ _id: 'dominance_data' })
+    if (dominanceDoc && dominanceDoc.data) {
+      memoryCache.dominance_data = dominanceDoc.data
+      memoryCache.dominance_data_timestamp = dominanceDoc.updatedAt || dominanceDoc.lastUpdate || Date.now()
+      console.log('✅ Memory cache warmed: dominance_data')
+    }
+  } catch (error) {
+    console.warn('⚠️ Memory cache warming hatası:', error.message)
+  }
 }
 
 // MongoDB bağlantısı
@@ -310,14 +403,81 @@ async function connectToMongoDB() {
       return
     }
 
-    client = new MongoClient(MONGODB_URI)
+    // MongoDB Connection Pooling Optimizasyonu (100-200 kullanıcı için)
+    client = new MongoClient(MONGODB_URI, {
+      maxPoolSize: 50, // Maksimum connection pool boyutu (varsayılan: 100)
+      minPoolSize: 5, // Minimum connection pool boyutu
+      maxIdleTimeMS: 30000, // 30 saniye idle connection timeout
+      serverSelectionTimeoutMS: 5000, // 5 saniye server selection timeout
+      socketTimeoutMS: 45000, // 45 saniye socket timeout
+      connectTimeoutMS: 10000, // 10 saniye connection timeout
+      retryWrites: true,
+      retryReads: true,
+      // Read preference: secondaryPreferred (read scaling için)
+      readPreference: 'primaryPreferred'
+    })
     await client.connect()
     db = client.db(DB_NAME)
-    console.log('✅ MongoDB bağlantısı başarılı!')
+    console.log('✅ MongoDB bağlantısı başarılı! (Connection Pool: min=5, max=50)')
+    
+    // MongoDB Index'lerini oluştur (performans için kritik)
+    await createMongoDBIndexes()
   } catch (error) {
     console.error('❌ MongoDB bağlantı hatası:', error.message)
     console.warn('⚠️ Server MongoDB olmadan çalışmaya devam edecek. Bazı özellikler çalışmayabilir.')
     // Server'ı durdurma, sadece uyarı ver
+  }
+}
+
+// MongoDB Index'lerini oluştur (100-200 kullanıcı için performans optimizasyonu)
+async function createMongoDBIndexes() {
+  if (!db) {
+    console.warn('⚠️ MongoDB bağlantısı yok, index\'ler oluşturulamadı')
+    return
+  }
+
+  try {
+    // api_cache collection index'leri
+    const apiCacheCollection = db.collection('api_cache')
+    await apiCacheCollection.createIndex({ _id: 1 }, { unique: true, background: true })
+    await apiCacheCollection.createIndex({ updatedAt: -1 }, { background: true })
+    await apiCacheCollection.createIndex({ lastUpdate: -1 }, { background: true })
+    console.log('✅ api_cache collection index\'leri oluşturuldu')
+
+    // user_settings collection index'leri
+    const userSettingsCollection = db.collection('user_settings')
+    await userSettingsCollection.createIndex({ userId: 1 }, { unique: true, background: true })
+    await userSettingsCollection.createIndex({ updatedAt: -1 }, { background: true })
+    console.log('✅ user_settings collection index\'leri oluşturuldu')
+
+    // user_portfolio collection index'leri
+    const userPortfolioCollection = db.collection('user_portfolio')
+    await userPortfolioCollection.createIndex({ userId: 1 }, { unique: true, background: true })
+    await userPortfolioCollection.createIndex({ updatedAt: -1 }, { background: true })
+    console.log('✅ user_portfolio collection index\'leri oluşturuldu')
+
+    // user_favorites collection index'leri
+    const userFavoritesCollection = db.collection('user_favorites')
+    await userFavoritesCollection.createIndex({ userId: 1 }, { unique: true, background: true })
+    await userFavoritesCollection.createIndex({ updatedAt: -1 }, { background: true })
+    console.log('✅ user_favorites collection index\'leri oluşturuldu')
+
+    // news collection index'leri
+    const newsCollection = db.collection('news')
+    await newsCollection.createIndex({ publishedAt: -1 }, { background: true })
+    await newsCollection.createIndex({ source: 1, publishedAt: -1 }, { background: true })
+    await newsCollection.createIndex({ createdAt: -1 }, { background: true })
+    console.log('✅ news collection index\'leri oluşturuldu')
+
+    console.log('✅ Tüm MongoDB index\'leri başarıyla oluşturuldu (background mode)')
+  } catch (error) {
+    // Index zaten varsa hata vermez, sadece uyarı ver
+    if (error.code === 85 || error.code === 86) {
+      // Index zaten var veya duplicate key hatası
+      console.log('ℹ️ Bazı index\'ler zaten mevcut, devam ediliyor...')
+    } else {
+      console.warn('⚠️ MongoDB index oluşturma hatası:', error.message)
+    }
   }
 }
 
@@ -1770,17 +1930,24 @@ app.post('/api/dominance/update', async (req, res) => {
       .sort((a, b) => new Date(a.date) - new Date(b.date))
 
     // MongoDB'ye kaydet
+    const saveNow = Date.now()
     await collection.updateOne(
       { _id: 'dominance_data' },
       { 
         $set: {
           data: mergedData,
-          lastUpdate: Date.now(),
-          updatedAt: new Date()
+          lastUpdate: saveNow,
+          updatedAt: saveNow
         }
       },
       { upsert: true }
     )
+
+    // Memory cache'i güncelle (100-200 kullanıcı için kritik)
+    memoryCache.dominance_data = mergedData
+    memoryCache.dominance_data_timestamp = saveNow
+    const timeStr = new Date().toLocaleTimeString('tr-TR')
+    console.log(`⚡ [${timeStr}] Memory cache güncellendi: dominance_data`)
 
     return res.json({
       success: true,
@@ -2043,14 +2210,10 @@ app.post('/api/crypto/update', async (req, res) => {
       { upsert: true }
     )
     
-    // Memory cache'i güncelle (hızlı erişim için - sonraki istekler <1ms'de dönecek)
+    // Memory cache'i güncelle (hızlı erişim için - 100-200 kullanıcı için kritik)
     memoryCache.crypto_list = result.data
     memoryCache.crypto_list_timestamp = now
-    console.log(`⚡ [${timeStr}] Memory cache güncellendi (${result.data.length} coin) - sonraki istekler <1ms'de dönecek`        )
-        
-        // Memory cache'i güncelle (hızlı erişim için)
-        memoryCache.crypto_list = result.data
-        memoryCache.crypto_list_timestamp = now
+    console.log(`⚡ [${timeStr}] Memory cache güncellendi (${result.data.length} coin) - sonraki istekler <1ms'de dönecek`)
     
     // Debug: Kaydedildikten sonra MongoDB'den kontrol
     const savedDoc = await collection.findOne({ _id: 'crypto_list' });
@@ -3180,6 +3343,8 @@ async function startServer() {
   // Memory cache'i yükle (MongoDB varsa - ilk kullanıcı için hızlı erişim)
   if (db) {
     await loadMemoryCache()
+    // Memory cache warming (100-200 kullanıcı için kritik - ilk isteklerde MongoDB'ye gitmemek için)
+    await warmMemoryCache()
   } else {
     console.warn('⚠️ MongoDB bağlantısı yok, memory cache atlanıyor')
   }
