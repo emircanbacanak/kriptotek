@@ -41,40 +41,55 @@ try {
   const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH
   
   if (serviceAccount) {
-    // JSON string olarak verilmişse
+    // JSON string olarak verilmişse (Heroku için önerilen yöntem)
     try {
       const serviceAccountJson = JSON.parse(serviceAccount)
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccountJson)
       })
       firebaseAdmin = admin
+      console.log('✅ Firebase Admin SDK başlatıldı (FIREBASE_SERVICE_ACCOUNT kullanıldı)')
     } catch (parseError) {
       console.warn('⚠️ Firebase Service Account JSON parse hatası:', parseError.message)
     }
+  } else if (serviceAccountPath) {
+    // Dosya yolu verilmişse (local development için)
+    const __filename = fileURLToPath(import.meta.url)
+    const __dirname = dirname(__filename)
+    const serviceAccountFile = serviceAccountPath.startsWith('/') || serviceAccountPath.match(/^[A-Z]:/) 
+      ? serviceAccountPath 
+      : join(__dirname, serviceAccountPath)
+    
+    if (existsSync(serviceAccountFile)) {
+      try {
+        const serviceAccountJson = JSON.parse(readFileSync(serviceAccountFile, 'utf8'))
+        admin.initializeApp({
+          credential: admin.credential.cert(serviceAccountJson)
+        })
+        firebaseAdmin = admin
+        console.log('✅ Firebase Admin SDK başlatıldı (FIREBASE_SERVICE_ACCOUNT_PATH kullanıldı)')
+      } catch (fileError) {
+        console.warn('⚠️ Firebase Service Account dosyası okunamadı:', fileError.message)
+      }
+    } else {
+      console.warn('⚠️ Firebase Service Account dosyası bulunamadı:', serviceAccountFile)
+    }
   } else {
-    // Dosya yolu kontrolü
+    // Otomatik dosya bulma: server/ klasöründe firebase-adminsdk-*.json dosyasını ara (local development için)
     const __filename = fileURLToPath(import.meta.url)
     const __dirname = dirname(__filename)
     let serviceAccountFile = null
     
-    if (serviceAccountPath) {
-      // Environment variable'dan dosya yolu
-      serviceAccountFile = serviceAccountPath.startsWith('/') || serviceAccountPath.match(/^[A-Z]:/) 
-        ? serviceAccountPath 
-        : join(__dirname, serviceAccountPath)
-    } else {
-      // Otomatik dosya bulma: server/ klasöründe firebase-adminsdk-*.json dosyasını ara
-      try {
-        const files = readdirSync(__dirname)
-        const firebaseAdminFile = files.find(file => 
-          file.includes('firebase-adminsdk') && file.endsWith('.json')
-        )
-        if (firebaseAdminFile) {
-          serviceAccountFile = join(__dirname, firebaseAdminFile)
-        }
-      } catch (dirError) {
-        // Klasör okunamadı, devam et
+    try {
+      const files = readdirSync(__dirname)
+      const firebaseAdminFile = files.find(file => 
+        file.includes('firebase-adminsdk') && file.endsWith('.json')
+      )
+      if (firebaseAdminFile) {
+        serviceAccountFile = join(__dirname, firebaseAdminFile)
       }
+    } catch (dirError) {
+      // Klasör okunamadı, devam et
     }
     
     if (serviceAccountFile && existsSync(serviceAccountFile)) {
@@ -84,20 +99,24 @@ try {
           credential: admin.credential.cert(serviceAccountJson)
         })
         firebaseAdmin = admin
+        console.log('✅ Firebase Admin SDK başlatıldı (otomatik dosya bulundu)')
       } catch (fileError) {
         console.warn('⚠️ Firebase Service Account dosyası okunamadı:', fileError.message)
       }
     } else {
       // Service Account yok - Firebase kullanıcıları çekilemeyecek
-      console.warn('⚠️ Firebase Service Account dosyası bulunamadı')
+      console.warn('⚠️ Firebase Service Account bulunamadı')
       console.warn('⚠️ Firebase kullanıcıları çekilemeyecek')
-      console.warn('ℹ️ Firebase Service Account JSON eklemek için:')
-      console.warn('   1. Firebase Console → https://console.firebase.google.com/')
-      console.warn('   2. Projenizi seçin (kriptotek-emir)')
-      console.warn('   3. ⚙️ Project Settings → Service accounts sekmesi')
-      console.warn('   4. "Generate new private key" butonuna tıklayın')
-      console.warn('   5. JSON dosyasını server/ klasörüne koyun')
-      console.warn('   6. Veya .env dosyasına ekleyin: FIREBASE_SERVICE_ACCOUNT_PATH=./kriptotek-emir-firebase-adminsdk-*.json')
+      console.warn('ℹ️ Firebase Service Account eklemek için iki yöntem:')
+      console.warn('   Yöntem 1 (Heroku için önerilen):')
+      console.warn('     FIREBASE_SERVICE_ACCOUNT={"type":"service_account",...} (JSON string)')
+      console.warn('   Yöntem 2 (Local development için):')
+      console.warn('     1. Firebase Console → https://console.firebase.google.com/')
+      console.warn('     2. Projenizi seçin (kriptotek-emir)')
+      console.warn('     3. ⚙️ Project Settings → Service accounts sekmesi')
+      console.warn('     4. "Generate new private key" butonuna tıklayın')
+      console.warn('     5. JSON dosyasını server/ klasörüne koyun')
+      console.warn('     6. Veya .env dosyasına ekleyin: FIREBASE_SERVICE_ACCOUNT_PATH=./kriptotek-emir-firebase-adminsdk-*.json')
     }
   }
 } catch (error) {
@@ -284,7 +303,7 @@ const memoryCache = {
 async function connectToMongoDB() {
   try {
     if (!MONGODB_URI) {
-      console.error('❌ MONGODB_URI environment variable eksik!')
+      console.warn('⚠️ MONGODB_URI environment variable eksik! Server MongoDB olmadan çalışacak.')
       return
     }
 
@@ -294,6 +313,8 @@ async function connectToMongoDB() {
     console.log('✅ MongoDB bağlantısı başarılı!')
   } catch (error) {
     console.error('❌ MongoDB bağlantı hatası:', error.message)
+    console.warn('⚠️ Server MongoDB olmadan çalışmaya devam edecek. Bazı özellikler çalışmayabilir.')
+    // Server'ı durdurma, sadece uyarı ver
   }
 }
 
@@ -3112,10 +3133,13 @@ app.post('/api/supply-tracking/update', async (req, res) => {
 })
 
 // Health check
+// Health check endpoint (Heroku için kritik)
 app.get('/health', (req, res) => {
-  res.json({ 
+  res.status(200).json({ 
     status: 'ok', 
-    mongodb: db ? 'connected' : 'disconnected' 
+    timestamp: new Date().toISOString(),
+    mongodb: db ? 'connected' : 'disconnected',
+    uptime: process.uptime()
   })
 })
 
@@ -3141,10 +3165,15 @@ app.use((req, res, next) => {
 
 // Server başlat
 async function startServer() {
+  // MongoDB bağlantısını başlat (başarısız olsa bile server başlamalı)
   await connectToMongoDB()
   
-  // Memory cache'i yükle (ilk kullanıcı için hızlı erişim)
-  await loadMemoryCache()
+  // Memory cache'i yükle (MongoDB varsa - ilk kullanıcı için hızlı erişim)
+  if (db) {
+    await loadMemoryCache()
+  } else {
+    console.warn('⚠️ MongoDB bağlantısı yok, memory cache atlanıyor')
+  }
   
   // Static dosyaları serve et (Heroku için - build edilmiş frontend)
   const rootDir = join(__dirname, '..')
@@ -3165,6 +3194,7 @@ async function startServer() {
   if (existsSync(distDir)) {
     // Production: Static dosyaları serve et
     app.use(express.static(distDir))
+    console.log(`✅ Static dosyalar serve ediliyor: ${distDir}`)
     
     // Tüm route'ları index.html'e yönlendir (SPA için)
     // API route'larından sonra ekle (yoksa API route'ları çalışmaz)
@@ -3173,29 +3203,47 @@ async function startServer() {
       if (!req.path.startsWith('/api') && 
           !req.path.includes('maintenance.html') && 
           !req.path.includes('error.html')) {
-        res.sendFile(join(distDir, 'index.html'), (err) => {
-          // Dosya bulunamazsa error.html göster
-          if (err) {
-            const errorPath = join(publicDir, 'error.html')
-            const distErrorPath = join(distDir, 'error.html')
-            
-            if (existsSync(errorPath)) {
-              return res.status(404).sendFile(errorPath)
-            } else if (existsSync(distErrorPath)) {
-              return res.status(404).sendFile(distErrorPath)
+        const indexPath = join(distDir, 'index.html')
+        if (existsSync(indexPath)) {
+          res.sendFile(indexPath, (err) => {
+            // Dosya bulunamazsa error.html göster
+            if (err) {
+              const errorPath = join(publicDir, 'error.html')
+              const distErrorPath = join(distDir, 'error.html')
+              
+              if (existsSync(errorPath)) {
+                return res.status(404).sendFile(errorPath)
+              } else if (existsSync(distErrorPath)) {
+                return res.status(404).sendFile(distErrorPath)
+              } else {
+                return res.status(404).json({ error: 'File not found' })
+              }
             }
-            next(err)
-          }
-        })
+          })
+        } else {
+          // index.html yoksa error göster
+          res.status(503).json({ 
+            error: 'Frontend build not found',
+            message: 'Please ensure the build process completed successfully',
+            mongodb: db ? 'connected' : 'disconnected'
+          })
+        }
       } else {
         next()
       }
     })
+  } else {
+    console.warn('⚠️ dist klasörü bulunamadı - Production modunda frontend dosyaları serve edilemiyor')
+    console.warn('⚠️ Heroku build sürecini kontrol edin: npm run build')
     
-    // Production'da mesaj gösterme
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('✅ Static dosyalar serve ediliyor:', distDir)
-    }
+    // dist klasörü yoksa bile root path'ten bir mesaj döndür
+    app.get('/', (req, res) => {
+      res.status(503).json({
+        error: 'Frontend build not found',
+        message: 'Please ensure the build process completed successfully',
+        mongodb: db ? 'connected' : 'disconnected'
+      })
+    })
   }
   
   // Error Handler Middleware (500 vb. için) - Route'lardan SONRA
@@ -3288,12 +3336,16 @@ async function startServer() {
     wss.on('close', () => clearInterval(interval))
   }
   
-  // Change Streams'i başlat (MongoDB realtime updates için)
-  try {
-    const { startChangeStreams } = await import('./services/changeStreams.js')
-    startChangeStreams(db, wss)
-  } catch (error) {
-    console.warn('⚠️ Change Streams başlatılamadı:', error.message)
+  // Change Streams'i başlat (MongoDB realtime updates için - sadece MongoDB varsa)
+  if (db) {
+    try {
+      const { startChangeStreams } = await import('./services/changeStreams.js')
+      startChangeStreams(db, wss)
+    } catch (error) {
+      console.warn('⚠️ Change Streams başlatılamadı:', error.message)
+    }
+  } else {
+    console.warn('⚠️ MongoDB bağlantısı yok, Change Streams atlanıyor')
   }
   
   // API Scheduler'ı import et
@@ -3302,21 +3354,38 @@ async function startServer() {
   // MongoDB db instance'ını scheduler'a geç
   if (db) {
     setDbInstance(db)
+    // API Scheduler'ı başlat (sadece MongoDB varsa)
+    start()
+  } else {
+    console.warn('⚠️ MongoDB bağlantısı yok, API Scheduler atlanıyor')
   }
   
+  // Server'ı başlat (MongoDB olsun ya da olmasın)
   httpServer.listen(PORT, () => {
     console.log(`✅ Backend API çalışıyor: http://localhost:${PORT}`)
     console.log(`✅ WebSocket server çalışıyor: ws://localhost:${PORT}/ws`)
     if (process.env.NODE_ENV === 'production') {
       console.log(`✅ Frontend static dosyalar serve ediliyor`)
     }
-    
-    // API Scheduler'ı başlat
-    start()
+    if (!db) {
+      console.warn('⚠️ MongoDB bağlantısı yok - bazı özellikler çalışmayabilir')
+    }
   })
 }
 
-startServer().catch(console.error)
+// Server'ı başlat - hata olsa bile process'i çalışır tut (Heroku için kritik)
+startServer().catch((error) => {
+  console.error('❌ Server başlatma hatası:', error)
+  console.error('❌ Stack trace:', error.stack)
+  // Heroku'da process'in çalışır kalması için server'ı yine de başlat
+  // Health check endpoint'i çalışmalı
+  const PORT = process.env.PORT || 3000
+  const httpServer = createServer(app)
+  httpServer.listen(PORT, () => {
+    console.log(`⚠️ Server hata ile başlatıldı, sadece health check çalışıyor: http://localhost:${PORT}`)
+    console.log(`⚠️ MongoDB ve diğer özellikler çalışmıyor olabilir`)
+  })
+})
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
