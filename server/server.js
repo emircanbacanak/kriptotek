@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { createServer } from 'http'
 import { WebSocketServer } from 'ws'
+import rateLimit from 'express-rate-limit'
 import { fetchDominanceData } from './services/apiHandlers/dominance.js'
 import { fetchFearGreedData } from './services/apiHandlers/fearGreed.js'
 
@@ -206,6 +207,96 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
+// Rate Limiting Middleware (100-200 kullanıcı için optimize)
+// Genel API rate limit
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 dakika
+  max: 200, // Her IP için 15 dakikada 200 istek (100-200 kullanıcı için yeterli)
+  message: {
+    success: false,
+    error: 'Too many requests from this IP, please try again later.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => {
+    // Health check endpoint'ini rate limit'ten muaf tut
+    if (req.path === '/health') {
+      return true
+    }
+    // Localhost/internal istekleri rate limit'ten muaf tut (scheduler'lar için)
+    const ip = req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress
+    if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1' || ip?.startsWith('127.') || ip === 'localhost') {
+      return true
+    }
+    // X-Forwarded-For header'ından IP al (Heroku/proxy arkasında)
+    const forwardedFor = req.headers['x-forwarded-for']
+    if (forwardedFor) {
+      const firstIp = forwardedFor.split(',')[0].trim()
+      if (firstIp === '127.0.0.1' || firstIp === '::1' || firstIp.startsWith('127.')) {
+        return true
+      }
+    }
+    return false
+  }
+})
+
+// Daha sıkı rate limit (cache endpoint'leri için)
+const cacheLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 dakika
+  max: 60, // Her IP için 1 dakikada 60 istek (100-200 kullanıcı için yeterli)
+  message: {
+    success: false,
+    error: 'Too many cache requests, please try again later.'
+  },
+  skip: (req) => {
+    // Localhost/internal istekleri rate limit'ten muaf tut
+    const ip = req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress
+    if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1' || ip?.startsWith('127.') || ip === 'localhost') {
+      return true
+    }
+    const forwardedFor = req.headers['x-forwarded-for']
+    if (forwardedFor) {
+      const firstIp = forwardedFor.split(',')[0].trim()
+      if (firstIp === '127.0.0.1' || firstIp === '::1' || firstIp.startsWith('127.')) {
+        return true
+      }
+    }
+    return false
+  }
+})
+
+// Çok sıkı rate limit (update endpoint'leri için)
+const updateLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 dakika
+  max: 20, // Her IP için 5 dakikada 20 istek (100-200 kullanıcı için yeterli)
+  message: {
+    success: false,
+    error: 'Too many update requests, please try again later.'
+  },
+  skip: (req) => {
+    // Localhost/internal istekleri rate limit'ten muaf tut (scheduler'lar için)
+    const ip = req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress
+    if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1' || ip?.startsWith('127.') || ip === 'localhost') {
+      return true
+    }
+    const forwardedFor = req.headers['x-forwarded-for']
+    if (forwardedFor) {
+      const firstIp = forwardedFor.split(',')[0].trim()
+      if (firstIp === '127.0.0.1' || firstIp === '::1' || firstIp.startsWith('127.')) {
+        return true
+      }
+    }
+    return false
+  }
+})
+
+// API route'larına rate limiting uygula
+app.use('/api/', apiLimiter)
+app.use('/cache/', cacheLimiter)
+app.use('/api/crypto/update', updateLimiter)
+app.use('/api/currency/update', updateLimiter)
+app.use('/api/trending/update', updateLimiter)
+
 // Input Validation & Sanitization Middleware
 const validateUserId = (userId) => {
   if (!userId || typeof userId !== 'string') {
@@ -310,14 +401,84 @@ async function connectToMongoDB() {
       return
     }
 
-    client = new MongoClient(MONGODB_URI)
+    // Connection Pooling (100-200 kullanıcı için optimize)
+    client = new MongoClient(MONGODB_URI, {
+      maxPoolSize: 50, // Maksimum connection pool boyutu
+      minPoolSize: 10, // Minimum connection pool boyutu
+      maxIdleTimeMS: 30000, // 30 saniye idle connection timeout
+      serverSelectionTimeoutMS: 5000, // 5 saniye server selection timeout
+      socketTimeoutMS: 120000, // 120 saniye socket timeout (supply tracking için yeterli)
+      connectTimeoutMS: 10000, // 10 saniye connection timeout
+      retryWrites: true,
+      retryReads: true,
+      readPreference: 'primaryPreferred' // Read scaling için
+    })
     await client.connect()
     db = client.db(DB_NAME)
-    console.log('✅ MongoDB bağlantısı başarılı!')
+    console.log('✅ MongoDB bağlantısı başarılı! (Connection Pool: min=10, max=50)')
+    
+    // MongoDB Index'lerini oluştur (performans için kritik)
+    // Hata olsa bile devam et (index'ler zaten varsa hata vermez)
+    try {
+      await createMongoDBIndexes()
+    } catch (indexError) {
+      console.warn('⚠️ Index oluşturma hatası (devam ediliyor):', indexError.message)
+      // Hata olsa bile devam et
+    }
   } catch (error) {
     console.error('❌ MongoDB bağlantı hatası:', error.message)
     console.warn('⚠️ Server MongoDB olmadan çalışmaya devam edecek. Bazı özellikler çalışmayabilir.')
     // Server'ı durdurma, sadece uyarı ver
+  }
+}
+
+// MongoDB Index'lerini oluştur (100-200 kullanıcı için performans optimizasyonu)
+async function createMongoDBIndexes() {
+  if (!db) {
+    console.warn('⚠️ MongoDB bağlantısı yok, index\'ler oluşturulamadı')
+    return
+  }
+
+  try {
+    // api_cache collection index'leri
+    const apiCacheCollection = db.collection('api_cache')
+    await apiCacheCollection.createIndex({ updatedAt: -1 }, { background: true })
+    await apiCacheCollection.createIndex({ lastUpdate: -1 }, { background: true })
+    console.log('✅ api_cache collection index\'leri oluşturuldu')
+
+    // user_settings collection index'leri
+    const userSettingsCollection = db.collection('user_settings')
+    await userSettingsCollection.createIndex({ userId: 1 }, { unique: true, background: true })
+    await userSettingsCollection.createIndex({ updatedAt: -1 }, { background: true })
+    console.log('✅ user_settings collection index\'leri oluşturuldu')
+
+    // user_portfolio collection index'leri
+    const userPortfolioCollection = db.collection('user_portfolio')
+    await userPortfolioCollection.createIndex({ userId: 1 }, { unique: true, background: true })
+    await userPortfolioCollection.createIndex({ updatedAt: -1 }, { background: true })
+    console.log('✅ user_portfolio collection index\'leri oluşturuldu')
+
+    // user_favorites collection index'leri
+    const userFavoritesCollection = db.collection('user_favorites')
+    await userFavoritesCollection.createIndex({ userId: 1 }, { unique: true, background: true })
+    await userFavoritesCollection.createIndex({ updatedAt: -1 }, { background: true })
+    console.log('✅ user_favorites collection index\'leri oluşturuldu')
+
+    // news collection index'leri
+    const newsCollection = db.collection('news')
+    await newsCollection.createIndex({ publishedAt: -1 }, { background: true })
+    await newsCollection.createIndex({ source: 1, publishedAt: -1 }, { background: true })
+    await newsCollection.createIndex({ createdAt: -1 }, { background: true })
+    console.log('✅ news collection index\'leri oluşturuldu')
+
+    console.log('✅ Tüm MongoDB index\'leri başarıyla oluşturuldu (background mode)')
+  } catch (error) {
+    // Index zaten varsa hata vermez, sadece uyarı ver
+    if (error.code === 85 || error.code === 86) {
+      console.log('ℹ️ Bazı index\'ler zaten mevcut, devam ediliyor...')
+    } else {
+      console.warn('⚠️ MongoDB index oluşturma hatası:', error.message)
+    }
   }
 }
 
@@ -336,18 +497,22 @@ async function loadMemoryCache() {
     const collection = db.collection('api_cache')
     
     // Crypto list
-    const cryptoDoc = await collection.findOne({ _id: 'crypto_list' })
+    const cryptoDoc = await collection.findOne({ _id: 'crypto_list' }, { maxTimeMS: 10000 })
     if (cryptoDoc && cryptoDoc.data && Array.isArray(cryptoDoc.data) && cryptoDoc.data.length > 0) {
       memoryCache.crypto_list = cryptoDoc.data
-      memoryCache.crypto_list_timestamp = cryptoDoc.updatedAt || cryptoDoc.lastUpdate || Date.now()
+      // Timestamp'i her zaman number'a çevir (Date objesi ise getTime() kullan)
+      const timestamp = cryptoDoc.updatedAt || cryptoDoc.lastUpdate || Date.now()
+      memoryCache.crypto_list_timestamp = timestamp instanceof Date ? timestamp.getTime() : (typeof timestamp === 'number' ? timestamp : Date.now())
       console.log(`✅ [${timeStr}] Memory cache'e ${cryptoDoc.data.length} coin yüklendi`)
     }
     
     // Dominance data
-    const dominanceDoc = await collection.findOne({ _id: 'dominance_data' })
+    const dominanceDoc = await collection.findOne({ _id: 'dominance_data' }, { maxTimeMS: 10000 })
     if (dominanceDoc && dominanceDoc.data) {
       memoryCache.dominance_data = dominanceDoc.data
-      memoryCache.dominance_data_timestamp = dominanceDoc.updatedAt || dominanceDoc.lastUpdate || Date.now()
+      // Timestamp'i her zaman number'a çevir (Date objesi ise getTime() kullan)
+      const timestamp = dominanceDoc.updatedAt || dominanceDoc.lastUpdate || Date.now()
+      memoryCache.dominance_data_timestamp = timestamp instanceof Date ? timestamp.getTime() : (typeof timestamp === 'number' ? timestamp : Date.now())
       console.log(`✅ [${timeStr}] Memory cache'e dominance data yüklendi`)
     }
     
@@ -1095,8 +1260,13 @@ app.get('/cache/crypto_list', async (req, res) => {
   try {
     // Önce memory cache'i kontrol et (çok hızlı - <1ms)
     const now = Date.now()
-    if (memoryCache.crypto_list && memoryCache.crypto_list_timestamp && 
-        (now - memoryCache.crypto_list_timestamp) < memoryCache.crypto_list_ttl) {
+    // Timestamp'i number'a çevir (Date objesi olabilir)
+    const cacheTimestamp = memoryCache.crypto_list_timestamp instanceof Date 
+      ? memoryCache.crypto_list_timestamp.getTime() 
+      : (typeof memoryCache.crypto_list_timestamp === 'number' ? memoryCache.crypto_list_timestamp : null)
+    
+    if (memoryCache.crypto_list && cacheTimestamp && 
+        (now - cacheTimestamp) < memoryCache.crypto_list_ttl) {
       const cacheDuration = Date.now() - startTime
       console.log(`⚡ [${timeStr}] Memory cache'den döndürüldü (${cacheDuration}ms) - ${memoryCache.crypto_list.length} coin`)
       return res.json({
@@ -1119,14 +1289,24 @@ app.get('/cache/crypto_list', async (req, res) => {
     console.log(`🔍 [${timeStr}] MongoDB'den crypto_list verisi çekiliyor... (memory cache'de yok)`)
     const collection = db.collection('api_cache')
     const findStartTime = Date.now()
-    const cacheDoc = await collection.findOne({ _id: 'crypto_list' })
+    // Timeout ayarı ekle (10 saniye) - 100-200 kullanıcı için kritik
+    // Projection ekle - sadece gerekli alanları çek (daha hızlı)
+    const cacheDoc = await collection.findOne(
+      { _id: 'crypto_list' },
+      { 
+        maxTimeMS: 10000, // 10 saniye timeout
+        projection: { data: 1, updatedAt: 1, lastUpdate: 1 } // Sadece gerekli alanları çek
+      }
+    )
     const findDuration = Date.now() - findStartTime
     console.log(`📊 [${timeStr}] MongoDB findOne süresi: ${findDuration}ms`)
     
     if (cacheDoc && cacheDoc.data && Array.isArray(cacheDoc.data) && cacheDoc.data.length > 0) {
       // Memory cache'e kaydet (sonraki istekler için)
       memoryCache.crypto_list = cacheDoc.data
-      memoryCache.crypto_list_timestamp = cacheDoc.updatedAt || cacheDoc.lastUpdate || Date.now()
+      // Timestamp'i her zaman number'a çevir (Date objesi ise getTime() kullan)
+      const timestamp = cacheDoc.updatedAt || cacheDoc.lastUpdate || Date.now()
+      memoryCache.crypto_list_timestamp = timestamp instanceof Date ? timestamp.getTime() : (typeof timestamp === 'number' ? timestamp : Date.now())
       
       // Debug: MongoDB'den okunurken total_supply ve max_supply kontrolü
       const sampleCoin = cacheDoc.data[0];
@@ -3439,6 +3619,20 @@ startServer().catch((error) => {
       console.log(`⚠️ MongoDB ve diğer özellikler çalışmıyor olabilir`)
     })
   }
+})
+
+// Unhandled promise rejection handler (process crash'i önlemek için)
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Promise Rejection:', reason)
+  console.error('❌ Promise:', promise)
+  // Process'i sonlandırma, sadece log'la (server çalışmaya devam etsin)
+})
+
+// Uncaught exception handler
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error)
+  console.error('❌ Stack:', error.stack)
+  // Process'i sonlandırma, sadece log'la (server çalışmaya devam etsin)
 })
 
 // Graceful shutdown

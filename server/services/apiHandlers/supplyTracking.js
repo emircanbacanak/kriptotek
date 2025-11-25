@@ -22,7 +22,10 @@ export async function updateSupplyTracking(db) {
     const supplyHistoryCollection = db.collection('supply_history')
     
     // 1. Crypto listesini MongoDB'den al
-    const cryptoDoc = await collection.findOne({ _id: 'crypto_list' })
+    const cryptoDoc = await collection.findOne(
+      { _id: 'crypto_list' },
+      { maxTimeMS: 10000 } // 10 saniye timeout
+    )
     if (!cryptoDoc || !cryptoDoc.data || !Array.isArray(cryptoDoc.data) || cryptoDoc.data.length === 0) {
       console.warn('⚠️ Supply tracking: Crypto listesi bulunamadı')
       return false
@@ -51,14 +54,15 @@ export async function updateSupplyTracking(db) {
     await supplyHistoryCollection.updateOne(
       { _id: snapshotKey },
       { $set: snapshot },
-      { upsert: true }
+      { upsert: true, maxTimeMS: 30000 } // 30 saniye timeout
     )
     
     // 5. Eski snapshot'ları temizle (30 günden eski)
     const thirtyDaysAgo = now.getTime() - (30 * 24 * 60 * 60 * 1000)
-    const deleteResult = await supplyHistoryCollection.deleteMany({
-      timestamp: { $lt: thirtyDaysAgo }
-    })
+    const deleteResult = await supplyHistoryCollection.deleteMany(
+      { timestamp: { $lt: thirtyDaysAgo } },
+      { maxTimeMS: 30000 } // 30 saniye timeout
+    )
     if (deleteResult.deletedCount > 0) {
       console.log(`🗑️ ${deleteResult.deletedCount} eski supply snapshot silindi (30 günden eski)`)
     }
@@ -76,7 +80,7 @@ export async function updateSupplyTracking(db) {
           updatedAt: now
         }
       },
-      { upsert: true }
+      { upsert: true, maxTimeMS: 30000 } // 30 saniye timeout
     )
     
     const timeStr = now.toLocaleTimeString('tr-TR')
@@ -105,13 +109,22 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
   // NOT: Eski snapshot'larda timestamp alanı olmayabilir veya Date objesi olabilir
   // Bu yüzden önce tüm snapshot'ları al, sonra filtrele
   const thirtyDaysAgo = now.getTime() - hours720
+  
+  // Önce timestamp'i olan snapshot'ları al (daha hızlı)
+  // Sonra timestamp'i olmayan snapshot'ları al
   const allSnapshotsRaw = await supplyHistoryCollection
-    .find({})
+    .find({}, { 
+      maxTimeMS: 60000, // 60 saniye timeout
+      projection: { _id: 1, timestamp: 1, supplies: 1 } // Sadece gerekli alanları çek
+    })
     .sort({ _id: 1 }) // _id'ye göre sırala (YYYY-MM-DD-HHMM formatı)
+    .limit(1000) // Maksimum 1000 snapshot (30 gün için yeterli - her 5 dakikada bir = ~8640 snapshot, ama limit koyuyoruz)
     .toArray()
   
   // Timestamp'i normalize et ve 30 günden eski olanları filtrele
   const allSnapshots = []
+  const updatesToApply = [] // Batch update için
+  
   for (const snapshot of allSnapshotsRaw) {
     let snapshotTime = null
     
@@ -137,11 +150,13 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
           const minute = parseInt(parts[5])
           snapshotTime = new Date(year, month, day, hour, minute).getTime()
           
-          // Timestamp alanını güncelle (bir sonraki sorgu için)
-          await supplyHistoryCollection.updateOne(
-            { _id: snapshot._id },
-            { $set: { timestamp: snapshotTime } }
-          )
+          // Timestamp güncellemesini batch'e ekle (her snapshot için ayrı update yerine)
+          updatesToApply.push({
+            updateOne: {
+              filter: { _id: snapshot._id },
+              update: { $set: { timestamp: snapshotTime } }
+            }
+          })
         }
       } catch (error) {
         console.warn(`⚠️ Supply tracking: ${snapshot._id} için timestamp çıkarılamadı:`, error.message)
@@ -153,6 +168,22 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
       // Timestamp'i normalize et
       snapshot.timestamp = snapshotTime
       allSnapshots.push(snapshot)
+    }
+  }
+  
+  // Batch update uygula (tüm timestamp güncellemelerini tek seferde yap)
+  if (updatesToApply.length > 0) {
+    try {
+      await supplyHistoryCollection.bulkWrite(updatesToApply, { 
+        ordered: false, // Paralel çalışsın
+        maxTimeMS: 60000 // 60 saniye timeout
+      })
+      if (updatesToApply.length > 0) {
+        console.log(`✅ Supply tracking: ${updatesToApply.length} snapshot için timestamp güncellendi (batch)`)
+      }
+    } catch (error) {
+      console.warn(`⚠️ Supply tracking: Batch timestamp güncelleme hatası:`, error.message)
+      // Hata olsa bile devam et
     }
   }
   

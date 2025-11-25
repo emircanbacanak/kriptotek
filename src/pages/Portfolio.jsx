@@ -351,16 +351,27 @@ const Portfolio = () => {
         profitLoss,
         profitLossPercent,
         stopLossStatus,
-        takeProfitStatus
+        takeProfitStatus,
+        // Kaldıraçsız bakiye için investmentAmount'ı sakla
+        investmentAmount: investmentAmount
       }
     }).filter(Boolean)
   }, [positions, coins])
 
   const portfolioSummary = useMemo(() => {
-    const totalEntryValue = positionsWithData.reduce((sum, pos) => sum + (pos.entryValue || 0), 0)
-    const totalCurrentValue = positionsWithData.reduce((sum, pos) => sum + (pos.currentValue || 0), 0)
-    // Kar/Zarar = Her pozisyonun kendi profitLoss değerlerinin toplamı (long ve short için doğru)
+    // Giriş Değeri: Kaldıraçsız toplam yatırım tutarı (kaldıraçsız bakiye)
+    const totalEntryValue = positionsWithData.reduce((sum, pos) => {
+      const investmentAmount = parseFloat(pos.investmentAmount) || 0
+      return sum + investmentAmount
+    }, 0)
+    
+    // Kar/Zarar: Kaldıraçlı hesaplanmış kar/zarar (zaten doğru hesaplanıyor)
     const totalProfitLoss = positionsWithData.reduce((sum, pos) => sum + (pos.profitLoss || 0), 0)
+    
+    // Toplam Portföy Değeri: Kaldıraçsız bakiye + Kaldıraçlı kar/zarar
+    const totalCurrentValue = totalEntryValue + totalProfitLoss
+    
+    // Kar/Zarar yüzdesi: Kaldıraçsız bakiyeye göre hesapla
     const totalProfitLossPercent = totalEntryValue > 0 ? (totalProfitLoss / totalEntryValue) * 100 : 0
     
     // Toplam kar (pozitif profitLoss değerlerinin toplamı)

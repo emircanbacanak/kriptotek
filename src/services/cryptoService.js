@@ -208,15 +208,7 @@ const fetchFromCoinGecko = async (useCache = true) => {
     // Backend'den gelen veri zaten filtrelenmiş ve normalize edilmiş (500 coin, stablecoin'ler hariç)
     const normalizedData = result.data || []
     const apiStatuses = result.apiStatuses || [{ name: 'Backend API', success: true }]
-    
-    // Debug: İlk coin için total_supply ve max_supply kontrolü
-    if (normalizedData.length > 0) {
-      const sampleCoin = normalizedData[0];
-      console.log(`🔍 [cryptoService] Backend'den örnek coin (${sampleCoin.id}): total_supply=${sampleCoin.total_supply}, max_supply=${sampleCoin.max_supply}`);
-      const coinsWithTotalSupply = normalizedData.filter(c => c.total_supply !== null && c.total_supply !== undefined).length;
-      const coinsWithMaxSupply = normalizedData.filter(c => c.max_supply !== null && c.max_supply !== undefined).length;
-      console.log(`📊 [cryptoService] Backend'den: ${coinsWithTotalSupply} coin'de total_supply, ${coinsWithMaxSupply} coin'de max_supply var (toplam ${normalizedData.length} coin)`);
-    }
+
     
     if (normalizedData.length === 0) {
       // Cache'den tekrar dene
