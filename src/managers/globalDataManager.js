@@ -1863,10 +1863,8 @@ class GlobalDataManager {
               // localStorage'a kaydet
               this.saveToLocalStorage()
               this.notifySubscribers()
-              console.log('✅ Custom event: Crypto verisi güncellendi (fallback):', this.coins.length, 'coin, BTC price:', newFirstCoin?.current_price)
             } else {
               // Mevcut veri var, Custom event'ten yükleme yapma (WebSocket öncelikli)
-              console.log('⏭️ Custom event: Crypto verisi atlandı (mevcut veri var, WebSocket öncelikli)')
             }
           }
         }

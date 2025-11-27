@@ -210,7 +210,7 @@ export async function fetchFedRateData(dbInstance = null) {
                   // Son açıklanma tarihinden önceki bir tarih olmalı (en az 25 gün fark - Fed kararları genellikle 6-8 hafta arayla açıklanır)
                   const daysDiff = (announceDate.getTime() - obsDateObj.getTime()) / (1000 * 60 * 60 * 24)
                   
-                  if (daysDiff >= 25) {
+                  if (daysDiff >= 30) {
                     previousUpper = obsUpper
                     previousLower = obsLower
                     foundPrevious = true

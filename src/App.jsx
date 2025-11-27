@@ -14,6 +14,7 @@ import Portfolio from './pages/Portfolio'
 import News from './pages/News'
 import FedRate from './pages/FedRate'
 import SupplyTracking from './pages/SupplyTracking'
+import WhaleTracking from './pages/WhaleTracking'
 import NotFound from './pages/NotFound'
 import PremiumRoute from './components/PremiumRoute'
 import { useAuth } from './contexts/AuthContext'
@@ -138,6 +139,14 @@ const App = () => {
           element={
             <PremiumRoute>
               <News />
+            </PremiumRoute>
+          }
+        />
+        <Route
+          path="whale-tracking"
+          element={
+            <PremiumRoute>
+              <WhaleTracking />
             </PremiumRoute>
           }
         />

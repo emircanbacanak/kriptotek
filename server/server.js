@@ -11,6 +11,7 @@ import { WebSocketServer } from 'ws'
 import rateLimit from 'express-rate-limit'
 import { fetchDominanceData } from './services/apiHandlers/dominance.js'
 import { fetchFearGreedData } from './services/apiHandlers/fearGreed.js'
+import { fetchWhaleTransactions, calculateExchangeFlow } from './services/apiHandlers/whale.js'
 
 // .env dosyasını yükle (sadece root dizinden)
 const __filename = fileURLToPath(import.meta.url)
@@ -165,7 +166,7 @@ app.use((req, res, next) => {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src 'self' https://fonts.gstatic.com; " +
     "img-src 'self' data: https: blob:; " +
-    "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.herokuapp.com wss://*.herokuapp.com ws://*.herokuapp.com http://localhost:3000 wss://localhost:3000 ws://localhost:3000 https://api.binance.com https://api.kucoin.com https://apis.google.com; " +
+          "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.herokuapp.com wss://*.herokuapp.com ws://*.herokuapp.com http://localhost:3000 wss://localhost:3000 ws://localhost:3000 https://api.binance.com wss://stream.binance.com:9443 wss://stream.binance.com wss://*.binance.com https://api.kucoin.com https://openapi-v2.kucoin.com wss://ws-api-spot.kucoin.com wss://*.kucoin.com wss://stream.bybit.com wss://*.bybit.com wss://ws.okx.com:8443 wss://ws.okx.com wss://*.okx.com wss://ws.bitget.com wss://*.bitget.com https://apis.google.com; " +
     "frame-src 'self' https://*.googleapis.com https://*.gstatic.com https://apis.google.com https://*.firebaseapp.com https://*.firebase.com; " +
     "object-src 'none'; " +
     "base-uri 'self'; " +
@@ -2026,6 +2027,143 @@ app.post('/api/fear-greed/update', async (req, res) => {
   }
 })
 
+// ========== WHALE TRACKING API ENDPOINT ==========
+// GET /api/whale/transactions - MongoDB'den whale transaction'ları çek (cache)
+app.get('/api/whale/transactions', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const collection = db.collection('api_cache')
+    const cacheDoc = await collection.findOne({ _id: 'whale_transactions' })
+    
+    // MongoDB'de veri var mı ve taze mi? (5 dakikadan eski değilse)
+    const CACHE_DURATION = 5 * 60 * 1000 // 5 dakika
+    const checkNow = Date.now()
+    
+    if (cacheDoc && cacheDoc.data && Array.isArray(cacheDoc.data.transactions) && cacheDoc.data.transactions.length > 0) {
+      const cacheAge = checkNow - (cacheDoc.updatedAt || cacheDoc.lastUpdate || 0)
+      
+      if (cacheAge < CACHE_DURATION) {
+        // Cache taze, MongoDB'den döndür
+        return res.json({
+          success: true,
+          data: cacheDoc.data,
+          fromCache: true,
+          cacheAge: cacheAge
+        })
+      }
+    }
+
+    // Cache yok veya eski, boş döndür (frontend Whale Alert API'yi kullanacak)
+    return res.json({
+      success: true,
+      data: {
+        transactions: [],
+        exchangeFlow: {
+          inflow: 0,
+          outflow: 0,
+          net: 0,
+          byExchange: {},
+          byCurrency: {}
+        }
+      },
+      fromCache: false,
+      message: 'Cache yok, frontend Whale Alert API kullanacak'
+    })
+  } catch (error) {
+    console.error('❌ GET /api/whale/transactions error:', error)
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    })
+  }
+})
+
+// POST /api/whale/update - Whale Alert API'den transaction'ları çek ve MongoDB'ye kaydet
+app.post('/api/whale/update', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const WHALE_ALERT_API_KEY = process.env.WHALE_ALERT_API_KEY
+    if (!WHALE_ALERT_API_KEY) {
+      return res.status(400).json({
+        success: false,
+        error: 'Whale Alert API key eksik (.env dosyasında WHALE_ALERT_API_KEY tanımlı olmalı)'
+      })
+    }
+
+    // Query parametrelerini al
+    const minValue = parseInt(req.query.min_value) || parseInt(req.body.min_value) || 1000000
+    const currency = req.query.currency || req.body.currency || null
+    const limit = Math.min(parseInt(req.query.limit) || parseInt(req.body.limit) || 100, 100)
+    
+    // Son 24 saatteki transaction'ları çek
+    const start = Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000) // 24 saat önce (timestamp)
+
+    // Whale Alert API'den veri çek
+    const result = await fetchWhaleTransactions(WHALE_ALERT_API_KEY, {
+      min_value: minValue,
+      currency: currency,
+      start: start,
+      limit: limit
+    })
+
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        error: result.error || 'Whale Alert API hatası'
+      })
+    }
+
+    // Exchange flow hesapla
+    const exchangeFlow = calculateExchangeFlow(result.transactions)
+
+    const whaleData = {
+      transactions: result.transactions,
+      exchangeFlow: exchangeFlow,
+      count: result.count,
+      cursor: result.cursor,
+      lastUpdate: Date.now()
+    }
+
+    // MongoDB'ye kaydet
+    const collection = db.collection('api_cache')
+    await collection.updateOne(
+      { _id: 'whale_transactions' },
+      { 
+        $set: {
+          data: whaleData,
+          lastUpdate: Date.now(),
+          updatedAt: new Date()
+        }
+      },
+      { upsert: true }
+    )
+
+    return res.json({
+      success: true,
+      data: whaleData,
+      message: 'Whale transactions updated from Whale Alert API'
+    })
+  } catch (error) {
+    console.error('❌ POST /api/whale/update error:', error)
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    })
+  }
+})
+
 // ========== CRYPTO ENDPOINT ==========
 // GET /api/crypto/list - MongoDB'den kripto para listesi çek (cache)
 // In-memory cache ile optimize edilmiş
@@ -2915,6 +3053,285 @@ app.get('/cache/supply_tracking', async (req, res) => {
   }
 })
 
+// GET /cache/whale_transactions - MongoDB'den whale transaction'ları çek (cache)
+app.get('/cache/whale_transactions', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        ok: false,
+        success: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const collection = db.collection('api_cache')
+    const cacheDoc = await collection.findOne({ _id: 'whale_transactions' })
+    
+    if (cacheDoc && cacheDoc.data && cacheDoc.data.trades && Array.isArray(cacheDoc.data.trades)) {
+      const tradesCount = cacheDoc.data.trades.length
+      return res.json({
+        ok: true,
+        success: true,
+        data: {
+          data: cacheDoc.data,
+          lastUpdate: cacheDoc.lastUpdate || cacheDoc.updatedAt || null
+        }
+      })
+    }
+
+    // Cache yok - boş döndür
+    console.log('⚠️ GET /cache/whale_transactions: Cache\'de trade yok, boş array döndürülüyor')
+    return res.json({
+      ok: true,
+      success: true,
+      data: {
+        data: {
+          trades: [],
+          lastUpdate: null
+        },
+        lastUpdate: null
+      }
+    })
+  } catch (error) {
+    console.error('❌ GET /cache/whale_transactions error:', error)
+    return res.status(500).json({
+      ok: false,
+      success: false,
+      error: error.message
+    })
+  }
+})
+
+// POST /api/kucoin/bullet-public - KuCoin WebSocket token al (CORS proxy)
+app.post('/api/kucoin/bullet-public', async (req, res) => {
+  console.log('📡 POST /api/kucoin/bullet-public isteği alındı')
+  try {
+    const { fetch } = await import('undici')
+    
+    const response = await fetch('https://openapi-v2.kucoin.com/api/v1/bullet-public', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      signal: AbortSignal.timeout(10000)
+    })
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        success: false,
+        error: `KuCoin API hatası: ${response.status}`
+      })
+    }
+
+    const data = await response.json()
+    
+    return res.json({
+      success: true,
+      data: data
+    })
+  } catch (error) {
+    console.error('❌ POST /api/kucoin/bullet-public error:', error)
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'KuCoin API hatası'
+    })
+  }
+})
+
+// GET /api/whale/recent-trades - Minimum değerin üstündeki whale trade'leri getir (son 24 saat)
+app.get('/api/whale/recent-trades', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const minValue = Math.max(parseFloat(req.query.minValue) || 200000, 200000) // Minimum $200K
+    
+    const collection = db.collection('api_cache')
+    const cacheDoc = await collection.findOne({ _id: 'whale_transactions' })
+    const allTrades = cacheDoc?.data?.trades || []
+    
+    // 24 saat öncesini hesapla
+    const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000)
+    
+    // 24 saat içindeki ve minimum değerin üstündeki trade'leri filtrele
+    const filteredTrades = allTrades.filter(trade => {
+      const tradeValue = trade.tradeValue || (trade.price * trade.quantity || 0)
+      const tradeTime = trade.timestamp ? new Date(trade.timestamp).getTime() : 0
+      
+      // Minimum değer ve 24 saat kontrolü
+      return tradeValue >= minValue && tradeTime >= twentyFourHoursAgo
+    })
+    
+    // Eski trade'leri temizle (24 saatten eski)
+    const recentTrades = allTrades.filter(trade => {
+      const tradeTime = trade.timestamp ? new Date(trade.timestamp).getTime() : 0
+      return tradeTime >= twentyFourHoursAgo
+    })
+    
+    // Eğer eski trade'ler varsa, cache'i güncelle
+    if (recentTrades.length !== allTrades.length) {
+      await collection.updateOne(
+        { _id: 'whale_transactions' },
+        { 
+          $set: {
+            data: {
+              trades: recentTrades,
+              lastUpdate: Date.now()
+            },
+            lastUpdate: Date.now(),
+            updatedAt: new Date()
+          }
+        },
+        { upsert: true }
+      )
+      console.log(`🧹 ${allTrades.length - recentTrades.length} eski whale trade temizlendi (24 saatten eski)`)
+    }
+    
+    // Son 200 trade'i döndür (tarih sırasına göre - en yeni önce)
+    const sortedTrades = filteredTrades
+      .sort((a, b) => {
+        const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0
+        const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0
+        return timeB - timeA
+      })
+      .slice(0, 200)
+    
+    return res.json({
+      success: true,
+      trades: sortedTrades,
+      total: sortedTrades.length,
+      minValue: minValue,
+      timeRange: '24 hours'
+    })
+  } catch (error) {
+    console.error('❌ GET /api/whale/recent-trades error:', error)
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    })
+  }
+})
+
+// POST /api/whale/trades - Gerçek zamanlı whale trade'lerini MongoDB'ye kaydet
+app.post('/api/whale/trades', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'MongoDB bağlantısı yok' 
+      })
+    }
+
+    const { trades } = req.body
+    
+    if (!Array.isArray(trades)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Trades array bekleniyor'
+      })
+    }
+
+    if (trades.length === 0) {
+      return res.json({
+        success: true,
+        message: 'Kaydedilecek trade yok',
+        totalTrades: 0
+      })
+    }
+
+    const collection = db.collection('api_cache')
+    
+    // Minimum $200K kontrolü - sadece bu değerin üstündeki trade'leri kaydet
+    const MIN_TRADE_VALUE = 200000
+    const validTrades = trades.filter(trade => {
+      const tradeValue = trade.tradeValue || (trade.price * trade.quantity || 0)
+      return tradeValue >= MIN_TRADE_VALUE
+    })
+
+    if (validTrades.length === 0) {
+      return res.json({
+        success: true,
+        message: 'Kaydedilecek trade yok (minimum $200,000 gereklidir)',
+        totalTrades: 0
+      })
+    }
+    
+    // Mevcut trade'leri al
+    const cacheDoc = await collection.findOne({ _id: 'whale_transactions' })
+    const existingTrades = cacheDoc?.data?.trades || []
+    
+    // 24 saat öncesini hesapla
+    const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000)
+    
+    // Önce eski trade'leri temizle (24 saatten eski)
+    const recentExistingTrades = existingTrades.filter(trade => {
+      const tradeTime = trade.timestamp ? new Date(trade.timestamp).getTime() : 0
+      return tradeTime >= twentyFourHoursAgo
+    })
+    
+    // Yeni trade'leri ekle (duplicate kontrolü - id + source kombinasyonu)
+    const existingKeys = new Set(
+      recentExistingTrades.map(t => `${t.id}_${t.source || 'unknown'}`)
+    )
+    const newTrades = validTrades.filter(t => {
+      const key = `${t.id}_${t.source || 'unknown'}`
+      return !existingKeys.has(key)
+    })
+    
+    if (newTrades.length === 0 && recentExistingTrades.length === existingTrades.length) {
+      return res.json({
+        success: true,
+        message: 'Tüm trade\'ler zaten kayıtlı',
+        totalTrades: recentExistingTrades.length
+      })
+    }
+    
+    // Yeni trade'leri başa ekle (24 saat içindeki trade'lerle birleştir)
+    const allTrades = [...newTrades, ...recentExistingTrades]
+    
+    // Eski trade'ler temizlendiyse log
+    if (recentExistingTrades.length !== existingTrades.length) {
+      console.log(`🧹 ${existingTrades.length - recentExistingTrades.length} eski whale trade temizlendi (24 saatten eski)`)
+    }
+    
+    // MongoDB'ye kaydet
+    await collection.updateOne(
+      { _id: 'whale_transactions' },
+      { 
+        $set: {
+          data: {
+            trades: allTrades,
+            lastUpdate: Date.now()
+          },
+          lastUpdate: Date.now(),
+          updatedAt: new Date()
+        }
+      },
+      { upsert: true }
+    )
+
+    console.log(`✅ ${newTrades.length} yeni whale trade kaydedildi (toplam: ${allTrades.length})`)
+    
+    return res.json({
+      success: true,
+      message: `${newTrades.length} yeni trade kaydedildi`,
+      totalTrades: allTrades.length,
+      newTrades: newTrades.length
+    })
+  } catch (error) {
+    console.error('❌ POST /api/whale/trades error:', error)
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    })
+  }
+})
+
 // ========== SUPPLY HISTORY ENDPOINT ==========
 // GET /supply-history/all - Tüm supply snapshot'larını getir (frontend'de filtreleme yapılacak)
 app.get('/supply-history/all', async (req, res) => {
@@ -3573,6 +3990,23 @@ async function startServer() {
     }
   } catch (error) {
     console.warn('⚠️ API Scheduler import/başlatma hatası:', error.message)
+  }
+  
+  // Exchange Whale Tracking'i başlat (MongoDB varsa)
+  if (db) {
+    try {
+      const { startExchangeWhaleTracking, setWebSocketServer } = await import('./services/apiHandlers/exchangeWhale.js')
+      // WebSocket server'ı whale tracker'a geç
+      if (wss) {
+        setWebSocketServer(wss)
+      }
+      startExchangeWhaleTracking(db, 200000) // Minimum $200K
+      console.log('✅ Exchange whale tracking başlatıldı (Binance, Bybit, KuCoin, OKX, Bitget, Gate.io, HTX, MEXC)')
+    } catch (error) {
+      console.warn('⚠️ Exchange whale tracking başlatma hatası:', error.message)
+    }
+  } else {
+    console.warn('⚠️ MongoDB bağlantısı yok, Exchange whale tracking atlanıyor')
   }
   
   // Server'ı başlat (MongoDB olsun ya da olmasın)
