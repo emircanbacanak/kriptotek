@@ -512,13 +512,34 @@ function News() {
 
   function formatTimeAgo(date, newsSource) {
     const now = new Date(nowTick)
-    // Veritabanına kaydedilirken zaten +3 saat eklenmiş (CoinTelegraph için)
-    // Bu yüzden burada tekrar eklemeye gerek yok
-    const parsedDate = parseIstanbulDate(date)
+    
+    // Veritabanından gelen tarih zaten +3 saat eklenmiş UTC formatında
+    // UTC tarihlerini UTC olarak parse et (timezone dönüşümü yapma)
+    let parsedDate = null
+    
+    if (date instanceof Date) {
+      parsedDate = date
+    } else if (typeof date === 'string') {
+      // UTC formatında ise (Z veya +00:00 ile bitiyorsa) UTC olarak parse et
+      if (date.includes('T') && (date.endsWith('Z') || date.includes('+00:00') || date.match(/[+-]\d{2}:\d{2}$/))) {
+        // UTC olarak parse et - JavaScript Date objesi bunu local timezone'a çevirir
+        // Ama biz UTC timestamp'ini kullanacağız
+        parsedDate = new Date(date)
+      } else {
+        // Diğer formatlar için parseIstanbulDate kullan
+        parsedDate = parseIstanbulDate(date)
+      }
+    } else if (typeof date === 'number') {
+      parsedDate = new Date(date)
+    }
     
     if (!parsedDate || isNaN(parsedDate.getTime())) return '—'
     
-    const diff = now.getTime() - parsedDate.getTime()
+    // UTC timestamp'lerini kullan (timezone dönüşümü yapmadan)
+    // Veritabanından gelen tarih zaten +3 saat eklenmiş UTC formatında
+    const publishedTime = parsedDate.getTime()
+    const nowTime = now.getTime()
+    const diff = nowTime - publishedTime
     
     // Negatif fark (gelecek tarih) durumunda 0 göster
     if (diff < 0) {
@@ -536,6 +557,7 @@ function News() {
     // 1-23 saat arası
     if (hours < 24) return `${hours} ${t('hoursAgo')}`
     // 24+ saat
+    // Tarihi gösterirken local timezone kullan (kullanıcı için)
     return parsedDate.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })
   }
 
