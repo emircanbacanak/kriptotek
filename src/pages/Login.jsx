@@ -467,7 +467,7 @@ const Login = () => {
                 {t('email')}
               </label>
               <div className="relative">
-                <Mail className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-white w-3 h-3" />
+                <Mail className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-900 z-10 w-4 h-4 sm:w-5 sm:h-5 opacity-100" style={{ color: '#000000' }} />
                 <input
                   id="email"
                   name="email"
@@ -478,6 +478,7 @@ const Login = () => {
                   className="input pl-8 sm:pl-10"
                   placeholder={t('emailPlaceholderRegister')}
                   autoComplete="email"
+                  style={{ backgroundColor: 'rgba(255, 255, 255, 0.9)', color: '#000000' }}
                 />
               </div>
             </div>
@@ -487,7 +488,7 @@ const Login = () => {
                 {t('password')}
               </label>
               <div className="relative">
-                <Lock className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-white w-3 h-3" />
+                <Lock className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-900 z-10 w-4 h-4 sm:w-5 sm:h-5 opacity-100" style={{ color: '#000000' }} />
                 <input
                   id="password"
                   name="password"
@@ -498,13 +499,15 @@ const Login = () => {
                   className="input pl-8 pr-8 sm:pl-10 sm:pr-10"
                   placeholder={t('passwordPlaceholder')}
                   autoComplete="current-password"
+                  style={{ backgroundColor: 'rgba(255, 255, 255, 0.9)', color: '#000000' }}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-200"
+                  className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 text-gray-900 hover:text-gray-700 z-10"
+                  style={{ color: '#000000' }}
                 >
-                  {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                  {showPassword ? <EyeOff className="w-4 h-4 sm:w-5 sm:h-5 opacity-100" style={{ color: '#000000' }} /> : <Eye className="w-4 h-4 sm:w-5 sm:h-5 opacity-100" style={{ color: '#000000' }} />}
                 </button>
               </div>
             </div>
