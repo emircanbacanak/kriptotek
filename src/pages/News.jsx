@@ -514,35 +514,46 @@ function News() {
     const now = new Date(nowTick)
     
     // Veritabanından gelen tarih zaten +3 saat eklenmiş UTC formatında
-    // UTC tarihlerini UTC olarak parse et (timezone dönüşümü yapma)
+    // MongoDB'den gelen Date objesi veya ISO string'i parse et
     let parsedDate = null
     
     if (date instanceof Date) {
       parsedDate = date
     } else if (typeof date === 'string') {
-      // UTC formatında ise (Z veya +00:00 ile bitiyorsa) UTC olarak parse et
-      if (date.includes('T') && (date.endsWith('Z') || date.includes('+00:00') || date.match(/[+-]\d{2}:\d{2}$/))) {
-        // UTC olarak parse et - JavaScript Date objesi bunu local timezone'a çevirir
-        // Ama biz UTC timestamp'ini kullanacağız
-        parsedDate = new Date(date)
-      } else {
-        // Diğer formatlar için parseIstanbulDate kullan
-        parsedDate = parseIstanbulDate(date)
-      }
+      // ISO string formatında ise (Z veya timezone ile) direkt parse et
+      parsedDate = new Date(date)
     } else if (typeof date === 'number') {
       parsedDate = new Date(date)
+    } else {
+      // Fallback: parseIstanbulDate kullan
+      parsedDate = parseIstanbulDate(date)
     }
     
-    if (!parsedDate || isNaN(parsedDate.getTime())) return '—'
+    if (!parsedDate || isNaN(parsedDate.getTime())) {
+      console.warn('⚠️ formatTimeAgo: Geçersiz tarih', date, newsSource)
+      return '—'
+    }
     
-    // UTC timestamp'lerini kullan (timezone dönüşümü yapmadan)
-    // Veritabanından gelen tarih zaten +3 saat eklenmiş UTC formatında
+    // Debug: CoinTelegraph haberleri için log
+    if (newsSource === 'cointelegraph') {
+      console.log(`🔍 formatTimeAgo CoinTelegraph - date: ${date}, parsedDate: ${parsedDate.toISOString()}, getTime(): ${parsedDate.getTime()}, now: ${now.toISOString()}, now.getTime(): ${now.getTime()}`)
+    }
+    
+    // Timestamp farkını hesapla (milliseconds)
     const publishedTime = parsedDate.getTime()
     const nowTime = now.getTime()
     const diff = nowTime - publishedTime
     
+    // Debug: CoinTelegraph için farkı logla
+    if (newsSource === 'cointelegraph') {
+      console.log(`🔍 formatTimeAgo CoinTelegraph - diff: ${diff}ms (${Math.floor(diff / 60000)} dakika)`)
+    }
+    
     // Negatif fark (gelecek tarih) durumunda 0 göster
     if (diff < 0) {
+      if (newsSource === 'cointelegraph') {
+        console.warn(`⚠️ CoinTelegraph gelecek tarih: ${parsedDate.toISOString()}, şimdi: ${now.toISOString()}, fark: ${diff}ms`)
+      }
       return '0 dakika önce'
     }
     

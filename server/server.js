@@ -2949,17 +2949,37 @@ app.get('/api/news', async (req, res) => {
       .limit(parseInt(limit))
     const docs = await cursor.toArray()
     
-    // Debug: CoinTelegraph haberlerinin publishedAt değerlerini kontrol et
-    const cointelegraphNews = docs.filter(doc => doc.source === 'cointelegraph')
-    if (cointelegraphNews.length > 0) {
-      const firstNews = cointelegraphNews[0]
-      const publishedAt = firstNews.publishedAt instanceof Date 
-        ? firstNews.publishedAt 
-        : new Date(firstNews.publishedAt)
-      console.log(`🔍 GET /api/news - CoinTelegraph örnek: publishedAt=${publishedAt.toISOString()}, getTime()=${publishedAt.getTime()}, source=${firstNews.source}`)
-    }
+    // Date objelerini ISO string'e çevir (JSON serialize için)
+    // MongoDB'den gelen Date objeleri JSON'a serialize edilirken otomatik ISO string'e çevrilir
+    // Ama emin olmak için manuel çevirelim
+    const serializedDocs = docs.map(doc => {
+      const serialized = { ...doc }
+      
+      // publishedAt'i ISO string'e çevir
+      if (serialized.publishedAt instanceof Date) {
+        serialized.publishedAt = serialized.publishedAt.toISOString()
+      } else if (serialized.publishedAt && typeof serialized.publishedAt === 'object' && serialized.publishedAt.$date) {
+        // MongoDB Extended JSON formatı
+        serialized.publishedAt = new Date(serialized.publishedAt.$date).toISOString()
+      }
+      
+      // createdAt ve updatedAt'i de çevir
+      if (serialized.createdAt instanceof Date) {
+        serialized.createdAt = serialized.createdAt.toISOString()
+      }
+      if (serialized.updatedAt instanceof Date) {
+        serialized.updatedAt = serialized.updatedAt.toISOString()
+      }
+      
+      // Debug: CoinTelegraph haberleri için log
+      if (serialized.source === 'cointelegraph') {
+        console.log(`🔍 GET /api/news - CoinTelegraph: publishedAt=${serialized.publishedAt}, source=${serialized.source}, title=${serialized.title?.substring(0, 50)}`)
+      }
+      
+      return serialized
+    })
     
-    res.json({ ok: true, data: docs })
+    res.json({ ok: true, data: serializedDocs })
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message })
   }
