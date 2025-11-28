@@ -187,22 +187,18 @@ function parseRSSFeed(xml, source) {
           publishedAt = new Date()
         }
         
-        // CoinTelegraph için +3 saat ekle (diğer kaynaklar için değişiklik yok)
-        // RSS feed'den gelen tarih UTC formatında
+        // CoinTelegraph için +3 saat ekleme KALDIRILDI
+        // RSS feed'den gelen tarih zaten UTC formatında ve doğru
         // Örnek: "Thu, 28 Nov 2025 12:18:00 +0000" veya "2025-11-28T12:18:00.000Z"
-        // Bu tarih UTC'de 12:18:00 demektir, ama aslında Türkiye saati 15:18:00 olmalı
-        // Bu yüzden +3 saat ekleyerek Türkiye saatini UTC'de temsil ediyoruz
+        // Bu tarih UTC'de 12:18:00 demektir, bu zaten doğru
+        // +3 saat eklemek yanlış çünkü tarih gelecek bir tarih oluyor
+        // Frontend'de zaten UTC olarak parse ediliyor ve doğru görünüyor
         if (source === 'cointelegraph' && !isNaN(publishedAt.getTime())) {
           const originalTime = publishedAt.toISOString()
-          const originalTimestamp = publishedAt.getTime()
-          // UTC timestamp'ine +3 saat ekle (10800000 ms = 3 saat)
-          const adjustedTimestamp = originalTimestamp + (3 * 60 * 60 * 1000)
-          publishedAt = new Date(adjustedTimestamp)
-          const newTime = publishedAt.toISOString()
           const now = new Date()
-          const diff = now.getTime() - adjustedTimestamp
+          const diff = now.getTime() - publishedAt.getTime()
           const diffMinutes = Math.floor(diff / 60000)
-          console.log(`🕐 CoinTelegraph (RSS) saat düzeltmesi: ${originalTime} -> ${newTime} (+3 saat), şimdi: ${now.toISOString()}, fark: ${diffMinutes} dakika`)
+          console.log(`🕐 CoinTelegraph (RSS) tarih (değiştirilmedi): ${originalTime}, şimdi: ${now.toISOString()}, fark: ${diffMinutes} dakika`)
         }
               
         // Son 48 saat içindeki haberleri filtrele
@@ -307,22 +303,18 @@ export async function updateNews() {
                   const pubDateRaw = item.pubDate || item.pubdate || ''
                   let pubDate = pubDateRaw ? new Date(pubDateRaw) : new Date()
                   
-                  // CoinTelegraph için +3 saat ekle
-                  // RSS feed'den gelen tarih UTC formatında (Z ile bitiyor)
+                  // CoinTelegraph için +3 saat ekleme KALDIRILDI
+                  // RSS feed'den gelen tarih zaten UTC formatında ve doğru
                   // Örnek: "Thu, 28 Nov 2025 12:18:00 +0000" veya "2025-11-28T12:18:00.000Z"
-                  // Bu tarih UTC'de 12:18:00 demektir, ama aslında Türkiye saati 15:18:00 olmalı
-                  // Bu yüzden +3 saat ekleyerek Türkiye saatini UTC'de temsil ediyoruz
+                  // Bu tarih UTC'de 12:18:00 demektir, bu zaten doğru
+                  // +3 saat eklemek yanlış çünkü tarih gelecek bir tarih oluyor
+                  // Frontend'de zaten UTC olarak parse ediliyor ve doğru görünüyor
                   if (!isNaN(pubDate.getTime())) {
                     const originalTime = pubDate.toISOString()
-                    const originalTimestamp = pubDate.getTime()
-                    // UTC timestamp'ine +3 saat ekle (10800000 ms = 3 saat)
-                    const adjustedTimestamp = originalTimestamp + (3 * 60 * 60 * 1000)
-                    pubDate = new Date(adjustedTimestamp)
-                    const newTime = pubDate.toISOString()
                     const now = new Date()
-                    const diff = now.getTime() - adjustedTimestamp
+                    const diff = now.getTime() - pubDate.getTime()
                     const diffMinutes = Math.floor(diff / 60000)
-                    console.log(`🕐 CoinTelegraph saat düzeltmesi: ${originalTime} -> ${newTime} (+3 saat), şimdi: ${now.toISOString()}, fark: ${diffMinutes} dakika`)
+                    console.log(`🕐 CoinTelegraph tarih (değiştirilmedi): ${originalTime}, şimdi: ${now.toISOString()}, fark: ${diffMinutes} dakika`)
                   }
                   
                   // Resim URL'i çıkar
@@ -428,14 +420,14 @@ export async function updateNews() {
       
       for (const newsItem of allNews) {
         try {
-          // publishedAt zaten CoinTelegraph için +3 saat eklenmiş durumda (çekilirken ekleniyor)
+          // publishedAt zaten doğru (CoinTelegraph için +3 saat eklenmiyor artık)
           // Diğer kaynaklar (kriptofoni, bitcoinsistemi) için değişiklik yok
           let publishedAt = newsItem.publishedAt instanceof Date 
             ? newsItem.publishedAt 
             : new Date(newsItem.publishedAt)
           
-          // CoinTelegraph için +3 saat zaten çekilirken eklenmiş
-          // Burada sadece Date objesi olarak kullanıyoruz, tekrar ekleme yapmıyoruz
+          // CoinTelegraph için +3 saat ekleme KALDIRILDI
+          // RSS feed'den gelen tarih zaten UTC formatında ve doğru
           // Kriptofoni ve Bitcoinsistemi için saat değişikliği YOK
           
           // CoinTelegraph için publishedAt'in doğru kaydedildiğinden emin ol
