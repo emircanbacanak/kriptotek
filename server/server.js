@@ -2948,6 +2948,17 @@ app.get('/api/news', async (req, res) => {
       .sort({ [orderBy]: sort })
       .limit(parseInt(limit))
     const docs = await cursor.toArray()
+    
+    // Debug: CoinTelegraph haberlerinin publishedAt değerlerini kontrol et
+    const cointelegraphNews = docs.filter(doc => doc.source === 'cointelegraph')
+    if (cointelegraphNews.length > 0) {
+      const firstNews = cointelegraphNews[0]
+      const publishedAt = firstNews.publishedAt instanceof Date 
+        ? firstNews.publishedAt 
+        : new Date(firstNews.publishedAt)
+      console.log(`🔍 GET /api/news - CoinTelegraph örnek: publishedAt=${publishedAt.toISOString()}, getTime()=${publishedAt.getTime()}, source=${firstNews.source}`)
+    }
+    
     res.json({ ok: true, data: docs })
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message })

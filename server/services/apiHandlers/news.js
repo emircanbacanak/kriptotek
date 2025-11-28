@@ -188,11 +188,15 @@ function parseRSSFeed(xml, source) {
         }
         
         // CoinTelegraph için +3 saat ekle (diğer kaynaklar için değişiklik yok)
+        // RSS feed'den gelen tarih UTC formatında ama Türkiye saatine göre yazılmış
         if (source === 'cointelegraph' && !isNaN(publishedAt.getTime())) {
           const originalTime = publishedAt.toISOString()
-          publishedAt = new Date(publishedAt.getTime() + (3 * 60 * 60 * 1000))
+          const originalTimestamp = publishedAt.getTime()
+          // UTC timestamp'ine +3 saat ekle (10800000 ms = 3 saat)
+          const adjustedTimestamp = originalTimestamp + (3 * 60 * 60 * 1000)
+          publishedAt = new Date(adjustedTimestamp)
           const newTime = publishedAt.toISOString()
-          console.log(`🕐 CoinTelegraph (RSS) saat düzeltmesi: ${originalTime} -> ${newTime} (+3 saat)`)
+          console.log(`🕐 CoinTelegraph (RSS) saat düzeltmesi: ${originalTime} (${originalTimestamp}) -> ${newTime} (${adjustedTimestamp}) (+3 saat)`)
         }
               
         // Son 48 saat içindeki haberleri filtrele
@@ -298,11 +302,17 @@ export async function updateNews() {
                   let pubDate = pubDateRaw ? new Date(pubDateRaw) : new Date()
                   
                   // CoinTelegraph için +3 saat ekle
+                  // RSS feed'den gelen tarih UTC formatında ama Türkiye saatine göre yazılmış
+                  // Örnek: RSS'de "12:18:00" yazıyorsa, bu Türkiye saati 12:18, UTC'de 09:18 demektir
+                  // Ama RSS feed UTC formatında geldiği için, +3 saat ekleyerek Türkiye saatini UTC'de temsil ediyoruz
                   if (!isNaN(pubDate.getTime())) {
                     const originalTime = pubDate.toISOString()
-                    pubDate = new Date(pubDate.getTime() + (3 * 60 * 60 * 1000))
+                    const originalTimestamp = pubDate.getTime()
+                    // UTC timestamp'ine +3 saat ekle (10800000 ms = 3 saat)
+                    const adjustedTimestamp = originalTimestamp + (3 * 60 * 60 * 1000)
+                    pubDate = new Date(adjustedTimestamp)
                     const newTime = pubDate.toISOString()
-                    console.log(`🕐 CoinTelegraph saat düzeltmesi: ${originalTime} -> ${newTime} (+3 saat)`)
+                    console.log(`🕐 CoinTelegraph saat düzeltmesi: ${originalTime} (${originalTimestamp}) -> ${newTime} (${adjustedTimestamp}) (+3 saat)`)
                   }
                   
                   // Resim URL'i çıkar
@@ -418,17 +428,41 @@ export async function updateNews() {
           // Burada sadece Date objesi olarak kullanıyoruz, tekrar ekleme yapmıyoruz
           // Kriptofoni ve Bitcoinsistemi için saat değişikliği YOK
           
+          // CoinTelegraph için publishedAt'in doğru kaydedildiğinden emin ol
+          if (newsItem.source === 'cointelegraph') {
+            console.log(`🔍 CoinTelegraph kayıt öncesi - publishedAt: ${publishedAt.toISOString()}, getTime(): ${publishedAt.getTime()}, type: ${publishedAt instanceof Date ? 'Date' : typeof publishedAt}`)
+          }
+          
+          // MongoDB'ye kaydet - publishedAt Date objesi olarak kaydedilecek
+          const documentToSave = {
+            _id: newsItem.url,
+            ...newsItem,
+            publishedAt: publishedAt, // CoinTelegraph için +3 saat eklenmiş, diğerleri değişmemiş
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+          
+          // Debug: Kaydedilecek document'i kontrol et
+          if (newsItem.source === 'cointelegraph') {
+            console.log(`🔍 CoinTelegraph documentToSave.publishedAt: ${documentToSave.publishedAt instanceof Date ? documentToSave.publishedAt.toISOString() : documentToSave.publishedAt}, type: ${documentToSave.publishedAt instanceof Date ? 'Date' : typeof documentToSave.publishedAt}`)
+          }
+          
           await db.collection('crypto_news').replaceOne(
             { _id: newsItem.url },
-            {
-              _id: newsItem.url,
-              ...newsItem,
-              publishedAt: publishedAt, // CoinTelegraph için +3 saat eklenmiş, diğerleri değişmemiş
-              createdAt: new Date(),
-              updatedAt: new Date()
-            },
+            documentToSave,
             { upsert: true }
           )
+          
+          // CoinTelegraph için kayıt sonrası doğrulama
+          if (newsItem.source === 'cointelegraph') {
+            const savedDoc = await db.collection('crypto_news').findOne({ _id: newsItem.url })
+            if (savedDoc && savedDoc.publishedAt) {
+              const savedDate = savedDoc.publishedAt instanceof Date 
+                ? savedDoc.publishedAt 
+                : new Date(savedDoc.publishedAt)
+              console.log(`✅ CoinTelegraph kayıt sonrası - publishedAt: ${savedDate.toISOString()}, getTime(): ${savedDate.getTime()}, type: ${savedDoc.publishedAt instanceof Date ? 'Date' : typeof savedDoc.publishedAt}`)
+            }
+          }
           savedCount++
         } catch (err) {
           skippedCount++
