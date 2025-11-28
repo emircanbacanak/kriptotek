@@ -277,9 +277,13 @@ async function updateNewsScheduled() {
 function scheduleNewsNext() {
   if (newsSchedulerInterval) {
     clearTimeout(newsSchedulerInterval)
+    newsSchedulerInterval = null
   }
 
   const delay = getNextUpdateTime(10) // 10 dakika
+  const nextUpdateTime = new Date(Date.now() + delay).toLocaleTimeString('tr-TR')
+  console.log(`📰 News scheduler: Bir sonraki güncelleme ${nextUpdateTime} (${Math.round(delay / 1000 / 60)} dakika sonra)`)
+  
   newsSchedulerInterval = setTimeout(() => {
     updateNewsScheduled()
   }, delay)
@@ -685,10 +689,13 @@ function start() {
     scheduleFearGreedNext() // Sadece zamanlayıcı kur, hemen çalıştırma
   }
   
-  // News scheduler'ı başlat (10 dakikada bir) - SADECE PLANLA, HEMEN ÇALIŞTIRMA
+  // News scheduler'ı başlat (10 dakikada bir)
   if (!newsSchedulerInterval) {
     console.log('🚀 News Scheduler başlatıldı (10 dakikada bir)')
-    scheduleNewsNext() // Sadece zamanlayıcı kur, hemen çalıştırma
+    // İlk güncellemeyi hemen yap (async, await etmeden - kendi içinde hata yönetimi var)
+    updateNewsScheduled().catch(err => {
+      console.error('❌ News scheduler ilk güncelleme hatası:', err.message)
+    })
   }
   
   // Dominance scheduler'ı başlat (10 dakikada bir) - SADECE PLANLA, HEMEN ÇALIŞTIRMA
