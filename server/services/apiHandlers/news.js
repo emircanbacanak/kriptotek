@@ -188,7 +188,10 @@ function parseRSSFeed(xml, source) {
         }
         
         // CoinTelegraph için +3 saat ekle (diğer kaynaklar için değişiklik yok)
-        // RSS feed'den gelen tarih UTC formatında ama Türkiye saatine göre yazılmış
+        // RSS feed'den gelen tarih UTC formatında
+        // Örnek: "Thu, 28 Nov 2025 12:18:00 +0000" veya "2025-11-28T12:18:00.000Z"
+        // Bu tarih UTC'de 12:18:00 demektir, ama aslında Türkiye saati 15:18:00 olmalı
+        // Bu yüzden +3 saat ekleyerek Türkiye saatini UTC'de temsil ediyoruz
         if (source === 'cointelegraph' && !isNaN(publishedAt.getTime())) {
           const originalTime = publishedAt.toISOString()
           const originalTimestamp = publishedAt.getTime()
@@ -196,7 +199,10 @@ function parseRSSFeed(xml, source) {
           const adjustedTimestamp = originalTimestamp + (3 * 60 * 60 * 1000)
           publishedAt = new Date(adjustedTimestamp)
           const newTime = publishedAt.toISOString()
-          console.log(`🕐 CoinTelegraph (RSS) saat düzeltmesi: ${originalTime} (${originalTimestamp}) -> ${newTime} (${adjustedTimestamp}) (+3 saat)`)
+          const now = new Date()
+          const diff = now.getTime() - adjustedTimestamp
+          const diffMinutes = Math.floor(diff / 60000)
+          console.log(`🕐 CoinTelegraph (RSS) saat düzeltmesi: ${originalTime} -> ${newTime} (+3 saat), şimdi: ${now.toISOString()}, fark: ${diffMinutes} dakika`)
         }
               
         // Son 48 saat içindeki haberleri filtrele
@@ -302,9 +308,10 @@ export async function updateNews() {
                   let pubDate = pubDateRaw ? new Date(pubDateRaw) : new Date()
                   
                   // CoinTelegraph için +3 saat ekle
-                  // RSS feed'den gelen tarih UTC formatında ama Türkiye saatine göre yazılmış
-                  // Örnek: RSS'de "12:18:00" yazıyorsa, bu Türkiye saati 12:18, UTC'de 09:18 demektir
-                  // Ama RSS feed UTC formatında geldiği için, +3 saat ekleyerek Türkiye saatini UTC'de temsil ediyoruz
+                  // RSS feed'den gelen tarih UTC formatında (Z ile bitiyor)
+                  // Örnek: "Thu, 28 Nov 2025 12:18:00 +0000" veya "2025-11-28T12:18:00.000Z"
+                  // Bu tarih UTC'de 12:18:00 demektir, ama aslında Türkiye saati 15:18:00 olmalı
+                  // Bu yüzden +3 saat ekleyerek Türkiye saatini UTC'de temsil ediyoruz
                   if (!isNaN(pubDate.getTime())) {
                     const originalTime = pubDate.toISOString()
                     const originalTimestamp = pubDate.getTime()
@@ -312,7 +319,10 @@ export async function updateNews() {
                     const adjustedTimestamp = originalTimestamp + (3 * 60 * 60 * 1000)
                     pubDate = new Date(adjustedTimestamp)
                     const newTime = pubDate.toISOString()
-                    console.log(`🕐 CoinTelegraph saat düzeltmesi: ${originalTime} (${originalTimestamp}) -> ${newTime} (${adjustedTimestamp}) (+3 saat)`)
+                    const now = new Date()
+                    const diff = now.getTime() - adjustedTimestamp
+                    const diffMinutes = Math.floor(diff / 60000)
+                    console.log(`🕐 CoinTelegraph saat düzeltmesi: ${originalTime} -> ${newTime} (+3 saat), şimdi: ${now.toISOString()}, fark: ${diffMinutes} dakika`)
                   }
                   
                   // Resim URL'i çıkar
