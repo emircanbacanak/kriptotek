@@ -129,6 +129,9 @@ try {
 const app = express()
 const PORT = process.env.PORT || 3000
 
+// Trust proxy - Heroku ve reverse proxy'ler için gerekli (express-rate-limit için)
+app.set('trust proxy', true)
+
 // Global HTTP server (hata durumunda da başlatılabilmesi için)
 let httpServer = null
 
