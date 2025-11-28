@@ -189,7 +189,10 @@ function parseRSSFeed(xml, source) {
         
         // CoinTelegraph için +3 saat ekle (diğer kaynaklar için değişiklik yok)
         if (source === 'cointelegraph' && !isNaN(publishedAt.getTime())) {
+          const originalTime = publishedAt.toISOString()
           publishedAt = new Date(publishedAt.getTime() + (3 * 60 * 60 * 1000))
+          const newTime = publishedAt.toISOString()
+          console.log(`🕐 CoinTelegraph (RSS) saat düzeltmesi: ${originalTime} -> ${newTime} (+3 saat)`)
         }
               
         // Son 48 saat içindeki haberleri filtrele
@@ -296,7 +299,10 @@ export async function updateNews() {
                   
                   // CoinTelegraph için +3 saat ekle
                   if (!isNaN(pubDate.getTime())) {
+                    const originalTime = pubDate.toISOString()
                     pubDate = new Date(pubDate.getTime() + (3 * 60 * 60 * 1000))
+                    const newTime = pubDate.toISOString()
+                    console.log(`🕐 CoinTelegraph saat düzeltmesi: ${originalTime} -> ${newTime} (+3 saat)`)
                   }
                   
                   // Resim URL'i çıkar
