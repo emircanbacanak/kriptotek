@@ -187,8 +187,10 @@ function parseRSSFeed(xml, source) {
           publishedAt = new Date()
         }
         
-        // NOT: Saat ekleme/çıkarma parseRSSFeed'de yapılmıyor
-        // MongoDB'ye kaydetmeden ÖNCE yapılacak (sadece CoinTelegraph için +3 saat)
+        // CoinTelegraph için +3 saat ekle (diğer kaynaklar için değişiklik yok)
+        if (source === 'cointelegraph' && !isNaN(publishedAt.getTime())) {
+          publishedAt = new Date(publishedAt.getTime() + (3 * 60 * 60 * 1000))
+        }
               
         // Son 48 saat içindeki haberleri filtrele
         if (publishedAt < cutoff) continue
@@ -292,6 +294,11 @@ export async function updateNews() {
                   const pubDateRaw = item.pubDate || item.pubdate || ''
                   let pubDate = pubDateRaw ? new Date(pubDateRaw) : new Date()
                   
+                  // CoinTelegraph için +3 saat ekle
+                  if (!isNaN(pubDate.getTime())) {
+                    pubDate = new Date(pubDate.getTime() + (3 * 60 * 60 * 1000))
+                  }
+                  
                   // Resim URL'i çıkar
                   let imageUrl = item.enclosure?.link || item.thumbnail || ''
                   if (!imageUrl && descriptionRaw) {
@@ -307,7 +314,7 @@ export async function updateNews() {
                     url: url,
                     title: title,
                     description: description,
-                    publishedAt: pubDate, // CoinTelegraph - saat değişikliği yok
+                    publishedAt: pubDate, // CoinTelegraph - +3 saat eklendi
                     source: 'cointelegraph',
                     category: 'crypto',
                     image: imageUrl || '/kriptotek.jpg'
@@ -395,18 +402,15 @@ export async function updateNews() {
       
       for (const newsItem of allNews) {
         try {
-          // Saat ekleme/çıkarma işlemi (KESİN - veritabanına kaydetmeden önce)
+          // publishedAt zaten CoinTelegraph için +3 saat eklenmiş durumda (çekilirken ekleniyor)
+          // Diğer kaynaklar (kriptofoni, bitcoinsistemi) için değişiklik yok
           let publishedAt = newsItem.publishedAt instanceof Date 
             ? newsItem.publishedAt 
             : new Date(newsItem.publishedAt)
           
-          // SADECE CoinTelegraph için +3 saat ekle (12:00 -> 15:00 gibi)
-          // Kriptofoni ve Bitcoinsistemi için 0 saat (elleme)
-          if (newsItem.source === 'cointelegraph' && !isNaN(publishedAt.getTime())) {
-            const originalDate = publishedAt.toISOString()
-            publishedAt = new Date(publishedAt.getTime() + (3 * 60 * 60 * 1000))
-          }
-          // Kriptofoni ve Bitcoinsistemi için saat değişikliği YOK (elleme)
+          // CoinTelegraph için +3 saat zaten çekilirken eklenmiş
+          // Burada sadece Date objesi olarak kullanıyoruz, tekrar ekleme yapmıyoruz
+          // Kriptofoni ve Bitcoinsistemi için saat değişikliği YOK
           
           await db.collection('crypto_news').replaceOne(
             { _id: newsItem.url },

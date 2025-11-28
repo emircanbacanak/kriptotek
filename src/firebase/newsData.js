@@ -268,7 +268,7 @@ export function subscribeToNews(callback, limitCount = 100, errorCallback = null
       // Yeni haber eklendi veya güncellendi
       // Haberi formatla
       let publishedAt = newsData.publishedAt ? new Date(newsData.publishedAt) : new Date()
-      // CoinTelegraph haberleri için tzHint kontrolü yapma - backend'de zaten +2 saat ekleniyor
+      // CoinTelegraph haberleri için tzHint kontrolü yapma - backend'de zaten +3 saat ekleniyor
       // Diğer kaynaklar için UTC ise +3 saat ekle
       if (newsData.tzHint === 'utc' && newsData.source !== 'cointelegraph') {
         publishedAt = new Date(publishedAt.getTime() + (3 * 60 * 60 * 1000))
