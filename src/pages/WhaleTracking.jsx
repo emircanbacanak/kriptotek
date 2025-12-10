@@ -119,7 +119,37 @@ const WhaleTracking = () => {
     }
   }, [minValue])
 
-  // PERFORMANS: Bekleyen trade'leri batch olarak işle (500ms'de bir)
+  // Trade'leri backend'e kaydet (İLK TANIMLANMALI - bağımlılık yok)
+  const saveTradesToBackend = useCallback(async (trades) => {
+    if (!trades || trades.length === 0) return
+
+    try {
+      // Trade'leri serialize et (Date objelerini timestamp'e çevir)
+      const serializedTrades = trades.map(trade => ({
+        ...trade,
+        timestamp: trade.timestamp instanceof Date ? trade.timestamp.getTime() : trade.timestamp
+      }))
+
+      const response = await fetch(`${getApiUrl()}/api/whale/trades`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ trades: serializedTrades })
+      })
+
+      if (response.ok) {
+        logger.log(`✅ ${trades.length} trade backend'e kaydedildi`)
+      } else {
+        logger.warn('Trade kaydetme hatası:', await response.text())
+      }
+    } catch (error) {
+      logger.warn('Trade kaydetme hatası:', error)
+    }
+  }, [])
+
+  // PERFORMANS: Bekleyen trade'leri batch olarak işle (1000ms'de bir)
   const flushPendingTrades = useCallback(() => {
     if (pendingTradesRef.current.length === 0) return
 
@@ -165,44 +195,14 @@ const WhaleTracking = () => {
       timestamp: tradeTimestamp
     })
 
-    // Timer yoksa başlat (1000ms sonra flush - performans için artırıldı)
+    // Timer yoksa başlat (1000ms sonra flush - performans için)
     if (!batchUpdateTimerRef.current) {
       batchUpdateTimerRef.current = setTimeout(() => {
         batchUpdateTimerRef.current = null
         flushPendingTrades()
-      }, 1000) // 1000ms (500ms'den artırıldı - performans için)
+      }, 1000)
     }
   }, [flushPendingTrades])
-
-  // Trade'leri backend'e kaydet
-  const saveTradesToBackend = useCallback(async (trades) => {
-    if (!trades || trades.length === 0) return
-
-    try {
-      // Trade'leri serialize et (Date objelerini timestamp'e çevir)
-      const serializedTrades = trades.map(trade => ({
-        ...trade,
-        timestamp: trade.timestamp instanceof Date ? trade.timestamp.getTime() : trade.timestamp
-      }))
-
-      const response = await fetch(`${getApiUrl()}/api/whale/trades`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({ trades: serializedTrades })
-      })
-
-      if (response.ok) {
-        logger.log(`✅ ${trades.length} trade backend'e kaydedildi`)
-      } else {
-        logger.warn('Trade kaydetme hatası:', await response.text())
-      }
-    } catch (error) {
-      logger.warn('Trade kaydetme hatası:', error)
-    }
-  }, [])
 
   // Periyodik whale trade kontrolü (Her dakika bir kez)
   const startPeriodicTracking = useCallback(() => {

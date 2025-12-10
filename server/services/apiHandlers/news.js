@@ -187,18 +187,11 @@ function parseRSSFeed(xml, source) {
           publishedAt = new Date()
         }
 
-        // CoinTelegraph için +3 saat ekleme KALDIRILDI
-        // RSS feed'den gelen tarih zaten UTC formatında ve doğru
-        // Örnek: "Thu, 28 Nov 2025 12:18:00 +0000" veya "2025-11-28T12:18:00.000Z"
-        // Bu tarih UTC'de 12:18:00 demektir, bu zaten doğru
-        // +3 saat eklemek yanlış çünkü tarih gelecek bir tarih oluyor
-        // Frontend'de zaten UTC olarak parse ediliyor ve doğru görünüyor
         if (source === 'cointelegraph' && !isNaN(publishedAt.getTime())) {
           const originalTime = publishedAt.toISOString()
           const now = new Date()
           const diff = now.getTime() - publishedAt.getTime()
           const diffMinutes = Math.floor(diff / 60000)
-          console.log(`🕐 CoinTelegraph (RSS) tarih (değiştirilmedi): ${originalTime}, şimdi: ${now.toISOString()}, fark: ${diffMinutes} dakika`)
         }
 
         // Son 48 saat içindeki haberleri filtrele
@@ -303,18 +296,11 @@ export async function updateNews() {
                   const pubDateRaw = item.pubDate || item.pubdate || ''
                   let pubDate = pubDateRaw ? new Date(pubDateRaw) : new Date()
 
-                  // CoinTelegraph için +3 saat ekleme KALDIRILDI
-                  // RSS feed'den gelen tarih zaten UTC formatında ve doğru
-                  // Örnek: "Thu, 28 Nov 2025 12:18:00 +0000" veya "2025-11-28T12:18:00.000Z"
-                  // Bu tarih UTC'de 12:18:00 demektir, bu zaten doğru
-                  // +3 saat eklemek yanlış çünkü tarih gelecek bir tarih oluyor
-                  // Frontend'de zaten UTC olarak parse ediliyor ve doğru görünüyor
                   if (!isNaN(pubDate.getTime())) {
                     const originalTime = pubDate.toISOString()
                     const now = new Date()
                     const diff = now.getTime() - pubDate.getTime()
                     const diffMinutes = Math.floor(diff / 60000)
-                    console.log(`🕐 CoinTelegraph tarih (değiştirilmedi): ${originalTime}, şimdi: ${now.toISOString()}, fark: ${diffMinutes} dakika`)
                   }
 
                   // Resim URL'i çıkar
