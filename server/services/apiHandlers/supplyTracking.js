@@ -65,9 +65,16 @@ export async function updateSupplyTracking(db) {
     console.log(`✅ Snapshot kaydedildi: ${snapshotKey}, upserted: ${saveResult.upsertedCount > 0}, modified: ${saveResult.modifiedCount > 0}`)
 
     // 5. Eski snapshot'ları temizle (30 günden eski)
+    // NOT: Eski snapshot'larda timestamp Date objesi olabilir, yenilerde Number
     const thirtyDaysAgo = now.getTime() - (30 * 24 * 60 * 60 * 1000)
+    const thirtyDaysAgoDate = new Date(thirtyDaysAgo)
     const deleteResult = await supplyHistoryCollection.deleteMany(
-      { timestamp: { $lt: thirtyDaysAgo } },
+      {
+        $or: [
+          { timestamp: { $lt: thirtyDaysAgo } },      // Number formatı
+          { timestamp: { $lt: thirtyDaysAgoDate } }   // Date formatı
+        ]
+      },
       { maxTimeMS: 30000 } // 30 saniye timeout
     )
     if (deleteResult.deletedCount > 0) {
@@ -124,8 +131,8 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
       maxTimeMS: 60000, // 60 saniye timeout
       projection: { _id: 1, timestamp: 1, supplies: 1 } // Sadece gerekli alanları çek
     })
-    .sort({ _id: 1 }) // _id'ye göre sırala (YYYY-MM-DD-HHMM formatı)
-    .limit(1000) // Maksimum 1000 snapshot (30 gün için yeterli - her 5 dakikada bir = ~8640 snapshot, ama limit koyuyoruz)
+    .sort({ _id: -1 }) // YENİDEN ESKİYE sırala (en yeni snapshot'lar önce gelsin)
+    .limit(1000) // Maksimum 1000 snapshot
     .toArray()
 
   console.log(`📊 MongoDB'den ${allSnapshotsRaw.length} raw snapshot çekildi`)
