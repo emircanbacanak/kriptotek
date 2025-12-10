@@ -10,7 +10,7 @@ class MultiExchangeWhaleService {
     this.minTradeValue = 200000 // Minimum $200K trade value
     this.updateInterval = 60000 // 60 saniye (1 dakika)
     this.callbacks = new Set()
-    
+
     // Popüler coinler
     this.trackedSymbols = [
       'BTC', 'ETH', 'BNB', 'SOL', 'XRP',
@@ -64,8 +64,7 @@ class MultiExchangeWhaleService {
    * Tüm borsalardan büyük trade'leri çek (Backend'den)
    */
   async fetchAllWhales() {
-    console.log(`🔍 Whale trade'leri çekiliyor (Min: $${this.minTradeValue.toLocaleString()})...`)
-    
+
     try {
       // Backend'den tüm whale trade'leri çek
       const allTrades = await this.fetchAllWhalesFromBackend()
@@ -75,8 +74,6 @@ class MultiExchangeWhaleService {
         const tradeValue = trade.tradeValue || (trade.price * trade.quantity || 0)
         return tradeValue >= this.minTradeValue
       })
-
-      console.log(`✅ ${filteredTrades.length} whale trade bulundu (Min: $${this.minTradeValue.toLocaleString()})`)
 
       // Tüm callback'lere bildir
       this.callbacks.forEach(callback => {
@@ -103,7 +100,6 @@ class MultiExchangeWhaleService {
     }
 
     this.isRunning = true
-    console.log(`🚀 Multi-exchange whale tracking başlatıldı (Her ${this.updateInterval / 1000} saniyede bir, Min: $${this.minTradeValue.toLocaleString()})`)
 
     // Hemen bir kez çek
     this.fetchAllWhales()
@@ -135,7 +131,7 @@ class MultiExchangeWhaleService {
    */
   subscribe(callback) {
     this.callbacks.add(callback)
-    
+
     // Unsubscribe fonksiyonu
     return () => {
       this.callbacks.delete(callback)
@@ -147,7 +143,6 @@ class MultiExchangeWhaleService {
    */
   setMinTradeValue(value) {
     this.minTradeValue = value
-    console.log(`💰 Minimum trade değeri güncellendi: $${value.toLocaleString()}`)
   }
 
   /**

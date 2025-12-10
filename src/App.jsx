@@ -1,31 +1,24 @@
-import React, { Suspense, lazy } from 'react'
+import React, { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
+import Login from './pages/Login'
+import Register from './pages/Register'
+import ForgotPassword from './pages/ForgotPassword'
+import Layout from './components/Layout'
+import Home from './pages/Home'
+import Dominance from './pages/Dominance'
+import Admin from './pages/Admin'
+import Settings from './pages/Settings'
+import Trending from './pages/Trending'
+import Favorites from './pages/Favorites'
+import Portfolio from './pages/Portfolio'
+import News from './pages/News'
+import FedRate from './pages/FedRate'
+import SupplyTracking from './pages/SupplyTracking'
+import WhaleTracking from './pages/WhaleTracking'
+import NotFound from './pages/NotFound'
+import PremiumRoute from './components/PremiumRoute'
 import { useAuth } from './contexts/AuthContext'
 import './services/supplyHistoryService' // Supply history service'i yükle (window'a ekler)
-
-// Lazy-loaded components
-import PageSkeleton from './components/PageSkeleton'
-import Layout from './components/Layout'
-import PremiumRoute from './components/PremiumRoute'
-
-// Auth pages - kritik, ilk yüklemede gerekli
-const Login = lazy(() => import('./pages/Login'))
-const Register = lazy(() => import('./pages/Register'))
-const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
-
-// Main pages - lazy loaded
-const Home = lazy(() => import('./pages/Home'))
-const Dominance = lazy(() => import('./pages/Dominance'))
-const Admin = lazy(() => import('./pages/Admin'))
-const Settings = lazy(() => import('./pages/Settings'))
-const Trending = lazy(() => import('./pages/Trending'))
-const Favorites = lazy(() => import('./pages/Favorites'))
-const Portfolio = lazy(() => import('./pages/Portfolio'))
-const News = lazy(() => import('./pages/News'))
-const FedRate = lazy(() => import('./pages/FedRate'))
-const SupplyTracking = lazy(() => import('./pages/SupplyTracking'))
-const WhaleTracking = lazy(() => import('./pages/WhaleTracking'))
-const NotFound = lazy(() => import('./pages/NotFound'))
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, isActive, loading } = useAuth()
@@ -76,105 +69,103 @@ const AdminRoute = ({ children }) => {
 
 const App = () => {
   return (
-    <Suspense fallback={<PageSkeleton />}>
-      <Routes>
-        {/* Public routes - no layout */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
+    <Routes>
+      {/* Public routes - no layout */}
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
 
-        {/* Protected routes - with layout */}
+      {/* Protected routes - with layout */}
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <Layout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<Home />} />
+        {/* Premium routes - inside Layout */}
         <Route
-          path="/"
+          path="market-overview"
           element={
-            <ProtectedRoute>
-              <Layout />
-            </ProtectedRoute>
+            <PremiumRoute>
+              <Dominance />
+            </PremiumRoute>
           }
-        >
-          <Route index element={<Home />} />
-          {/* Premium routes - inside Layout */}
-          <Route
-            path="market-overview"
-            element={
-              <PremiumRoute>
-                <Dominance />
-              </PremiumRoute>
-            }
-          />
-          <Route
-            path="supply-tracking"
-            element={
-              <PremiumRoute>
-                <SupplyTracking />
-              </PremiumRoute>
-            }
-          />
-          <Route
-            path="fed-rate"
-            element={
-              <PremiumRoute>
-                <FedRate />
-              </PremiumRoute>
-            }
-          />
-          <Route
-            path="trending"
-            element={
-              <PremiumRoute>
-                <Trending />
-              </PremiumRoute>
-            }
-          />
-          <Route
-            path="favorites"
-            element={
-              <PremiumRoute>
-                <Favorites />
-              </PremiumRoute>
-            }
-          />
-          <Route
-            path="portfolio"
-            element={
-              <PremiumRoute>
-                <Portfolio />
-              </PremiumRoute>
-            }
-          />
-          <Route
-            path="news"
-            element={
-              <PremiumRoute>
-                <News />
-              </PremiumRoute>
-            }
-          />
-          <Route
-            path="whale-tracking"
-            element={
-              <PremiumRoute>
-                <WhaleTracking />
-              </PremiumRoute>
-            }
-          />
-          {/* Settings route */}
-          <Route path="settings" element={<Settings />} />
-          {/* Admin route - sadece admin kullanıcılar erişebilir */}
-          <Route
-            path="admin"
-            element={
-              <AdminRoute>
-                <Admin />
-              </AdminRoute>
-            }
-          />
-          {/* Add more protected routes here */}
-        </Route>
+        />
+        <Route
+          path="supply-tracking"
+          element={
+            <PremiumRoute>
+              <SupplyTracking />
+            </PremiumRoute>
+          }
+        />
+        <Route
+          path="fed-rate"
+          element={
+            <PremiumRoute>
+              <FedRate />
+            </PremiumRoute>
+          }
+        />
+        <Route
+          path="trending"
+          element={
+            <PremiumRoute>
+              <Trending />
+            </PremiumRoute>
+          }
+        />
+        <Route
+          path="favorites"
+          element={
+            <PremiumRoute>
+              <Favorites />
+            </PremiumRoute>
+          }
+        />
+        <Route
+          path="portfolio"
+          element={
+            <PremiumRoute>
+              <Portfolio />
+            </PremiumRoute>
+          }
+        />
+        <Route
+          path="news"
+          element={
+            <PremiumRoute>
+              <News />
+            </PremiumRoute>
+          }
+        />
+        <Route
+          path="whale-tracking"
+          element={
+            <PremiumRoute>
+              <WhaleTracking />
+            </PremiumRoute>
+          }
+        />
+        {/* Settings route */}
+        <Route path="settings" element={<Settings />} />
+        {/* Admin route - sadece admin kullanıcılar erişebilir */}
+        <Route
+          path="admin"
+          element={
+            <AdminRoute>
+              <Admin />
+            </AdminRoute>
+          }
+        />
+        {/* Add more protected routes here */}
+      </Route>
 
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </Suspense>
+      <Route path="*" element={<NotFound />} />
+    </Routes>
   )
 }
 

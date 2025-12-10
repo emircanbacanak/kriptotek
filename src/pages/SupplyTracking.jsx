@@ -13,11 +13,11 @@ const SUPPLY_CACHE_TIME_KEY = `${SUPPLY_CACHE_KEY}_time`;
 function SupplyTracking() {
   const { t, language } = useLanguage();
   const { theme } = useTheme();
-  
+
   // Global veri yönetim sisteminden verileri al
   const { supplyTrackingData, loading: globalSupplyLoading, isUpdating: globalSupplyUpdating } = useSupplyTrackingData();
   const { coins, loading: globalCoinsLoading } = useCryptoData();
-  
+
   const [supplyData, setSupplyData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -111,13 +111,13 @@ function SupplyTracking() {
 
     const enrichedCoins = coins.map((coin) => {
       const supplyInfo = supplyChanges[coin.id] || {};
-      
+
       // Supply bilgilerini öncelik sırasına göre belirle
       // 1. Coin objesinden (backend'den geliyor)
       // 2. Yoksa null
       const totalSupply = coin.total_supply !== null && coin.total_supply !== undefined ? coin.total_supply : null;
       const maxSupply = coin.max_supply !== null && coin.max_supply !== undefined ? coin.max_supply : null;
-      
+
       // Supply değişim bilgilerini al (backend'den gelen format: change24h, absoluteChange24h, etc.)
       const change24h = supplyInfo.change24h !== undefined ? supplyInfo.change24h : null;
       const absoluteChange24h = supplyInfo.absoluteChange24h !== undefined ? supplyInfo.absoluteChange24h : null;
@@ -125,7 +125,7 @@ function SupplyTracking() {
       const absoluteChange7d = supplyInfo.absoluteChange7d !== undefined ? supplyInfo.absoluteChange7d : null;
       const change1m = supplyInfo.change1m !== undefined ? supplyInfo.change1m : null;
       const absoluteChange1m = supplyInfo.absoluteChange1m !== undefined ? supplyInfo.absoluteChange1m : null;
-      
+
       return {
         ...coin,
         // Supply değişim bilgileri (açıkça set et)
@@ -140,7 +140,7 @@ function SupplyTracking() {
         max_supply: maxSupply,
       };
     });
-    
+
     // Debug: Kaç coin'de supply bilgisi var?
     const coinsWithTotalSupply = enrichedCoins.filter(c => c.total_supply !== null && c.total_supply !== undefined).length;
     const coinsWithMaxSupply = enrichedCoins.filter(c => c.max_supply !== null && c.max_supply !== undefined).length;
@@ -165,13 +165,13 @@ function SupplyTracking() {
 
   // Header gradients (Light: blue→indigo, Dark: yellow→orange) - same as Home page
   const headerIconGradient = useMemo(() => {
-    return theme === 'dark' 
+    return theme === 'dark'
       ? 'from-yellow-600 to-orange-600'
       : 'from-blue-500 to-indigo-500';
   }, [theme]);
 
   const headerTextGradient = useMemo(() => {
-    return theme === 'dark' 
+    return theme === 'dark'
       ? 'from-yellow-400 to-orange-400'
       : 'from-blue-600 to-indigo-600';
   }, [theme]);
@@ -222,10 +222,10 @@ function SupplyTracking() {
     const term = searchTerm.trim().toLowerCase();
     const base = term
       ? supplyData.filter((coin) => {
-          const name = coin.name?.toLowerCase() || '';
-          const symbol = coin.symbol?.toLowerCase() || '';
-          return name.includes(term) || symbol.includes(term);
-        })
+        const name = coin.name?.toLowerCase() || '';
+        const symbol = coin.symbol?.toLowerCase() || '';
+        return name.includes(term) || symbol.includes(term);
+      })
       : supplyData;
 
     const sorted = [...base];
@@ -350,88 +350,88 @@ function SupplyTracking() {
           </div>
         </div>
       ) : (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 max-h-[720px] overflow-y-auto overflow-x-hidden px-4 sm:px-6 pt-8 sm:pt-10 pb-6 crypto-list-scrollbar">
-        {filteredSupplyData.map((coin, index) => (
-          <div key={coin.id} className="group/card relative animate-fade-in" style={{ animationDelay: `${Math.min(index * 10, 250)}ms` }}>
-            <div className="absolute inset-0 bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl opacity-0 group-hover/card:opacity-50 blur-lg transition-opacity duration-500"></div>
-            <div className="relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700 rounded-2xl p-4 sm:p-5 shadow-lg transform transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.02]">
-              {/* Header: Icon, Name, Rank */}
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-3 flex-1 min-w-0">
-                  <div className="relative flex-shrink-0">
-                    <img
-                      className="h-10 w-10 sm:h-12 sm:w-12 rounded-full transition-transform duration-300 group-hover/card:scale-110 group-hover/card:rotate-6"
-                      src={coin.image}
-                      alt={coin.name}
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="absolute -top-1 -right-1 w-6 h-6 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-full flex items-center justify-center shadow-lg">
-                      <span className="text-white text-xs font-bold">#{coin.market_cap_rank}</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 max-h-[720px] overflow-y-auto overflow-x-hidden px-4 sm:px-6 pt-8 sm:pt-10 pb-6 crypto-list-scrollbar">
+          {filteredSupplyData.map((coin, index) => (
+            <div key={coin.id} className="group/card relative animate-fade-in" style={{ animationDelay: `${Math.min(index * 10, 250)}ms` }}>
+              <div className="absolute inset-0 bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl opacity-0 group-hover/card:opacity-50 blur-lg transition-opacity duration-500"></div>
+              <div className="relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700 rounded-2xl p-4 sm:p-5 shadow-lg transform transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.02]">
+                {/* Header: Icon, Name, Rank */}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-3 flex-1 min-w-0">
+                    <div className="relative flex-shrink-0">
+                      <img
+                        className="h-10 w-10 sm:h-12 sm:w-12 rounded-full transition-transform duration-300 group-hover/card:scale-110 group-hover/card:rotate-6"
+                        src={coin.image}
+                        alt={coin.name}
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute -top-1 -right-1 w-6 h-6 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-full flex items-center justify-center shadow-lg">
+                        <span className="text-white text-xs font-bold">#{coin.market_cap_rank}</span>
+                      </div>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h2 className="font-bold text-base sm:text-lg text-gray-900 dark:text-white truncate">
+                        {getDisplayName(coin.name, coin.symbol)}
+                      </h2>
+                      {shouldShowSymbol(coin.name) && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          {coin.symbol}
+                        </p>
+                      )}
                     </div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-bold text-base sm:text-lg text-gray-900 dark:text-white truncate">
-                      {getDisplayName(coin.name, coin.symbol)}
-                    </h3>
-                    {shouldShowSymbol(coin.name) && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                        {coin.symbol}
-                      </p>
-                    )}
-                  </div>
                 </div>
-              </div>
 
-              {/* Supply Changes: 24h, 7d, 1m */}
-              <div className="space-y-2 mb-4">
-                <div className="flex items-center justify-between p-2 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg transition-transform duration-300 group-hover/card:scale-105">
-                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{t('supplyChange24h')}</span>
-                  <div className={`flex items-center font-bold ${getSupplyChangeColor(coin.supply_absolute_change_24h)}`}>
-                    {coin.supply_absolute_change_24h === null || coin.supply_absolute_change_24h === undefined ? '-' : formatSupplyChange(coin.supply_absolute_change_24h)}
-                    {coin.supply_absolute_change_24h !== null && coin.supply_absolute_change_24h !== undefined && getSupplyChangeIcon(coin.supply_absolute_change_24h)}
+                {/* Supply Changes: 24h, 7d, 1m */}
+                <div className="space-y-2 mb-4">
+                  <div className="flex items-center justify-between p-2 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg transition-transform duration-300 group-hover/card:scale-105">
+                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{t('supplyChange24h')}</span>
+                    <div className={`flex items-center font-bold ${getSupplyChangeColor(coin.supply_absolute_change_24h)}`}>
+                      {coin.supply_absolute_change_24h === null || coin.supply_absolute_change_24h === undefined ? '-' : formatSupplyChange(coin.supply_absolute_change_24h)}
+                      {coin.supply_absolute_change_24h !== null && coin.supply_absolute_change_24h !== undefined && getSupplyChangeIcon(coin.supply_absolute_change_24h)}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between p-2 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg transition-transform duration-300 group-hover/card:scale-105">
+                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{t('supplyChange7d')}</span>
+                    <div className={`flex items-center font-bold ${getSupplyChangeColor(coin.supply_absolute_change_7d)}`}>
+                      {coin.supply_absolute_change_7d === null || coin.supply_absolute_change_7d === undefined ? '-' : formatSupplyChange(coin.supply_absolute_change_7d)}
+                      {coin.supply_absolute_change_7d !== null && coin.supply_absolute_change_7d !== undefined && getSupplyChangeIcon(coin.supply_absolute_change_7d)}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between p-2 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg transition-transform duration-300 group-hover/card:scale-105">
+                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{t('supplyChange30d')}</span>
+                    <div className={`flex items-center font-bold ${getSupplyChangeColor(coin.supply_absolute_change_1m)}`}>
+                      {coin.supply_absolute_change_1m === null || coin.supply_absolute_change_1m === undefined ? '-' : formatSupplyChange(coin.supply_absolute_change_1m)}
+                      {coin.supply_absolute_change_1m !== null && coin.supply_absolute_change_1m !== undefined && getSupplyChangeIcon(coin.supply_absolute_change_1m)}
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center justify-between p-2 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg transition-transform duration-300 group-hover/card:scale-105">
-                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{t('supplyChange7d')}</span>
-                  <div className={`flex items-center font-bold ${getSupplyChangeColor(coin.supply_absolute_change_7d)}`}>
-                    {coin.supply_absolute_change_7d === null || coin.supply_absolute_change_7d === undefined ? '-' : formatSupplyChange(coin.supply_absolute_change_7d)}
-                    {coin.supply_absolute_change_7d !== null && coin.supply_absolute_change_7d !== undefined && getSupplyChangeIcon(coin.supply_absolute_change_7d)}
-                  </div>
-                </div>
-                <div className="flex items-center justify-between p-2 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg transition-transform duration-300 group-hover/card:scale-105">
-                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{t('supplyChange30d')}</span>
-                  <div className={`flex items-center font-bold ${getSupplyChangeColor(coin.supply_absolute_change_1m)}`}>
-                    {coin.supply_absolute_change_1m === null || coin.supply_absolute_change_1m === undefined ? '-' : formatSupplyChange(coin.supply_absolute_change_1m)}
-                    {coin.supply_absolute_change_1m !== null && coin.supply_absolute_change_1m !== undefined && getSupplyChangeIcon(coin.supply_absolute_change_1m)}
-                  </div>
-                </div>
-              </div>
 
-              {/* Supply Stats */}
-              <div className="space-y-2 pt-3 border-t border-gray-200 dark:border-gray-600">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">{t('circulatingSupplyFull')}</span>
-                  <span className="text-xs font-semibold text-gray-900 dark:text-white text-right">
-                    {coin.circulating_supply ? formatLargeNumber(coin.circulating_supply, '', true) : '-'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">{t('totalSupplyFull')}</span>
-                  <span className="text-xs font-semibold text-gray-900 dark:text-white text-right">
-                    {coin.total_supply ? formatLargeNumber(coin.total_supply, '', true) : '-'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">{t('maxSupplyFull')}</span>
-                  <span className="text-xs font-semibold text-gray-900 dark:text-white text-right">
-                    {coin.max_supply ? formatLargeNumber(coin.max_supply, '', true) : '∞'}
-                  </span>
+                {/* Supply Stats */}
+                <div className="space-y-2 pt-3 border-t border-gray-200 dark:border-gray-600">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{t('circulatingSupplyFull')}</span>
+                    <span className="text-xs font-semibold text-gray-900 dark:text-white text-right">
+                      {coin.circulating_supply ? formatLargeNumber(coin.circulating_supply, '', true) : '-'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{t('totalSupplyFull')}</span>
+                    <span className="text-xs font-semibold text-gray-900 dark:text-white text-right">
+                      {coin.total_supply ? formatLargeNumber(coin.total_supply, '', true) : '-'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{t('maxSupplyFull')}</span>
+                    <span className="text-xs font-semibold text-gray-900 dark:text-white text-right">
+                      {coin.max_supply ? formatLargeNumber(coin.max_supply, '', true) : '∞'}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
       )}
     </div>
   );

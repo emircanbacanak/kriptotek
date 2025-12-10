@@ -24,7 +24,7 @@ class CryptoDataManager {
       lastUpdate: this.lastUpdate,
       isUpdating: this.isUpdating
     })
-    
+
     // Cleanup fonksiyonu
     return () => {
       this.subscribers.delete(callback)
@@ -39,7 +39,7 @@ class CryptoDataManager {
       lastUpdate: this.lastUpdate,
       isUpdating: this.isUpdating
     }
-    
+
     this.subscribers.forEach(callback => {
       try {
         callback(data)
@@ -68,7 +68,7 @@ class CryptoDataManager {
       id: coin.id,
       name: coin.name,
       symbol: coin.symbol,
-      image: coin.image || `https://assets.coingecko.com/coins/images/${coin.id}/large/${coin.id}.png`,
+      image: coin.image || `https://assets.coingecko.com/coins/images/${coin.id}/small/${coin.id}.png`,
       current_price: coin.current_price,
       price_change_percentage_24h: coin.price_change_percentage_24h
     })
@@ -97,7 +97,7 @@ class CryptoDataManager {
     const updateStartTime = Date.now()
     const timeStr = new Date().toLocaleTimeString('tr-TR')
     const nextUpdateTime = new Date(Date.now() + this.getNextUpdateTime()).toLocaleTimeString('tr-TR')
-    
+
     this.isUpdating = true
     this.notifySubscribers()
 
@@ -110,7 +110,7 @@ class CryptoDataManager {
       const result = await cryptoService.fetchCryptoListWithStatus()
       const cryptoList = result.data || []
       const apiStatus = result.apiStatus || {}
-      
+
       // API durumlarını kaydet
       if (apiStatus.apiStatuses && Array.isArray(apiStatus.apiStatuses)) {
         results.apiStatuses = apiStatus.apiStatuses
@@ -120,15 +120,15 @@ class CryptoDataManager {
         results.apiStatuses = [{ name: apiStatus.source, success: apiStatus.success || false }]
         results.source = apiStatus.source
       }
-      
+
       if (cryptoList && cryptoList.length > 0) {
         // Kesinlikle 300 coin
         const limitedList = cryptoList.length > 300 ? cryptoList.slice(0, 300) : cryptoList
-        
+
         this.coins = limitedList
         this.topMovers = this.calculateTopMovers(limitedList)
         this.lastUpdate = new Date()
-        
+
         results.success = true
         results.duration = ((Date.now() - updateStartTime) / 1000).toFixed(2)
       } else {
@@ -146,7 +146,7 @@ class CryptoDataManager {
       console.log(`\n📊 [${timeStr}] ========== Crypto Veri Güncelleme Tamamlandı ==========`)
       console.log(`⏱️  [${timeStr}] Toplam süre: ${totalDuration}s`)
       console.log(`📈 [${timeStr}] Crypto: ${results.success ? '✅ Başarılı' : '❌ Başarısız'} (${results.duration}s)`)
-      
+
       // API durumlarını göster
       if (results.apiStatuses && results.apiStatuses.length > 0) {
         results.apiStatuses.forEach(status => {
@@ -162,10 +162,10 @@ class CryptoDataManager {
           console.log(`   ${results.success ? '✅' : '❌'} Veri kaynağı: Bilinmiyor`)
         }
       }
-      
+
       console.log(`⏰ [${timeStr}] Bir sonraki güncelleme: ${nextUpdateTime}`)
       console.log(`═══════════════════════════════════════════════════════════\n`)
-      
+
       this.isUpdating = false
       this.notifySubscribers()
     }
@@ -175,14 +175,14 @@ class CryptoDataManager {
   getNextUpdateTime() {
     const now = new Date()
     const currentMinutes = now.getMinutes()
-    
+
     // Şu anki dakikanın hangi 5 dakikalık dilimde olduğunu bul
     const currentSlot = Math.floor(currentMinutes / 5)
     const nextSlot = currentSlot + 1
-    
+
     // Sonraki 5 dakikalık zamanı hesapla
     const nextTime = new Date(now)
-    
+
     if (nextSlot * 5 >= 60) {
       // Bir sonraki saate geç
       nextTime.setHours(now.getHours() + 1)
@@ -191,19 +191,19 @@ class CryptoDataManager {
       // Aynı saat içinde, sonraki 5 dakikalık dilime geç
       nextTime.setMinutes(nextSlot * 5)
     }
-    
+
     nextTime.setSeconds(0)
     nextTime.setMilliseconds(0)
-    
+
     // Şu anki zamandan sonraki zamana kadar geçen süreyi hesapla
     const delay = nextTime.getTime() - now.getTime()
-    
+
     // Eğer delay çok küçükse (zaten o zaman dilimindeysek), bir sonraki 5 dakikaya geç
     if (delay < 1000) {
       nextTime.setMinutes(nextTime.getMinutes() + 5)
       return nextTime.getTime() - now.getTime()
     }
-    
+
     return delay
   }
 
@@ -211,21 +211,21 @@ class CryptoDataManager {
   startAutoUpdate() {
     // İlk güncellemeyi hemen yap
     this.updateData()
-    
+
     // Recursive setTimeout kullanarak 5 dakikalık zaman dilimlerinde güncelle
     const scheduleNextUpdate = () => {
       const delay = this.getNextUpdateTime()
-      
+
       const timeoutId = setTimeout(() => {
         this.updateData()
         // Her güncellemeden sonra bir sonraki zamanı planla
         scheduleNextUpdate()
       }, delay)
-      
+
       // Timeout ID'yi sakla (cleanup için)
       this.updateInterval = timeoutId
     }
-    
+
     scheduleNextUpdate()
   }
 

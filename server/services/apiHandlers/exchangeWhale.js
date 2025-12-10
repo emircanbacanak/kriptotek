@@ -39,15 +39,14 @@ class BinanceWhaleTracker {
       const streams = TRACKED_SYMBOLS
         .map(symbol => `${symbol.toLowerCase()}@trade`)
         .join('/')
-      
+
       const wsUrl = `wss://stream.binance.com:9443/stream?streams=${streams}`
-      
+
       this.ws = new WebSocket(wsUrl)
 
       this.ws.on('open', () => {
         this.isConnected = true
         this.reconnectAttempts = 0
-        console.log(`✅ Binance whale tracking bağlantısı kuruldu`)
       })
 
       this.ws.on('message', (data) => {
@@ -66,8 +65,7 @@ class BinanceWhaleTracker {
       this.ws.on('close', (code, reason) => {
         this.isConnected = false
         const reasonStr = reason ? reason.toString() : 'Bilinmeyen neden'
-        console.log(`📡 Binance whale tracking bağlantısı kapatıldı (Code: ${code}, Reason: ${reasonStr})`)
-        
+
         // Binance WebSocket otomatik ping/pong yönetir, manuel ping gerekmez
         if (code !== 1000) {
           this.attemptReconnect()
@@ -88,7 +86,6 @@ class BinanceWhaleTracker {
     this.reconnectAttempts++
     const delay = Math.min(this.reconnectDelay * this.reconnectAttempts, 30000) // Max 30 saniye
 
-    console.log(`🔄 Binance whale tracking: ${delay / 1000} saniye sonra yeniden bağlanılacak (Deneme: ${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
 
     setTimeout(() => {
       if (!this.isConnected) {
@@ -142,14 +139,14 @@ class BinanceWhaleTracker {
         existingTrades.map(t => `${t.id}_${t.source || 'unknown'}`)
       )
       const key = `${trade.id}_${trade.source}`
-      
+
       if (existingKeys.has(key)) {
         return // Zaten var
       }
 
       // 24 saat öncesini hesapla
       const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000)
-      
+
       // Eski trade'leri temizle
       const recentTrades = existingTrades.filter(t => {
         const tradeTime = t.timestamp ? new Date(t.timestamp).getTime() : 0
@@ -180,8 +177,7 @@ class BinanceWhaleTracker {
         { upsert: true }
       )
 
-      console.log(`🐋 Binance whale trade kaydedildi: ${trade.symbol} - $${trade.tradeValue.toLocaleString()}`)
-      
+
       // WebSocket'e broadcast et
       broadcastWhaleTrade(serializedTrade)
     } catch (error) {
@@ -225,8 +221,7 @@ class BybitWhaleTracker {
       this.ws.on('open', () => {
         this.isConnected = true
         this.reconnectAttempts = 0
-        console.log(`✅ Bybit whale tracking bağlantısı kuruldu`)
-        
+
         // Her coin için subscribe
         TRACKED_SYMBOLS.forEach(symbol => {
           const subscribeMessage = {
@@ -235,7 +230,7 @@ class BybitWhaleTracker {
           }
           this.ws.send(JSON.stringify(subscribeMessage))
         })
-        
+
         // Bybit ping mekanizması (her 20 saniyede bir)
         this.startPing()
       })
@@ -257,8 +252,7 @@ class BybitWhaleTracker {
         this.isConnected = false
         this.stopPing()
         const reasonStr = reason ? reason.toString() : 'Bilinmeyen neden'
-        console.log(`📡 Bybit whale tracking bağlantısı kapatıldı (Code: ${code}, Reason: ${reasonStr})`)
-        
+
         if (code !== 1000) {
           this.attemptReconnect()
         }
@@ -278,7 +272,6 @@ class BybitWhaleTracker {
     this.reconnectAttempts++
     const delay = Math.min(this.reconnectDelay * this.reconnectAttempts, 30000) // Max 30 saniye
 
-    console.log(`🔄 Bybit whale tracking: ${delay / 1000} saniye sonra yeniden bağlanılacak (Deneme: ${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
 
     setTimeout(() => {
       if (!this.isConnected) {
@@ -292,18 +285,18 @@ class BybitWhaleTracker {
     if (message.op === 'pong') {
       return
     }
-    
+
     // Trade mesajları
     if (message.topic && message.topic.startsWith('publicTrade.') && message.data) {
       const symbol = message.topic.replace('publicTrade.', '')
       const trades = Array.isArray(message.data) ? message.data : [message.data]
-      
+
       trades.forEach(trade => {
         this.processTrade(symbol, trade)
       })
     }
   }
-  
+
   startPing() {
     this.stopPing()
     // Bybit: Her 20 saniyede bir ping gönder
@@ -314,7 +307,7 @@ class BybitWhaleTracker {
       }
     }, 20000)
   }
-  
+
   stopPing() {
     if (this.pingInterval) {
       clearInterval(this.pingInterval)
@@ -357,7 +350,7 @@ class BybitWhaleTracker {
         existingTrades.map(t => `${t.id}_${t.source || 'unknown'}`)
       )
       const key = `${trade.id}_${trade.source}`
-      
+
       if (existingKeys.has(key)) {
         return
       }
@@ -391,8 +384,6 @@ class BybitWhaleTracker {
         { upsert: true }
       )
 
-      console.log(`🐋 Bybit whale trade kaydedildi: ${trade.symbol} - $${trade.tradeValue.toLocaleString()}`)
-      
       // WebSocket'e broadcast et
       broadcastWhaleTrade(serializedTrade)
     } catch (error) {
@@ -442,12 +433,12 @@ class KuCoinWhaleTracker {
       }
 
       const result = await response.json()
-      
+
       if (result.code === '200000' && result.data && result.data.token) {
         this.publicToken = result.data.token
         return result.data.token
       }
-      
+
       throw new Error('KuCoin token alınamadı - Geçersiz yanıt formatı')
     } catch (error) {
       console.error('KuCoin public token hatası:', error)
@@ -476,8 +467,7 @@ class KuCoinWhaleTracker {
       this.ws.on('open', () => {
         this.isConnected = true
         this.reconnectAttempts = 0
-        console.log(`✅ KuCoin whale tracking bağlantısı kuruldu`)
-        
+
         // Her coin için subscribe
         this.trackedSymbols.forEach(symbol => {
           const subscribeMessage = {
@@ -489,7 +479,7 @@ class KuCoinWhaleTracker {
           }
           this.ws.send(JSON.stringify(subscribeMessage))
         })
-        
+
         // KuCoin ping mekanizması (her 15 saniyede bir)
         this.startPing()
       })
@@ -512,8 +502,7 @@ class KuCoinWhaleTracker {
         this.publicToken = null // Token'ı sıfırla, yeniden alınacak
         this.stopPing()
         const reasonStr = reason ? reason.toString() : 'Bilinmeyen neden'
-        console.log(`📡 KuCoin whale tracking bağlantısı kapatıldı (Code: ${code}, Reason: ${reasonStr})`)
-        
+
         // Eğer normal kapanma değilse reconnect dene
         if (code !== 1000) {
           this.attemptReconnect()
@@ -553,19 +542,19 @@ class KuCoinWhaleTracker {
       }
       return
     }
-    
+
     // Trade mesajları
     if (message.type === 'message' && message.topic && message.data) {
       const topic = message.topic
       const match = message.data
       const symbol = topic.split(':')[1]
-      
+
       if (symbol) {
         this.processTrade(symbol, match)
       }
     }
   }
-  
+
   startPing() {
     this.stopPing()
     // KuCoin: Her 15 saniyede bir ping gönder
@@ -576,7 +565,7 @@ class KuCoinWhaleTracker {
       }
     }, 15000)
   }
-  
+
   stopPing() {
     if (this.pingInterval) {
       clearInterval(this.pingInterval)
@@ -619,7 +608,7 @@ class KuCoinWhaleTracker {
         existingTrades.map(t => `${t.id}_${t.source || 'unknown'}`)
       )
       const key = `${trade.id}_${trade.source}`
-      
+
       if (existingKeys.has(key)) {
         return
       }
@@ -652,8 +641,7 @@ class KuCoinWhaleTracker {
         { upsert: true }
       )
 
-      console.log(`🐋 KuCoin whale trade kaydedildi: ${trade.symbol} - $${trade.tradeValue.toLocaleString()}`)
-      
+
       // WebSocket'e broadcast et
       broadcastWhaleTrade(serializedTrade)
     } catch (error) {
@@ -700,8 +688,7 @@ class OKXWhaleTracker {
       this.ws.on('open', () => {
         this.isConnected = true
         this.reconnectAttempts = 0
-        console.log(`✅ OKX whale tracking bağlantısı kuruldu`)
-        
+
         // Her coin için subscribe
         this.trackedSymbols.forEach(symbol => {
           const subscribeMessage = {
@@ -713,7 +700,7 @@ class OKXWhaleTracker {
           }
           this.ws.send(JSON.stringify(subscribeMessage))
         })
-        
+
         // OKX ping mekanizması (her 20 saniyede bir)
         this.startPing()
       })
@@ -735,8 +722,7 @@ class OKXWhaleTracker {
         this.isConnected = false
         this.stopPing()
         const reasonStr = reason ? reason.toString() : 'Bilinmeyen neden'
-        console.log(`📡 OKX whale tracking bağlantısı kapatıldı (Code: ${code}, Reason: ${reasonStr})`)
-        
+
         if (code !== 1000) {
           this.attemptReconnect()
         }
@@ -756,8 +742,6 @@ class OKXWhaleTracker {
     this.reconnectAttempts++
     const delay = Math.min(this.reconnectDelay * this.reconnectAttempts, 30000) // Max 30 saniye
 
-    console.log(`🔄 OKX whale tracking: ${delay / 1000} saniye sonra yeniden bağlanılacak (Deneme: ${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
-
     setTimeout(() => {
       if (!this.isConnected) {
         this.connect()
@@ -770,18 +754,18 @@ class OKXWhaleTracker {
     if (message.event === 'pong') {
       return
     }
-    
+
     // Trade mesajları
     if (message.arg && message.arg.channel === 'trades' && message.data) {
       const symbol = message.arg.instId
       const trades = Array.isArray(message.data) ? message.data : [message.data]
-      
+
       trades.forEach(trade => {
         this.processTrade(symbol, trade)
       })
     }
   }
-  
+
   startPing() {
     this.stopPing()
     // OKX: Her 20 saniyede bir ping gönder
@@ -792,7 +776,7 @@ class OKXWhaleTracker {
       }
     }, 20000)
   }
-  
+
   stopPing() {
     if (this.pingInterval) {
       clearInterval(this.pingInterval)
@@ -835,7 +819,7 @@ class OKXWhaleTracker {
         existingTrades.map(t => `${t.id}_${t.source || 'unknown'}`)
       )
       const key = `${trade.id}_${trade.source}`
-      
+
       if (existingKeys.has(key)) {
         return
       }
@@ -868,8 +852,6 @@ class OKXWhaleTracker {
         { upsert: true }
       )
 
-      console.log(`🐋 OKX whale trade kaydedildi: ${trade.symbol} - $${trade.tradeValue.toLocaleString()}`)
-      
       // WebSocket'e broadcast et
       broadcastWhaleTrade(serializedTrade)
     } catch (error) {
@@ -914,11 +896,10 @@ class BitgetWhaleTracker {
       this.ws.on('open', () => {
         this.isConnected = true
         this.reconnectAttempts = 0
-        console.log(`✅ Bitget whale tracking bağlantısı kuruldu`)
-        
+
         // Bitget ping mekanizmasını önce başlat (subscribe'den önce)
         this.startPing()
-        
+
         // Bitget: Subscribe'ları yavaşça gönder (rate limit: saatte 240 subscribe)
         // Her subscribe arasında 200ms gecikme, ilk subscribe 500ms sonra
         setTimeout(() => {
@@ -964,8 +945,7 @@ class BitgetWhaleTracker {
         this.isConnected = false
         this.stopPing()
         const reasonStr = reason ? reason.toString() : 'Bilinmeyen neden'
-        console.log(`📡 Bitget whale tracking bağlantısı kapatıldı (Code: ${code}, Reason: ${reasonStr})`)
-        
+
         if (code !== 1000) {
           this.attemptReconnect()
         }
@@ -985,8 +965,6 @@ class BitgetWhaleTracker {
     this.reconnectAttempts++
     const delay = Math.min(this.reconnectDelay * this.reconnectAttempts, 30000) // Max 30 saniye
 
-    console.log(`🔄 Bitget whale tracking: ${delay / 1000} saniye sonra yeniden bağlanılacak (Deneme: ${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
-
     setTimeout(() => {
       if (!this.isConnected) {
         this.connect()
@@ -999,24 +977,24 @@ class BitgetWhaleTracker {
     if (message.op === 'pong' || message.event === 'pong') {
       return
     }
-    
+
     // Subscribe yanıtı kontrolü
     if (message.event === 'subscribe' || (message.op === 'subscribe' && message.code === '0')) {
       // Subscribe başarılı
       return
     }
-    
+
     // Trade mesajları
     if (message.arg && message.arg.channel === 'trade' && message.data) {
       const symbol = message.arg.instId
       const trades = Array.isArray(message.data) ? message.data : [message.data]
-      
+
       trades.forEach(trade => {
         this.processTrade(symbol, trade)
       })
     }
   }
-  
+
   startPing() {
     this.stopPing()
     // Bitget: Her 25 saniyede bir ping gönder (dokümantasyona göre 30 saniye, ama güvenlik için 25)
@@ -1031,7 +1009,7 @@ class BitgetWhaleTracker {
       }
     }, 25000) // 25 saniye - Bitget dokümantasyonuna göre 30 saniye, ama güvenlik için 25
   }
-  
+
   stopPing() {
     if (this.pingInterval) {
       clearInterval(this.pingInterval)
@@ -1074,7 +1052,7 @@ class BitgetWhaleTracker {
         existingTrades.map(t => `${t.id}_${t.source || 'unknown'}`)
       )
       const key = `${trade.id}_${trade.source}`
-      
+
       if (existingKeys.has(key)) {
         return
       }
@@ -1107,8 +1085,6 @@ class BitgetWhaleTracker {
         { upsert: true }
       )
 
-      console.log(`🐋 Bitget whale trade kaydedildi: ${trade.symbol} - $${trade.tradeValue.toLocaleString()}`)
-      
       // WebSocket'e broadcast et
       broadcastWhaleTrade(serializedTrade)
     } catch (error) {
@@ -1153,8 +1129,7 @@ class GateIOWhaleTracker {
       this.ws.on('open', () => {
         this.isConnected = true
         this.reconnectAttempts = 0
-        console.log(`✅ Gate.io whale tracking bağlantısı kuruldu`)
-        
+
         // Her coin için subscribe
         TRACKED_SYMBOLS.forEach(symbol => {
           const subscribeMessage = {
@@ -1165,7 +1140,7 @@ class GateIOWhaleTracker {
           }
           this.ws.send(JSON.stringify(subscribeMessage))
         })
-        
+
         // Gate.io ping mekanizması (her 30 saniyede bir)
         this.startPing()
       })
@@ -1186,8 +1161,7 @@ class GateIOWhaleTracker {
       this.ws.on('close', (code, reason) => {
         this.isConnected = false
         const reasonStr = reason ? reason.toString() : 'Bilinmeyen neden'
-        console.log(`📡 Gate.io whale tracking bağlantısı kapatıldı (Code: ${code}, Reason: ${reasonStr})`)
-        
+
         // Eğer normal kapanma değilse reconnect dene
         if (code !== 1000) {
           this.attemptReconnect()
@@ -1208,8 +1182,6 @@ class GateIOWhaleTracker {
     this.reconnectAttempts++
     const delay = Math.min(this.reconnectDelay * this.reconnectAttempts, 30000) // Max 30 saniye
 
-    console.log(`🔄 Gate.io whale tracking: ${delay / 1000} saniye sonra yeniden bağlanılacak (Deneme: ${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
-
     setTimeout(() => {
       if (!this.isConnected) {
         this.connect()
@@ -1222,12 +1194,12 @@ class GateIOWhaleTracker {
     if (message.event === 'pong') {
       return
     }
-    
+
     // Trade mesajları
     if (message.channel === 'spot.trades' && message.result) {
       const trades = Array.isArray(message.result) ? message.result : [message.result]
       const symbol = message.result?.[0]?.currency_pair || message.result?.currency_pair
-      
+
       if (symbol) {
         trades.forEach(trade => {
           this.processTrade(symbol, trade)
@@ -1235,7 +1207,7 @@ class GateIOWhaleTracker {
       }
     }
   }
-  
+
   startPing() {
     this.stopPing()
     // Gate.io: Her 30 saniyede bir ping gönder
@@ -1250,7 +1222,7 @@ class GateIOWhaleTracker {
       }
     }, 30000)
   }
-  
+
   stopPing() {
     if (this.pingInterval) {
       clearInterval(this.pingInterval)
@@ -1293,7 +1265,7 @@ class GateIOWhaleTracker {
         existingTrades.map(t => `${t.id}_${t.source || 'unknown'}`)
       )
       const key = `${trade.id}_${trade.source}`
-      
+
       if (existingKeys.has(key)) {
         return
       }
@@ -1326,9 +1298,6 @@ class GateIOWhaleTracker {
         { upsert: true }
       )
 
-      console.log(`🐋 Gate.io whale trade kaydedildi: ${trade.symbol} - $${trade.tradeValue.toLocaleString()}`)
-      
-      // WebSocket'e broadcast et
       broadcastWhaleTrade(serializedTrade)
     } catch (error) {
       console.error('Gate.io whale trade kaydetme hatası:', error)
@@ -1372,8 +1341,7 @@ class HTXWhaleTracker {
       this.ws.on('open', () => {
         this.isConnected = true
         this.reconnectAttempts = 0
-        console.log(`✅ HTX whale tracking bağlantısı kuruldu`)
-        
+
         // Her coin için subscribe (HTX format: btcusdt - USDT'yi kaldır)
         TRACKED_SYMBOLS.forEach(symbol => {
           const baseSymbol = symbol.replace('USDT', '').toLowerCase() // BTCUSDT -> btc
@@ -1383,7 +1351,7 @@ class HTXWhaleTracker {
           }
           this.ws.send(JSON.stringify(subscribeMessage))
         })
-        
+
         // Ping mekanizması başlat (HTX ping check expired hatası için)
         this.startPing()
       })
@@ -1399,14 +1367,14 @@ class HTXWhaleTracker {
             // Gzip değilse direkt string olarak kullan
             decompressedData = data
           }
-          
+
           const messageStr = decompressedData.toString('utf-8')
-          
+
           // Boş mesajları atla
           if (!messageStr || messageStr.trim() === '') {
             return
           }
-          
+
           const message = JSON.parse(messageStr)
           this.handleMessage(message)
         } catch (error) {
@@ -1423,8 +1391,7 @@ class HTXWhaleTracker {
         this.isConnected = false
         this.stopPing()
         const reasonStr = reason ? reason.toString() : 'Bilinmeyen neden'
-        console.log(`📡 HTX whale tracking bağlantısı kapatıldı (Code: ${code}, Reason: ${reasonStr})`)
-        
+
         // Eğer normal kapanma değilse reconnect dene
         if (code !== 1000) {
           this.attemptReconnect()
@@ -1445,8 +1412,6 @@ class HTXWhaleTracker {
     this.reconnectAttempts++
     const delay = Math.min(this.reconnectDelay * this.reconnectAttempts, 30000) // Max 30 saniye
 
-    console.log(`🔄 HTX whale tracking: ${delay / 1000} saniye sonra yeniden bağlanılacak (Deneme: ${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
-
     setTimeout(() => {
       if (!this.isConnected) {
         this.connect()
@@ -1463,7 +1428,7 @@ class HTXWhaleTracker {
       }
       return
     }
-    
+
     // Trade mesajları
     if (message.ch && message.ch.includes('trade.detail') && message.tick && message.tick.data) {
       // Symbol'ü doğru parse et: market.btcusdt.trade.detail -> BTCUSDT
@@ -1471,18 +1436,18 @@ class HTXWhaleTracker {
       if (channelParts.length >= 2) {
         const symbolPair = channelParts[1].toUpperCase() // btcusdt -> BTCUSDT
         const trades = Array.isArray(message.tick.data) ? message.tick.data : [message.tick.data]
-        
+
         trades.forEach(trade => {
           this.processTrade(symbolPair, trade)
         })
       }
     }
   }
-  
+
   startPing() {
     // Ping mekanizmasını durdur (varsa)
     this.stopPing()
-    
+
     // HTX: Sunucu her 5 saniyede ping gönderir, biz pong yanıtı veriyoruz
     // Ekstra ping göndermeye gerek yok, sadece pong yanıtı yeterli
     // Ama güvenlik için her 30 saniyede bir ping gönderebiliriz
@@ -1493,7 +1458,7 @@ class HTXWhaleTracker {
       }
     }, 30000) // 30 saniye (HTX sunucu zaten 5 saniyede bir ping gönderiyor)
   }
-  
+
   stopPing() {
     if (this.pingInterval) {
       clearInterval(this.pingInterval)
@@ -1536,7 +1501,7 @@ class HTXWhaleTracker {
         existingTrades.map(t => `${t.id}_${t.source || 'unknown'}`)
       )
       const key = `${trade.id}_${trade.source}`
-      
+
       if (existingKeys.has(key)) {
         return
       }
@@ -1569,9 +1534,6 @@ class HTXWhaleTracker {
         { upsert: true }
       )
 
-      console.log(`🐋 HTX whale trade kaydedildi: ${trade.symbol} - $${trade.tradeValue.toLocaleString()}`)
-      
-      // WebSocket'e broadcast et
       broadcastWhaleTrade(serializedTrade)
     } catch (error) {
       console.error('HTX whale trade kaydetme hatası:', error)
@@ -1615,11 +1577,10 @@ class MEXCWhaleTracker {
       this.ws.on('open', () => {
         this.isConnected = true
         this.reconnectAttempts = 0
-        console.log(`✅ MEXC whale tracking bağlantısı kuruldu`)
-        
+
         // MEXC ping mekanizmasını önce başlat
         this.startPing()
-        
+
         // MEXC: Subscribe'ları yavaşça gönder (rate limit'i önlemek için)
         // Her subscribe arasında 200ms gecikme, ilk subscribe 500ms sonra
         setTimeout(() => {
@@ -1662,8 +1623,7 @@ class MEXCWhaleTracker {
         this.isConnected = false
         this.stopPing()
         const reasonStr = reason ? reason.toString() : 'Bilinmeyen neden'
-        console.log(`📡 MEXC whale tracking bağlantısı kapatıldı (Code: ${code}, Reason: ${reasonStr})`)
-        
+
         // Eğer normal kapanma değilse reconnect dene
         if (code !== 1000) {
           this.attemptReconnect()
@@ -1683,9 +1643,6 @@ class MEXCWhaleTracker {
 
     this.reconnectAttempts++
     const delay = Math.min(this.reconnectDelay * this.reconnectAttempts, 30000) // Max 30 saniye
-
-    console.log(`🔄 MEXC whale tracking: ${delay / 1000} saniye sonra yeniden bağlanılacak (Deneme: ${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
-
     setTimeout(() => {
       if (!this.isConnected) {
         this.connect()
@@ -1706,20 +1663,20 @@ class MEXCWhaleTracker {
       }
       return
     }
-    
+
     // Subscribe yanıtı kontrolü
     if (message.code === 0 || message.msg === 'success') {
       // Subscribe başarılı
       return
     }
-    
+
     // Trade mesajları - MEXC format: { c: 'spot@public.deal.v3.api@BTCUSDT', d: { deals: [...] } }
     if (message.c && message.c.includes('deal') && message.d && message.d.deals) {
       // Symbol'ü channel'dan çıkar: spot@public.deal.v3.api@BTCUSDT -> BTCUSDT
       const channelParts = message.c.split('@')
       const symbol = channelParts[channelParts.length - 1]?.toUpperCase() || message.s?.toUpperCase() || message.d.symbol?.toUpperCase()
       const trades = Array.isArray(message.d.deals) ? message.d.deals : [message.d.deals]
-      
+
       if (symbol) {
         trades.forEach(trade => {
           this.processTrade(symbol, trade)
@@ -1727,7 +1684,7 @@ class MEXCWhaleTracker {
       }
     }
   }
-  
+
   startPing() {
     this.stopPing()
     // MEXC: Her 5 saniyede bir ping gönder (çok sık - Code 1005'i önlemek için)
@@ -1742,7 +1699,7 @@ class MEXCWhaleTracker {
       }
     }, 5000) // 5 saniye - MEXC bağlantıyı canlı tutmak için
   }
-  
+
   stopPing() {
     if (this.pingInterval) {
       clearInterval(this.pingInterval)
@@ -1785,7 +1742,7 @@ class MEXCWhaleTracker {
         existingTrades.map(t => `${t.id}_${t.source || 'unknown'}`)
       )
       const key = `${trade.id}_${trade.source}`
-      
+
       if (existingKeys.has(key)) {
         return
       }
@@ -1818,9 +1775,6 @@ class MEXCWhaleTracker {
         { upsert: true }
       )
 
-      console.log(`🐋 MEXC whale trade kaydedildi: ${trade.symbol} - $${trade.tradeValue.toLocaleString()}`)
-      
-      // WebSocket'e broadcast et
       broadcastWhaleTrade(serializedTrade)
     } catch (error) {
       console.error('MEXC whale trade kaydetme hatası:', error)
@@ -1862,7 +1816,7 @@ export function setWebSocketServer(wss) {
  */
 function broadcastWhaleTrade(trade) {
   if (!wssInstance) return
-  
+
   try {
     const message = JSON.stringify({
       type: 'whale_trade',
@@ -1871,7 +1825,7 @@ function broadcastWhaleTrade(trade) {
         timestamp: trade.timestamp instanceof Date ? trade.timestamp.getTime() : trade.timestamp
       }
     })
-    
+
     wssInstance.clients.forEach((client) => {
       if (client.readyState === 1) { // WebSocket.OPEN
         try {

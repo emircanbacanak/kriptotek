@@ -16,13 +16,13 @@ const Layout = () => {
   useEffect(() => {
     // GlobalDataManager'ı başlat (sayfa açık olmasa bile çalışır)
     globalDataManager.startAutoUpdate();
-    
+
     // RealtimeService WebSocket bağlantısını başlat (sadece bir kez)
     // connect() fonksiyonu zaten bağlıysa veya bağlanıyorsa tekrar bağlanmayacak
     if (!realtimeService.isConnected && !realtimeService.isConnecting) {
       realtimeService.connect();
     }
-    
+
     // Cleanup: Component unmount olduğunda durdur
     // NOT: disconnect() çağrılmasın, diğer sayfalar da kullanıyor olabilir
     return () => {

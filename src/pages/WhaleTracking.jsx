@@ -26,8 +26,8 @@ const WhaleTracking = () => {
   const [loading, setLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterCurrency, setFilterCurrency] = useState('all')
-  const [minValue, setMinValue] = useState(200000) // $200K - Varsayılan minimum
-  const [inputValue, setInputValue] = useState('200000') // Input için ayrı state
+  const [minValue, setMinValue] = useState(500000) // $500K - Varsayılan minimum
+  const [inputValue, setInputValue] = useState('500000') // Input için ayrı state
   const [minValueError, setMinValueError] = useState('') // Minimum değer hatası
   const [saveSuccess, setSaveSuccess] = useState(false) // Kaydetme başarı durumu
 
@@ -66,7 +66,6 @@ const WhaleTracking = () => {
     try {
       setLoading(true)
       const apiUrl = getApiUrl()
-      logger.log(`🔍 Cache'den trade'ler yükleniyor: ${apiUrl}/api/whale/recent-trades`)
 
       // 24 saat öncesini hesapla
       const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000)
@@ -119,7 +118,7 @@ const WhaleTracking = () => {
     }
   }, [minValue])
 
-  // Trade'leri backend'e kaydet (İLK TANIMLANMALI - bağımlılık yok)
+  // Trade'leri backend'e kaydet
   const saveTradesToBackend = useCallback(async (trades) => {
     if (!trades || trades.length === 0) return
 
@@ -149,7 +148,7 @@ const WhaleTracking = () => {
     }
   }, [])
 
-  // PERFORMANS: Bekleyen trade'leri batch olarak işle (1000ms'de bir)
+  // PERFORMANS: Bekleyen trade'leri batch olarak işle (500ms'de bir)
   const flushPendingTrades = useCallback(() => {
     if (pendingTradesRef.current.length === 0) return
 
@@ -195,12 +194,12 @@ const WhaleTracking = () => {
       timestamp: tradeTimestamp
     })
 
-    // Timer yoksa başlat (1000ms sonra flush - performans için)
+    // Timer yoksa başlat (500ms sonra flush)
     if (!batchUpdateTimerRef.current) {
       batchUpdateTimerRef.current = setTimeout(() => {
         batchUpdateTimerRef.current = null
         flushPendingTrades()
-      }, 1000)
+      }, 500)
     }
   }, [flushPendingTrades])
 

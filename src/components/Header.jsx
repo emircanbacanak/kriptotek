@@ -35,32 +35,32 @@ const Header = ({ onMenuClick, className }) => {
 
   const [showEmailVerificationWarning, setShowEmailVerificationWarning] = useState(false)
   const [userSettings, setUserSettings] = useState(null)
-  
+
   useEffect(() => {
     const checkEmailVerification = async () => {
       if (!user || !user.providerData?.some(p => p.providerId === 'password')) {
         setShowEmailVerificationWarning(false)
         return
       }
-      
+
       if (user.emailVerified) {
         setShowEmailVerificationWarning(false)
         return
       }
-      
+
       try {
         const { loadUserSettings } = await import('../services/mongoUserSettings')
         const result = await loadUserSettings(user.uid)
-        
+
         if (result.success && result.exists && result.settings) {
           setUserSettings(result.settings)
-          
+
           const createdAt = result.settings.createdAt
           if (createdAt) {
             const createdDate = new Date(createdAt)
             const now = new Date()
             const hoursSinceCreation = (now - createdDate) / (1000 * 60 * 60)
-            
+
             if (hoursSinceCreation <= 24) {
               setShowEmailVerificationWarning(true)
             } else {
@@ -80,7 +80,7 @@ const Header = ({ onMenuClick, className }) => {
         setShowEmailVerificationWarning(false)
       }
     }
-    
+
     checkEmailVerification()
   }, [user])
 
@@ -115,6 +115,7 @@ const Header = ({ onMenuClick, className }) => {
             <div className="flex items-center space-x-4">
               <button
                 onClick={onMenuClick}
+                aria-label="Menüyü aç"
                 className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               >
                 <Menu className="w-5 h-5 text-gray-600 dark:text-gray-400" />
@@ -152,7 +153,7 @@ const Header = ({ onMenuClick, className }) => {
 
               <div className="flex items-center">
                 <div className="flex items-center">
-                  <button onClick={toggleTheme} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors mr-0">
+                  <button onClick={toggleTheme} aria-label={isDark ? 'Açık temaya geç' : 'Koyu temaya geç'} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors mr-0">
                     {isDark ? <Sun className="w-5 h-5 text-yellow-500" /> : <Moon className="w-5 h-5 text-gray-600" />}
                   </button>
                 </div>
@@ -190,7 +191,7 @@ const Header = ({ onMenuClick, className }) => {
               )}
 
               <div className="relative" ref={userMenuRef}>
-                <button onClick={() => setUserMenuOpen(!userMenuOpen)} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                <button onClick={() => setUserMenuOpen(!userMenuOpen)} aria-label="Kullanıcı menüsü" aria-expanded={userMenuOpen} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                   <div className="relative flex-shrink-0">
                     <div className="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center overflow-hidden">
                       {user?.photoURL ? (
@@ -209,9 +210,9 @@ const Header = ({ onMenuClick, className }) => {
                     <div className="flex items-center space-x-2">
                       <p className="text-sm font-medium text-gray-900 dark:text-white truncate max-w-[120px]">{user?.displayName || user?.email?.split('@')[0] || t('user')}</p>
                       {isPremium && (
-                        <div className="flex items-center space-x-1 px-2 py-1 bg-primary-500 rounded-full shadow-sm">
-                          <Crown className="w-3 h-3 text-white" />
-                          <span className="text-[10px] font-bold text-white leading-none">
+                        <div className="flex items-center space-x-1 px-2 py-1 bg-primary-700 rounded-full shadow-sm">
+                          <Crown className="w-3 h-3 text-yellow-300" />
+                          <span className="text-[10px] font-bold text-yellow-300 leading-none">
                             {t('premiumUser')}
                           </span>
                         </div>
@@ -227,12 +228,12 @@ const Header = ({ onMenuClick, className }) => {
                       <div className="flex items-center space-x-2">
                         <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{user?.displayName || user?.email?.split('@')[0] || t('user')}</p>
                         {isPremium && (
-                        <div className="flex items-center space-x-1 px-2 py-1 bg-primary-500 rounded-full shadow-sm">
-                          <Crown className="w-3 h-3 text-white" />
-                          <span className="text-[10px] font-bold text-white leading-none">
-                            {t('premiumUser')}
-                          </span>
-                        </div>
+                          <div className="flex items-center space-x-1 px-2 py-1 bg-primary-700 rounded-full shadow-sm">
+                            <Crown className="w-3 h-3 text-yellow-300" />
+                            <span className="text-[10px] font-bold text-yellow-300 leading-none">
+                              {t('premiumUser')}
+                            </span>
+                          </div>
                         )}
                       </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">{user?.email}</p>

@@ -9,6 +9,7 @@ import { dirname, join } from 'path'
 import { createServer } from 'http'
 import { WebSocketServer } from 'ws'
 import rateLimit from 'express-rate-limit'
+import compression from 'compression'
 import { fetchDominanceData } from './services/apiHandlers/dominance.js'
 import { fetchFearGreedData } from './services/apiHandlers/fearGreed.js'
 import { fetchWhaleTransactions, calculateExchangeFlow } from './services/apiHandlers/whale.js'
@@ -41,7 +42,7 @@ let firebaseAdmin = null
 try {
   const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT
   const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH
-  
+
   if (serviceAccount) {
     // JSON string olarak verilmişse (Heroku için önerilen yöntem)
     try {
@@ -58,10 +59,10 @@ try {
     // Dosya yolu verilmişse (local development için)
     const __filename = fileURLToPath(import.meta.url)
     const __dirname = dirname(__filename)
-    const serviceAccountFile = serviceAccountPath.startsWith('/') || serviceAccountPath.match(/^[A-Z]:/) 
-      ? serviceAccountPath 
+    const serviceAccountFile = serviceAccountPath.startsWith('/') || serviceAccountPath.match(/^[A-Z]:/)
+      ? serviceAccountPath
       : join(__dirname, serviceAccountPath)
-    
+
     if (existsSync(serviceAccountFile)) {
       try {
         const serviceAccountJson = JSON.parse(readFileSync(serviceAccountFile, 'utf8'))
@@ -81,10 +82,10 @@ try {
     const __filename = fileURLToPath(import.meta.url)
     const __dirname = dirname(__filename)
     let serviceAccountFile = null
-    
+
     try {
       const files = readdirSync(__dirname)
-      const firebaseAdminFile = files.find(file => 
+      const firebaseAdminFile = files.find(file =>
         file.includes('firebase-adminsdk') && file.endsWith('.json')
       )
       if (firebaseAdminFile) {
@@ -93,7 +94,7 @@ try {
     } catch (dirError) {
       // Klasör okunamadı, devam et
     }
-    
+
     if (serviceAccountFile && existsSync(serviceAccountFile)) {
       try {
         const serviceAccountJson = JSON.parse(readFileSync(serviceAccountFile, 'utf8'))
@@ -139,28 +140,28 @@ let httpServer = null
 app.use((req, res, next) => {
   // XSS Protection
   res.setHeader('X-XSS-Protection', '1; mode=block')
-  
+
   // Content Type Options - MIME type sniffing'i engelle
   res.setHeader('X-Content-Type-Options', 'nosniff')
-  
+
   // Frame Options - Clickjacking koruması (Firebase popup için esnek)
   // Firebase Google Auth popup için DENY yerine SAMEORIGIN kullanıyoruz
   res.setHeader('X-Frame-Options', 'SAMEORIGIN')
-  
+
   // Cross-Origin-Opener-Policy - Firebase popup auth için gerekli
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups')
-  
+
   // Referrer Policy - Referrer bilgisini kontrol et
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
-  
+
   // Permissions Policy - Tarayıcı özelliklerini kontrol et
   res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()')
-  
+
   // Strict Transport Security - HTTPS zorunluluğu (production'da)
   if (process.env.NODE_ENV === 'production') {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
   }
-  
+
   // Content Security Policy - XSS ve injection saldırılarına karşı
   res.setHeader(
     'Content-Security-Policy',
@@ -169,19 +170,20 @@ app.use((req, res, next) => {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src 'self' https://fonts.gstatic.com; " +
     "img-src 'self' data: https: blob:; " +
-          "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.herokuapp.com wss://*.herokuapp.com ws://*.herokuapp.com http://localhost:3000 wss://localhost:3000 ws://localhost:3000 https://api.binance.com wss://stream.binance.com:9443 wss://stream.binance.com wss://*.binance.com https://api.kucoin.com https://openapi-v2.kucoin.com wss://ws-api-spot.kucoin.com wss://*.kucoin.com wss://stream.bybit.com wss://*.bybit.com wss://ws.okx.com:8443 wss://ws.okx.com wss://*.okx.com wss://ws.bitget.com wss://*.bitget.com https://apis.google.com; " +
+    "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.herokuapp.com wss://*.herokuapp.com ws://*.herokuapp.com http://localhost:3000 wss://localhost:3000 ws://localhost:3000 https://api.binance.com wss://stream.binance.com:9443 wss://stream.binance.com wss://*.binance.com https://api.kucoin.com https://openapi-v2.kucoin.com wss://ws-api-spot.kucoin.com wss://*.kucoin.com wss://stream.bybit.com wss://*.bybit.com wss://ws.okx.com:8443 wss://ws.okx.com wss://*.okx.com wss://ws.bitget.com wss://*.bitget.com https://apis.google.com; " +
     "frame-src 'self' https://*.googleapis.com https://*.gstatic.com https://apis.google.com https://*.firebaseapp.com https://*.firebase.com; " +
     "object-src 'none'; " +
     "base-uri 'self'; " +
     "form-action 'self';"
   )
-  
+
   next()
 })
 
 // Middleware
 // CORS: Development ve Production domain'lerini destekle
 const allowedOrigins = [
+  'http://localhost:3000', // Production build local testing
   'http://localhost:5173', // Development
   'https://kriptotek.net', // Production domain
   'https://www.kriptotek.net', // Production domain with www
@@ -207,6 +209,20 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }))
+
+// PERFORMANS: Gzip compression - response boyutunu %70 azaltır
+app.use(compression({
+  level: 6, // Compression level (1-9, 6 optimal balance)
+  threshold: 1024, // 1KB'dan küçük dosyaları sıkıştırma
+  filter: (req, res) => {
+    // Zaten sıkıştırılmış dosyaları atla
+    if (req.headers['x-no-compression']) {
+      return false
+    }
+    return compression.filter(req, res)
+  }
+}))
+
 // Body parser limit'ini artır (500 coin için yeterli olmalı)
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
@@ -324,13 +340,13 @@ const sanitizeObject = (obj, maxDepth = 5) => {
   if (Array.isArray(obj)) {
     return obj.slice(0, 100).map(item => sanitizeObject(item, maxDepth - 1))
   }
-  
+
   const sanitized = {}
   for (const [key, value] of Object.entries(obj)) {
     // Key sanitization
     const sanitizedKey = key.replace(/[^a-zA-Z0-9_]/g, '').substring(0, 50)
     if (!sanitizedKey) continue
-    
+
     // Value sanitization
     if (typeof value === 'string') {
       // String length limit
@@ -420,7 +436,7 @@ async function connectToMongoDB() {
     await client.connect()
     db = client.db(DB_NAME)
     console.log('✅ MongoDB bağlantısı başarılı! (Connection Pool: min=10, max=50)')
-    
+
     // MongoDB Index'lerini oluştur (performans için kritik)
     // Hata olsa bile devam et (index'ler zaten varsa hata vermez)
     try {
@@ -492,14 +508,14 @@ async function loadMemoryCache() {
     console.warn('⚠️ MongoDB bağlantısı yok, memory cache yüklenemedi')
     return
   }
-  
+
   try {
     const timeStr = new Date().toLocaleTimeString('tr-TR')
     console.log(`📥 [${timeStr}] Memory cache yükleniyor...`)
     const startTime = Date.now()
-    
+
     const collection = db.collection('api_cache')
-    
+
     // Crypto list
     const cryptoDoc = await collection.findOne({ _id: 'crypto_list' }, { maxTimeMS: 10000 })
     if (cryptoDoc && cryptoDoc.data && Array.isArray(cryptoDoc.data) && cryptoDoc.data.length > 0) {
@@ -509,7 +525,7 @@ async function loadMemoryCache() {
       memoryCache.crypto_list_timestamp = timestamp instanceof Date ? timestamp.getTime() : (typeof timestamp === 'number' ? timestamp : Date.now())
       console.log(`✅ [${timeStr}] Memory cache'e ${cryptoDoc.data.length} coin yüklendi`)
     }
-    
+
     // Dominance data
     const dominanceDoc = await collection.findOne({ _id: 'dominance_data' }, { maxTimeMS: 10000 })
     if (dominanceDoc && dominanceDoc.data) {
@@ -519,9 +535,8 @@ async function loadMemoryCache() {
       memoryCache.dominance_data_timestamp = timestamp instanceof Date ? timestamp.getTime() : (typeof timestamp === 'number' ? timestamp : Date.now())
       console.log(`✅ [${timeStr}] Memory cache'e dominance data yüklendi`)
     }
-    
+
     const duration = Date.now() - startTime
-    console.log(`⚡ [${timeStr}] Memory cache yükleme tamamlandı (${duration}ms)`)
   } catch (error) {
     console.error('❌ Memory cache yükleme hatası:', error.message)
   }
@@ -531,22 +546,22 @@ async function loadMemoryCache() {
 app.get('/api/user-settings/:userId', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const { userId } = req.params
-    
+
     const collection = db.collection(COLLECTION_NAME)
-    
+
     const settings = await collection.findOne({ userId })
-        
+
     if (settings) {
       // _id'yi kaldır
       const { _id, ...settingsWithoutId } = settings
-           
+
       return res.json({
         success: true,
         data: settingsWithoutId
@@ -570,21 +585,21 @@ app.get('/api/user-settings/:userId', async (req, res) => {
 app.put('/api/user-settings/:userId', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const { userId } = req.params
     const settings = req.body
-    
+
     const collection = db.collection(COLLECTION_NAME)
-    
+
     // Upsert (varsa güncelle, yoksa oluştur)
     const result = await collection.updateOne(
       { userId },
-      { 
+      {
         $set: {
           ...settings,
           userId,
@@ -593,7 +608,7 @@ app.put('/api/user-settings/:userId', async (req, res) => {
       },
       { upsert: true }
     )
-    
+
     return res.json({
       success: true,
       message: result.upsertedCount > 0 ? 'User settings created' : 'User settings updated',
@@ -614,17 +629,17 @@ app.put('/api/user-settings/:userId', async (req, res) => {
 app.get('/api/portfolio/:userId', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const { userId } = req.params
     const collection = db.collection('user_portfolio')
-    
+
     const portfolio = await collection.findOne({ userId })
-    
+
     if (!portfolio) {
       return res.json({
         success: true,
@@ -637,7 +652,7 @@ app.get('/api/portfolio/:userId', async (req, res) => {
         }
       })
     }
-    
+
     return res.json({
       success: true,
       data: portfolio
@@ -655,23 +670,23 @@ app.get('/api/portfolio/:userId', async (req, res) => {
 app.post('/api/portfolio/:userId/positions', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const { userId } = req.params
     const position = req.body
-    
+
     const collection = db.collection('user_portfolio')
-    
+
     // Position ID oluştur
     const positionId = position.id || `pos_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    
+
     // Portfolio'yu bul veya oluştur
     const portfolio = await collection.findOne({ userId })
-    
+
     if (!portfolio) {
       // Yeni portfolio oluştur
       await collection.insertOne({
@@ -703,7 +718,7 @@ app.post('/api/portfolio/:userId/positions', async (req, res) => {
         }
       )
     }
-    
+
     return res.json({
       success: true,
       data: { id: positionId }
@@ -721,41 +736,41 @@ app.post('/api/portfolio/:userId/positions', async (req, res) => {
 app.put('/api/portfolio/:userId/positions/:positionId', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const { userId, positionId } = req.params
     const updates = req.body
-    
+
     const collection = db.collection('user_portfolio')
-    
+
     // Pozisyonu güncelle
     const updateFields = {
       'positions.$.updatedAt': Date.now(),
       updatedAt: Date.now()
     }
-    
+
     Object.keys(updates).forEach(key => {
       updateFields[`positions.$.${key}`] = updates[key]
     })
-    
+
     const result = await collection.updateOne(
       { userId, 'positions.id': positionId },
       {
         $set: updateFields
       }
     )
-    
+
     if (result.matchedCount === 0) {
       return res.status(404).json({
         success: false,
         error: 'Pozisyon bulunamadı'
       })
     }
-    
+
     return res.json({
       success: true,
       data: { id: positionId }
@@ -773,16 +788,16 @@ app.put('/api/portfolio/:userId/positions/:positionId', async (req, res) => {
 app.delete('/api/portfolio/:userId/positions/:positionId', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const { userId, positionId } = req.params
-    
+
     const collection = db.collection('user_portfolio')
-    
+
     // Pozisyonu sil
     const result = await collection.updateOne(
       { userId },
@@ -795,14 +810,14 @@ app.delete('/api/portfolio/:userId/positions/:positionId', async (req, res) => {
         }
       }
     )
-    
+
     if (result.matchedCount === 0) {
       return res.status(404).json({
         success: false,
         error: 'Portfolio bulunamadı'
       })
     }
-    
+
     return res.json({
       success: true,
       data: { id: positionId }
@@ -820,15 +835,15 @@ app.delete('/api/portfolio/:userId/positions/:positionId', async (req, res) => {
 app.get('/api/admin/users', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const collection = db.collection(COLLECTION_NAME)
     const mongoUsers = await collection.find({}).toArray()
-    
+
     // Firebase'den tüm kullanıcıları çek (email/displayName için)
     let firebaseUsersMap = new Map()
     if (firebaseAdmin) {
@@ -846,25 +861,25 @@ app.get('/api/admin/users', async (req, res) => {
         console.warn('⚠️ Firebase kullanıcıları çekilemedi:', firebaseError.message)
       }
     }
-    
+
     // MongoDB kullanıcılarını işle - Firebase bilgileriyle tamamla
     const mongoUsersList = mongoUsers.map(user => {
       const { _id, ...userWithoutId } = user
       const userId = userWithoutId.userId
-      
+
       // Firebase'den kullanıcı bilgilerini al (varsa)
       const fbUserData = firebaseUsersMap.get(userId) || {}
-      
+
       // Email: Önce MongoDB'den, yoksa Firebase'den, yoksa null
       const email = userWithoutId.email || fbUserData.email || null
-      
+
       // DisplayName: Önce MongoDB'den, yoksa Firebase'den, yoksa email'den oluştur, yoksa null
       let displayName = userWithoutId.displayName || fbUserData.displayName || null
       if (!displayName && email) {
         const emailPart = email.split('@')[0]
         displayName = emailPart.charAt(0).toUpperCase() + emailPart.slice(1).toLowerCase()
       }
-      
+
       return {
         uid: userId,
         email: email,
@@ -878,7 +893,7 @@ app.get('/api/admin/users', async (req, res) => {
         source: 'mongodb'
       }
     })
-    
+
     // Firebase'den Google provider'ı olan kullanıcıları çek (MongoDB'de olmayanlar)
     let firebaseGoogleUsers = []
     if (firebaseAdmin) {
@@ -895,11 +910,11 @@ app.get('/api/admin/users', async (req, res) => {
             if (existsInMongo) {
               return null
             }
-            
+
             // MongoDB'de yoksa Firebase'den ekle
             const email = fbUser.email || null
             const displayName = fbUser.displayName || (email ? email.split('@')[0].charAt(0).toUpperCase() + email.split('@')[0].slice(1).toLowerCase() : null)
-            
+
             return {
               uid: fbUser.uid,
               email: email,
@@ -918,10 +933,10 @@ app.get('/api/admin/users', async (req, res) => {
         console.warn('⚠️ Firebase kullanıcıları çekilemedi:', firebaseError.message)
       }
     }
-    
+
     // MongoDB ve Firebase kullanıcılarını birleştir
     const allUsers = [...mongoUsersList, ...firebaseGoogleUsers]
-    
+
     return res.json({
       success: true,
       users: allUsers
@@ -939,21 +954,20 @@ app.get('/api/admin/users', async (req, res) => {
 app.patch('/api/admin/users/:userId/premium', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const { userId } = req.params
     const { isPremium } = req.body
-    
+
     const collection = db.collection(COLLECTION_NAME)
-    
+
     // Önce kullanıcıyı kontrol et
     let existingUser = await collection.findOne({ userId })
-    console.log(`🔍 [Premium Toggle] Kullanıcı kontrolü: ${userId}, MongoDB'de var mı: ${!!existingUser}`)
-    
+
     // Eğer kullanıcı yoksa, Firebase'den bilgilerini çek ve MongoDB'de oluştur
     if (!existingUser) {
       if (firebaseAdmin) {
@@ -976,7 +990,7 @@ app.patch('/api/admin/users/:userId/premium', async (req, res) => {
               createdAt: fbUser.metadata.creationTime ? new Date(fbUser.metadata.creationTime).getTime() : Date.now(),
               updatedAt: Date.now()
             }
-            
+
             await collection.insertOne(defaultSettings)
             existingUser = defaultSettings
             console.log(`✅ [Premium Toggle] Firebase kullanıcısı MongoDB'ye eklendi: ${userId}`)
@@ -989,7 +1003,7 @@ app.patch('/api/admin/users/:userId/premium', async (req, res) => {
         console.warn(`⚠️ [Premium Toggle] Firebase Admin SDK başlatılmamış, kullanıcı oluşturulamıyor: ${userId}`)
       }
     }
-    
+
     // Kullanıcı hala yoksa hata döndür
     if (!existingUser) {
       console.error(`❌ [Premium Toggle] Kullanıcı bulunamadı (MongoDB ve Firebase'de yok): ${userId}`)
@@ -998,18 +1012,18 @@ app.patch('/api/admin/users/:userId/premium', async (req, res) => {
         error: `User not found: ${userId}. Kullanıcı ne MongoDB'de ne de Firebase'de bulunamadı.`
       })
     }
-    
+
     // Kullanıcıyı güncelle
     const result = await collection.updateOne(
       { userId },
-      { 
-        $set: { 
+      {
+        $set: {
           isPremium: isPremium === true || isPremium === 'true',
           updatedAt: Date.now()
         }
       }
     )
-    
+
     return res.json({
       success: true,
       message: `Kullanıcı ${isPremium ? 'premium' : 'ücretsiz'} olarak güncellendi`
@@ -1027,20 +1041,20 @@ app.patch('/api/admin/users/:userId/premium', async (req, res) => {
 app.patch('/api/admin/users/:userId/admin', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const { userId } = req.params
     const { isAdmin, adminEncrypted } = req.body
-    
+
     const collection = db.collection(COLLECTION_NAME)
-    
+
     // Önce kullanıcıyı kontrol et
     let existingUser = await collection.findOne({ userId })
-    
+
     // Eğer kullanıcı yoksa, Firebase'den bilgilerini çek ve MongoDB'de oluştur
     if (!existingUser && firebaseAdmin) {
       try {
@@ -1063,7 +1077,7 @@ app.patch('/api/admin/users/:userId/admin', async (req, res) => {
             createdAt: fbUser.metadata.creationTime ? new Date(fbUser.metadata.creationTime).getTime() : Date.now(),
             updatedAt: Date.now()
           }
-          
+
           await collection.insertOne(defaultSettings)
           existingUser = defaultSettings
         }
@@ -1071,7 +1085,7 @@ app.patch('/api/admin/users/:userId/admin', async (req, res) => {
         console.warn(`⚠️ Firebase kullanıcısı bulunamadı: ${userId}`, fbError.message)
       }
     }
-    
+
     // Kullanıcı hala yoksa hata döndür
     if (!existingUser) {
       return res.status(404).json({
@@ -1079,12 +1093,12 @@ app.patch('/api/admin/users/:userId/admin', async (req, res) => {
         error: 'User not found'
       })
     }
-    
+
     // Admin durumunu güncelle (adminEncrypted alanı)
     const updateData = {
       updatedAt: Date.now()
     }
-    
+
     if (isAdmin === true || isAdmin === 'true') {
       // Admin yap - şifreleme frontend'de yapılacak, burada sadece kaydet
       if (adminEncrypted) {
@@ -1097,12 +1111,12 @@ app.patch('/api/admin/users/:userId/admin', async (req, res) => {
       // Admin'den çıkar
       updateData.adminEncrypted = null
     }
-    
+
     const result = await collection.updateOne(
       { userId },
       { $set: updateData }
     )
-    
+
     return res.json({
       success: true,
       message: `Kullanıcı ${isAdmin ? 'admin' : 'normal'} olarak güncellendi`
@@ -1120,24 +1134,23 @@ app.patch('/api/admin/users/:userId/admin', async (req, res) => {
 app.patch('/api/admin/users/:userId/active', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const { userId } = req.params
     const { isActive } = req.body
-    
+
     // isActive değerini boolean'a çevir
     const isActiveBoolean = isActive === true || isActive === 'true'
-    
+
     const collection = db.collection(COLLECTION_NAME)
-    
+
     // Önce kullanıcıyı kontrol et
     let existingUser = await collection.findOne({ userId })
-    console.log(`🔍 [Active Toggle] Kullanıcı kontrolü: ${userId}, MongoDB'de var mı: ${!!existingUser}`)
-    
+
     // Eğer kullanıcı yoksa, Firebase'den bilgilerini çek ve MongoDB'de oluştur
     if (!existingUser) {
       if (firebaseAdmin) {
@@ -1160,7 +1173,7 @@ app.patch('/api/admin/users/:userId/active', async (req, res) => {
               createdAt: fbUser.metadata.creationTime ? new Date(fbUser.metadata.creationTime).getTime() : Date.now(),
               updatedAt: Date.now()
             }
-            
+
             await collection.insertOne(defaultSettings)
             existingUser = defaultSettings
             console.log(`✅ [Active Toggle] Firebase kullanıcısı MongoDB'ye eklendi: ${userId}`)
@@ -1173,7 +1186,7 @@ app.patch('/api/admin/users/:userId/active', async (req, res) => {
         console.warn(`⚠️ [Active Toggle] Firebase Admin SDK başlatılmamış, kullanıcı oluşturulamıyor: ${userId}`)
       }
     }
-    
+
     // Kullanıcı hala yoksa hata döndür
     if (!existingUser) {
       console.error(`❌ [Active Toggle] Kullanıcı bulunamadı (MongoDB ve Firebase'de yok): ${userId}`)
@@ -1182,18 +1195,18 @@ app.patch('/api/admin/users/:userId/active', async (req, res) => {
         error: `User not found: ${userId}. Kullanıcı ne MongoDB'de ne de Firebase'de bulunamadı.`
       })
     }
-    
+
     // Kullanıcıyı güncelle
     const result = await collection.updateOne(
       { userId },
-      { 
-        $set: { 
+      {
+        $set: {
           isActive: isActiveBoolean,
           updatedAt: Date.now()
         }
       }
     )
-    
+
     return res.json({
       success: true,
       message: `Kullanıcı ${isActiveBoolean ? 'aktif' : 'pasif'} olarak güncellendi`
@@ -1211,9 +1224,9 @@ app.patch('/api/admin/users/:userId/active', async (req, res) => {
 app.get('/api/cache/dominance_data', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
@@ -1223,17 +1236,17 @@ app.get('/api/cache/dominance_data', async (req, res) => {
     if (cacheDoc && cacheDoc.data) {
       // _id'yi kaldır
       const { _id, ...dataWithoutId } = cacheDoc.data
-      
+
       // ÖNEMLİ: Eğer cacheDoc.historicalData varsa (root level - eski veri yapısı), onu data'ya taşı!
       // Bu geçici bir düzeltme, root level'daki historicalData'yı data içine taşıyoruz
       if (cacheDoc.historicalData && Array.isArray(cacheDoc.historicalData) && cacheDoc.historicalData.length > 0) {
         // Eğer data içinde historicalData yoksa veya daha az gün varsa, root level'dakini kullan
-        if (!dataWithoutId.historicalData || !Array.isArray(dataWithoutId.historicalData) || 
-            dataWithoutId.historicalData.length < cacheDoc.historicalData.length) {
+        if (!dataWithoutId.historicalData || !Array.isArray(dataWithoutId.historicalData) ||
+          dataWithoutId.historicalData.length < cacheDoc.historicalData.length) {
           dataWithoutId.historicalData = cacheDoc.historicalData
         }
       }
-      
+
       return res.json({
         success: true,
         data: dataWithoutId,
@@ -1260,19 +1273,18 @@ app.get('/cache/crypto_list', async (req, res) => {
   const startTime = Date.now()
   const timeStr = new Date().toLocaleTimeString('tr-TR')
   console.log(`📥 [${timeStr}] GET /cache/crypto_list isteği geldi`)
-  
+
   try {
     // Önce memory cache'i kontrol et (çok hızlı - <1ms)
     const now = Date.now()
     // Timestamp'i number'a çevir (Date objesi olabilir)
-    const cacheTimestamp = memoryCache.crypto_list_timestamp instanceof Date 
-      ? memoryCache.crypto_list_timestamp.getTime() 
+    const cacheTimestamp = memoryCache.crypto_list_timestamp instanceof Date
+      ? memoryCache.crypto_list_timestamp.getTime()
       : (typeof memoryCache.crypto_list_timestamp === 'number' ? memoryCache.crypto_list_timestamp : null)
-    
-    if (memoryCache.crypto_list && cacheTimestamp && 
-        (now - cacheTimestamp) < memoryCache.crypto_list_ttl) {
+
+    if (memoryCache.crypto_list && cacheTimestamp &&
+      (now - cacheTimestamp) < memoryCache.crypto_list_ttl) {
       const cacheDuration = Date.now() - startTime
-      console.log(`⚡ [${timeStr}] Memory cache'den döndürüldü (${cacheDuration}ms) - ${memoryCache.crypto_list.length} coin`)
       return res.json({
         success: true,
         data: {
@@ -1281,43 +1293,42 @@ app.get('/cache/crypto_list', async (req, res) => {
         }
       })
     }
-    
+
     if (!db) {
       console.error(`❌ [${timeStr}] MongoDB bağlantısı yok`)
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
-    console.log(`🔍 [${timeStr}] MongoDB'den crypto_list verisi çekiliyor... (memory cache'de yok)`)
     const collection = db.collection('api_cache')
     const findStartTime = Date.now()
     // Timeout ayarı ekle (10 saniye) - 100-200 kullanıcı için kritik
     // Projection ekle - sadece gerekli alanları çek (daha hızlı)
     const cacheDoc = await collection.findOne(
       { _id: 'crypto_list' },
-      { 
+      {
         maxTimeMS: 10000, // 10 saniye timeout
         projection: { data: 1, updatedAt: 1, lastUpdate: 1 } // Sadece gerekli alanları çek
       }
     )
     const findDuration = Date.now() - findStartTime
     console.log(`📊 [${timeStr}] MongoDB findOne süresi: ${findDuration}ms`)
-    
+
     if (cacheDoc && cacheDoc.data && Array.isArray(cacheDoc.data) && cacheDoc.data.length > 0) {
       // Memory cache'e kaydet (sonraki istekler için)
       memoryCache.crypto_list = cacheDoc.data
       // Timestamp'i her zaman number'a çevir (Date objesi ise getTime() kullan)
       const timestamp = cacheDoc.updatedAt || cacheDoc.lastUpdate || Date.now()
       memoryCache.crypto_list_timestamp = timestamp instanceof Date ? timestamp.getTime() : (typeof timestamp === 'number' ? timestamp : Date.now())
-      
+
       // Debug: MongoDB'den okunurken total_supply ve max_supply kontrolü
       const sampleCoin = cacheDoc.data[0];
       const coinsWithTotalSupply = cacheDoc.data.filter(c => c.total_supply !== null && c.total_supply !== undefined).length;
       const coinsWithMaxSupply = cacheDoc.data.filter(c => c.max_supply !== null && c.max_supply !== undefined).length;
       const totalDuration = Date.now() - startTime
-      
+
       console.log(`✅ [${timeStr}] ${cacheDoc.data.length} coin bulundu, ${coinsWithTotalSupply} coin'de total_supply var, toplam süre: ${totalDuration}ms (memory cache'e kaydedildi)`)
 
       return res.json({
@@ -1330,9 +1341,9 @@ app.get('/cache/crypto_list', async (req, res) => {
     } else {
       const totalDuration = Date.now() - startTime
       console.warn(`⚠️ [${timeStr}] Crypto list verisi bulunamadı (cacheDoc: ${!!cacheDoc}), toplam süre: ${totalDuration}ms`)
-      return res.status(404).json({ 
-        success: false, 
-        error: 'Crypto list verisi bulunamadı' 
+      return res.status(404).json({
+        success: false,
+        error: 'Crypto list verisi bulunamadı'
       })
     }
   } catch (error) {
@@ -1349,26 +1360,26 @@ app.get('/cache/crypto_list', async (req, res) => {
 app.get('/api/cache/currency_rates', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const collection = db.collection('api_cache')
     const cacheDoc = await collection.findOne({ _id: 'currency_rates' })
-    
+
     if (!cacheDoc || !cacheDoc.data) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'Currency rates verisi bulunamadı' 
+      return res.status(404).json({
+        success: false,
+        error: 'Currency rates verisi bulunamadı'
       })
     }
 
     // Veri eski mi kontrol et (5 dakika)
     const CACHE_DURATION = 5 * 60 * 1000 // 5 dakika
     const isStale = !cacheDoc.updatedAt || (Date.now() - cacheDoc.updatedAt > CACHE_DURATION)
-    
+
     return res.json({
       success: true,
       data: cacheDoc.data,
@@ -1388,14 +1399,14 @@ app.get('/api/cache/currency_rates', async (req, res) => {
 app.put('/api/cache/currency_rates', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const { data } = req.body
-    
+
     if (!data || typeof data !== 'object') {
       return res.status(400).json({
         success: false,
@@ -1406,7 +1417,7 @@ app.put('/api/cache/currency_rates', async (req, res) => {
     const collection = db.collection('api_cache')
     await collection.updateOne(
       { _id: 'currency_rates' },
-      { 
+      {
         $set: {
           data: data,
           updatedAt: Date.now(),
@@ -1415,7 +1426,7 @@ app.put('/api/cache/currency_rates', async (req, res) => {
       },
       { upsert: true }
     )
-    
+
     return res.json({
       success: true,
       message: 'Currency rates verisi kaydedildi'
@@ -1433,27 +1444,27 @@ app.put('/api/cache/currency_rates', async (req, res) => {
 app.post('/api/currency/update', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const { fetchCurrencyRates } = await import('./services/apiHandlers/currency.js')
     const result = await fetchCurrencyRates()
-    
+
     if (!result.data || Object.keys(result.data).length === 0) {
       return res.status(500).json({
         success: false,
         error: 'No data received from ExchangeRate API'
       })
     }
-    
+
     // MongoDB'ye kaydet
     const collection = db.collection('api_cache')
     await collection.updateOne(
       { _id: 'currency_rates' },
-      { 
+      {
         $set: {
           data: result.data,
           updatedAt: Date.now(),
@@ -1462,9 +1473,9 @@ app.post('/api/currency/update', async (req, res) => {
       },
       { upsert: true }
     )
-    
+
     const timeStr = new Date().toLocaleTimeString('tr-TR')
-    
+
     return res.json({
       success: true,
       data: result.data,
@@ -1484,15 +1495,15 @@ app.post('/api/currency/update', async (req, res) => {
 app.get('/api/cache/fear_greed', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const collection = db.collection('api_cache')
     const cacheDoc = await collection.findOne({ _id: 'fear_greed' })
-    
+
     if (cacheDoc && cacheDoc.data) {
       // _id'yi kaldır ve data'yı döndür
       const { _id: dataId, ...dataWithoutId } = cacheDoc.data
@@ -1520,20 +1531,20 @@ app.get('/api/cache/fear_greed', async (req, res) => {
 app.put('/api/cache/fear_greed', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const fearGreedData = req.body
-    
+
     const collection = db.collection('api_cache')
-    
+
     // Upsert (varsa güncelle, yoksa oluştur)
     const result = await collection.updateOne(
       { _id: 'fear_greed' },
-      { 
+      {
         $set: {
           data: fearGreedData,
           lastUpdate: Date.now(),
@@ -1542,7 +1553,7 @@ app.put('/api/cache/fear_greed', async (req, res) => {
       },
       { upsert: true }
     )
-    
+
     return res.json({
       success: true,
       message: result.upsertedCount > 0 ? 'Fear & Greed data created' : 'Fear & Greed data updated',
@@ -1562,28 +1573,28 @@ app.put('/api/cache/fear_greed', async (req, res) => {
 app.put('/api/cache/dominance_data', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const dominanceData = req.body
-    
+
     const collection = db.collection('api_cache')
-    
+
     // Mevcut veriyi çek (varsa)
     const existing = await collection.findOne({ _id: 'dominance_data' })
     let mergedData = { ...dominanceData }
-    
+
     // Eğer mevcut veri varsa, merge et (historicalData MUTLAKA korunur)
     if (existing && existing.data) {
       // Historical data'yı öncelikle mevcut veriden al (MongoDB'deki 7 günlük veri)
       // ÖNEMLİ: existing.historicalData varsa (root level - eski veri yapısı), onu data'ya taşı!
       let existingHistorical = existing.data.historicalData || []
       // Eğer root level'da historicalData varsa ve data'dakinden daha fazla gün varsa, onu kullan
-      if (existing.historicalData && Array.isArray(existing.historicalData) && 
-          existing.historicalData.length > existingHistorical.length) {
+      if (existing.historicalData && Array.isArray(existing.historicalData) &&
+        existing.historicalData.length > existingHistorical.length) {
         existingHistorical = existing.historicalData
       }
       const newHistorical = dominanceData.historicalData || []
@@ -1614,7 +1625,7 @@ app.put('/api/cache/dominance_data', async (req, res) => {
           return hDate >= sevenDaysAgo
         })
       }
-      
+
       mergedData = {
         ...existing.data,
         ...dominanceData,
@@ -1627,12 +1638,12 @@ app.put('/api/cache/dominance_data', async (req, res) => {
         mergedData.historicalData = []
       }
     }
-    
+
     // Upsert (varsa güncelle, yoksa oluştur)
     // ÖNEMLİ: Sadece data içindeki verileri kaydet, root level'daki eski alanları temizle
     const result = await collection.updateOne(
       { _id: 'dominance_data' },
-      { 
+      {
         $set: {
           data: mergedData,
           lastUpdate: Date.now(),
@@ -1650,7 +1661,7 @@ app.put('/api/cache/dominance_data', async (req, res) => {
       },
       { upsert: true }
     )
-    
+
     return res.json({
       success: true,
       message: result.upsertedCount > 0 ? 'Dominance data created' : 'Dominance data updated',
@@ -1673,24 +1684,24 @@ const FAVORITES_COLLECTION = 'user_favorites'
 app.get('/api/user-favorites/:userId', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const { userId } = req.params
     const collection = db.collection(FAVORITES_COLLECTION)
-    
+
     const favoritesDoc = await collection.findOne({ userId })
-    
+
     if (!favoritesDoc) {
       return res.json({
         success: true,
         favorites: []
       })
     }
-    
+
     return res.json({
       success: true,
       favorites: favoritesDoc.coinIds || []
@@ -1708,15 +1719,15 @@ app.get('/api/user-favorites/:userId', async (req, res) => {
 app.post('/api/user-favorites/:userId', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const { userId } = req.params
     const { coinId } = req.body
-    
+
     if (!coinId) {
       return res.status(400).json({
         success: false,
@@ -1725,11 +1736,11 @@ app.post('/api/user-favorites/:userId', async (req, res) => {
     }
 
     const collection = db.collection(FAVORITES_COLLECTION)
-    
+
     // Mevcut favorileri al
     const existingDoc = await collection.findOne({ userId })
     const currentFavorites = existingDoc?.coinIds || []
-    
+
     // Zaten favorilerde varsa başarılı döndür
     if (currentFavorites.includes(coinId)) {
       return res.json({
@@ -1738,10 +1749,10 @@ app.post('/api/user-favorites/:userId', async (req, res) => {
         favorites: currentFavorites
       })
     }
-    
+
     // Favori ekle
     const updatedFavorites = [...currentFavorites, coinId]
-    
+
     await collection.updateOne(
       { userId },
       {
@@ -1755,7 +1766,7 @@ app.post('/api/user-favorites/:userId', async (req, res) => {
       },
       { upsert: true }
     )
-    
+
     return res.json({
       success: true,
       message: 'Favori eklendi',
@@ -1774,18 +1785,18 @@ app.post('/api/user-favorites/:userId', async (req, res) => {
 app.delete('/api/user-favorites/:userId/:coinId', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const { userId, coinId } = req.params
     const collection = db.collection(FAVORITES_COLLECTION)
-    
+
     // Mevcut favorileri al
     const existingDoc = await collection.findOne({ userId })
-    
+
     if (!existingDoc || !existingDoc.coinIds) {
       return res.json({
         success: true,
@@ -1793,10 +1804,10 @@ app.delete('/api/user-favorites/:userId/:coinId', async (req, res) => {
         favorites: []
       })
     }
-    
+
     const currentFavorites = existingDoc.coinIds
     const updatedFavorites = currentFavorites.filter(id => id !== coinId)
-    
+
     // Favori kaldır
     await collection.updateOne(
       { userId },
@@ -1807,7 +1818,7 @@ app.delete('/api/user-favorites/:userId/:coinId', async (req, res) => {
         }
       }
     )
-    
+
     return res.json({
       success: true,
       message: 'Favori kaldırıldı',
@@ -1826,15 +1837,15 @@ app.delete('/api/user-favorites/:userId/:coinId', async (req, res) => {
 app.delete('/api/user-favorites/:userId', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const { userId } = req.params
     const collection = db.collection(FAVORITES_COLLECTION)
-    
+
     await collection.updateOne(
       { userId },
       {
@@ -1848,7 +1859,7 @@ app.delete('/api/user-favorites/:userId', async (req, res) => {
       },
       { upsert: true }
     )
-    
+
     return res.json({
       success: true,
       message: 'Tüm favoriler temizlendi',
@@ -1868,9 +1879,9 @@ app.delete('/api/user-favorites/:userId', async (req, res) => {
 app.post('/api/dominance/update', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
@@ -1891,7 +1902,7 @@ app.post('/api/dominance/update', async (req, res) => {
       console.warn('⚠️ CoinMarketCap API hatası, MongoDB\'den mevcut veri kullanılıyor...')
       const collection = db.collection('api_cache')
       const existing = await collection.findOne({ _id: 'dominance_data' })
-      
+
       if (existing && existing.data) {
         // Mevcut veriyi döndür (güncelleme yapılmadı)
         return res.json({
@@ -1909,9 +1920,9 @@ app.post('/api/dominance/update', async (req, res) => {
     // MongoDB'ye kaydet
     const collection = db.collection('api_cache')
     const existing = await collection.findOne({ _id: 'dominance_data' })
-    
+
     let mergedData = { ...dominanceData }
-    
+
     // Historical data'yı koru
     if (existing && existing.data && existing.data.historicalData) {
       mergedData.historicalData = existing.data.historicalData
@@ -1956,7 +1967,7 @@ app.post('/api/dominance/update', async (req, res) => {
     // MongoDB'ye kaydet
     await collection.updateOne(
       { _id: 'dominance_data' },
-      { 
+      {
         $set: {
           data: mergedData,
           lastUpdate: Date.now(),
@@ -1985,9 +1996,9 @@ app.post('/api/dominance/update', async (req, res) => {
 app.post('/api/fear-greed/update', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
@@ -2006,7 +2017,7 @@ app.post('/api/fear-greed/update', async (req, res) => {
     const collection = db.collection('api_cache')
     await collection.updateOne(
       { _id: 'fear_greed' },
-      { 
+      {
         $set: {
           data: fearGreedData,
           lastUpdate: Date.now(),
@@ -2035,22 +2046,22 @@ app.post('/api/fear-greed/update', async (req, res) => {
 app.get('/api/whale/transactions', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const collection = db.collection('api_cache')
     const cacheDoc = await collection.findOne({ _id: 'whale_transactions' })
-    
+
     // MongoDB'de veri var mı ve taze mi? (5 dakikadan eski değilse)
     const CACHE_DURATION = 5 * 60 * 1000 // 5 dakika
     const checkNow = Date.now()
-    
+
     if (cacheDoc && cacheDoc.data && Array.isArray(cacheDoc.data.transactions) && cacheDoc.data.transactions.length > 0) {
       const cacheAge = checkNow - (cacheDoc.updatedAt || cacheDoc.lastUpdate || 0)
-      
+
       if (cacheAge < CACHE_DURATION) {
         // Cache taze, MongoDB'den döndür
         return res.json({
@@ -2091,9 +2102,9 @@ app.get('/api/whale/transactions', async (req, res) => {
 app.post('/api/whale/update', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
@@ -2109,7 +2120,7 @@ app.post('/api/whale/update', async (req, res) => {
     const minValue = parseInt(req.query.min_value) || parseInt(req.body.min_value) || 1000000
     const currency = req.query.currency || req.body.currency || null
     const limit = Math.min(parseInt(req.query.limit) || parseInt(req.body.limit) || 100, 100)
-    
+
     // Son 24 saatteki transaction'ları çek
     const start = Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000) // 24 saat önce (timestamp)
 
@@ -2143,7 +2154,7 @@ app.post('/api/whale/update', async (req, res) => {
     const collection = db.collection('api_cache')
     await collection.updateOne(
       { _id: 'whale_transactions' },
-      { 
+      {
         $set: {
           data: whaleData,
           lastUpdate: Date.now(),
@@ -2173,16 +2184,16 @@ app.post('/api/whale/update', async (req, res) => {
 app.get('/api/crypto/list', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     // Önce memory cache'i kontrol et (çok hızlı - <1ms)
     const cacheCheckNow = Date.now()
-    if (memoryCache.crypto_list && memoryCache.crypto_list_timestamp && 
-        (cacheCheckNow - memoryCache.crypto_list_timestamp) < memoryCache.crypto_list_ttl) {
+    if (memoryCache.crypto_list && memoryCache.crypto_list_timestamp &&
+      (cacheCheckNow - memoryCache.crypto_list_timestamp) < memoryCache.crypto_list_ttl) {
       return res.json({
         success: true,
         data: memoryCache.crypto_list,
@@ -2195,16 +2206,16 @@ app.get('/api/crypto/list', async (req, res) => {
 
     const collection = db.collection('api_cache')
     const cacheDoc = await collection.findOne({ _id: 'crypto_list' })
-    
+
     // MongoDB'de veri var mı ve taze mi? (5 dakikadan eski değilse)
     const CACHE_DURATION = 5 * 60 * 1000 // 5 dakika
     const checkNow = Date.now()
-    
+
     if (cacheDoc && cacheDoc.data && Array.isArray(cacheDoc.data) && cacheDoc.data.length > 0) {
       const cacheAge = checkNow - (cacheDoc.updatedAt || cacheDoc.lastUpdate || 0)
-      
+
       if (cacheAge < CACHE_DURATION) {
-        
+
         // Cache taze, MongoDB'den döndür
         return res.json({
           success: true,
@@ -2216,12 +2227,12 @@ app.get('/api/crypto/list', async (req, res) => {
         })
       }
     }
-    
+
     // Cache yok veya eski, API'den çek
     try {
       const { fetchCryptoList } = await import('./services/apiHandlers/crypto.js')
       const result = await fetchCryptoList()
-      
+
       if (result.data && result.data.length > 0) {
         // Debug: Kaydedilmeden önce total_supply ve max_supply kontrolü
         if (result.data.length > 0) {
@@ -2229,12 +2240,12 @@ app.get('/api/crypto/list', async (req, res) => {
           const coinsWithTotalSupply = result.data.filter(c => c.total_supply !== null && c.total_supply !== undefined).length;
           const coinsWithMaxSupply = result.data.filter(c => c.max_supply !== null && c.max_supply !== undefined).length;
         }
-        
+
         // MongoDB'ye kaydet
         const saveNow = Date.now()
         await collection.updateOne(
           { _id: 'crypto_list' },
-          { 
+          {
             $set: {
               data: result.data,
               updatedAt: saveNow,
@@ -2243,18 +2254,18 @@ app.get('/api/crypto/list', async (req, res) => {
           },
           { upsert: true }
         )
-        
+
         // Memory cache'i güncelle (hızlı erişim için)
         memoryCache.crypto_list = result.data
         memoryCache.crypto_list_timestamp = saveNow
-        
+
         // Debug: Kaydedildikten sonra MongoDB'den kontrol
         const savedDoc = await collection.findOne({ _id: 'crypto_list' });
         if (savedDoc && savedDoc.data && savedDoc.data.length > 0) {
           const sampleCoin = savedDoc.data[0];
         }
-        
-        
+
+
         return res.json({
           success: true,
           data: result.data,
@@ -2274,18 +2285,18 @@ app.get('/api/crypto/list', async (req, res) => {
             source: 'mongodb_stale_cache'
           })
         }
-        
+
         throw new Error('No data available from API and no cache found')
       }
     } catch (apiError) {
       console.error('❌ CoinGecko API hatası:', apiError.message)
-      
+
       // API hatası, cache'den döndür (varsa - yaş fark etmez)
       if (cacheDoc && cacheDoc.data && Array.isArray(cacheDoc.data) && cacheDoc.data.length > 0) {
         const cacheAge = now - (cacheDoc.updatedAt || cacheDoc.lastUpdate || 0)
         const cacheAgeMinutes = Math.floor(cacheAge / (60 * 1000))
         console.log(`⚠️ API hatası, fallback cache kullanılıyor: ${cacheDoc.data.length} coin (${cacheAgeMinutes} dakika önce)`)
-        
+
         return res.json({
           success: true,
           data: cacheDoc.data,
@@ -2296,7 +2307,7 @@ app.get('/api/crypto/list', async (req, res) => {
           source: 'mongodb_fallback_cache'
         })
       }
-      
+
       // Hiç cache yok, boş array döndür (sayfa boş kalmasın)
       console.error('❌ Hiç cache yok, boş array döndürülüyor')
       return res.json({
@@ -2323,38 +2334,38 @@ app.get('/api/crypto/list', async (req, res) => {
 app.post('/api/crypto/update', async (req, res) => {
   try {
     const timeStr = new Date().toLocaleTimeString('tr-TR')
-    
+
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const { fetchCryptoList } = await import('./services/apiHandlers/crypto.js')
     const result = await fetchCryptoList()
-    
+
     if (!result.data || result.data.length === 0) {
       return res.status(500).json({
         success: false,
         error: 'No data received from CoinGecko API'
       })
     }
-    
+
     // MongoDB'ye kaydet
     const collection = db.collection('api_cache')
-    
+
     // Debug: Kaydedilmeden önce total_supply ve max_supply kontrolü
     if (result.data && result.data.length > 0) {
       const sampleCoin = result.data[0];
       const coinsWithTotalSupply = result.data.filter(c => c.total_supply !== null && c.total_supply !== undefined).length;
       const coinsWithMaxSupply = result.data.filter(c => c.max_supply !== null && c.max_supply !== undefined).length;
     }
-    
+
     const now = Date.now()
     await collection.updateOne(
       { _id: 'crypto_list' },
-      { 
+      {
         $set: {
           data: result.data, // Bu array içinde her coin'de total_supply, max_supply, circulating_supply var
           updatedAt: now,
@@ -2363,16 +2374,15 @@ app.post('/api/crypto/update', async (req, res) => {
       },
       { upsert: true }
     )
-    
+
     // Memory cache'i güncelle (hızlı erişim için - sonraki istekler <1ms'de dönecek)
     memoryCache.crypto_list = result.data
     memoryCache.crypto_list_timestamp = now
-    console.log(`⚡ [${timeStr}] Memory cache güncellendi (${result.data.length} coin) - sonraki istekler <1ms'de dönecek`        )
-        
-        // Memory cache'i güncelle (hızlı erişim için)
-        memoryCache.crypto_list = result.data
-        memoryCache.crypto_list_timestamp = now
-    
+
+    // Memory cache'i güncelle (hızlı erişim için)
+    memoryCache.crypto_list = result.data
+    memoryCache.crypto_list_timestamp = now
+
     // Debug: Kaydedildikten sonra MongoDB'den kontrol
     const savedDoc = await collection.findOne({ _id: 'crypto_list' });
     if (savedDoc && savedDoc.data && savedDoc.data.length > 0) {
@@ -2380,7 +2390,7 @@ app.post('/api/crypto/update', async (req, res) => {
       const coinsWithTotalSupply = savedDoc.data.filter(c => c.total_supply !== null && c.total_supply !== undefined).length;
       const coinsWithMaxSupply = savedDoc.data.filter(c => c.max_supply !== null && c.max_supply !== undefined).length;
     }
-    
+
     // Crypto listesi güncellendiğinde trending'i de otomatik güncelle
     try {
       const trendingCoins = calculateTrendingScores(result.data)
@@ -2400,7 +2410,7 @@ app.post('/api/crypto/update', async (req, res) => {
     } catch (trendingError) {
       console.warn(`⚠️ [${timeStr}] Trending güncelleme hatası (devam ediliyor):`, trendingError.message)
     }
-    
+
     return res.json({
       success: true,
       data: result.data,
@@ -2421,17 +2431,17 @@ app.get('/api/crypto/ohlc/:coinId', async (req, res) => {
   try {
     const { coinId } = req.params
     const days = parseInt(req.query.days) || 1
-    
+
     if (!coinId) {
       return res.status(400).json({
         success: false,
         error: 'coinId gerekli'
       })
     }
-    
+
     const { fetchOHLCData } = await import('./services/apiHandlers/crypto.js')
     const data = await fetchOHLCData(coinId, days)
-    
+
     return res.json({
       success: true,
       data: data
@@ -2450,15 +2460,15 @@ app.get('/api/crypto/ohlc/:coinId', async (req, res) => {
 app.get('/api/trending', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const collection = db.collection('trending_data')
     const trendingDoc = await collection.findOne({ _id: 'trending_coins' })
-    
+
     if (!trendingDoc) {
       return res.json({
         success: true,
@@ -2468,7 +2478,7 @@ app.get('/api/trending', async (req, res) => {
         }
       })
     }
-    
+
     return res.json({
       success: true,
       data: {
@@ -2489,9 +2499,9 @@ app.get('/api/trending', async (req, res) => {
 app.post('/api/trending/update', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
@@ -2513,7 +2523,7 @@ app.post('/api/trending/update', async (req, res) => {
     const collection = db.collection('trending_data')
     await collection.updateOne(
       { _id: 'trending_coins' },
-      { 
+      {
         $set: {
           coins: trendingCoins,
           updatedAt: Date.now(),
@@ -2552,23 +2562,23 @@ function calculateTrendingScores(coins) {
       const volume = coin.total_volume || 0
       const marketCap = coin.market_cap || 0
       const rank = coin.market_cap_rank || index + 1
-      
+
       // ============ TREND SCORE HESAPLAMALARI (500 coin için optimize edildi - çok sıkı) ============
       // NOT: 100/100 = Maksimum performans (en iyi durum), nadiren ulaşılır
-      
+
       // 1. Volume/Market Cap Ratio (Likidite Skoru) - %30 ağırlık
       // Volume ratio: Hacim / Piyasa Değeri oranı
       // Çok sıkı: 1.0+ = 100 (çok nadir, sadece aşırı pump coinlerde)
       // 0.5 = 50, 0.3 = 30, 0.1 = 10
       const volumeRatio = marketCap > 0 ? volume / marketCap : 0
       const liquidityScore = Math.min(100, Math.max(0, volumeRatio * 100))
-      
+
       // 2. Price Momentum (Fiyat Momentumu) - %25 ağırlık
       // 24 saatlik fiyat değişimi
       // Çok sıkı: -60% = 0, +60% = 100 (sadece aşırı hareketler 100 alır)
       // +30% = 50, +15% = 25, 0% = 0
       const momentumScore = Math.min(100, Math.max(0, 50 + (priceChange * (50 / 60))))
-      
+
       // 3. Market Cap Position (Piyasa Değeri Pozisyonu) - %20 ağırlık
       // Piyasa değeri sıralaması (500 coin için - logaritmik ölçek)
       // Rank 1 = 100, Rank 10 = 90, Rank 50 = 70, Rank 100 = 50, Rank 200 = 30, Rank 500 = 0
@@ -2603,7 +2613,7 @@ function calculateTrendingScores(coins) {
         marketCapScore = Math.max(0, 5 - ((rank - 400) * (5 / 100)))
       }
       marketCapScore = Math.round(marketCapScore)
-      
+
       // 4. Volume Trend (Hacim Trendi) - %15 ağırlık
       // İşlem hacmi aktivitesi (logaritmik ölçek, çok sıkı)
       // 1M = 0, 50M = 25, 500M = 50, 5B = 75, 50B = 100 (çok nadir)
@@ -2618,13 +2628,13 @@ function calculateTrendingScores(coins) {
         const normalized = (logVolume - logMin) / (logMax - logMin)
         volumeTrendScore = Math.min(100, Math.max(0, Math.pow(normalized, 0.7) * 100))
       }
-      
+
       // 5. Volatility (Volatilite/Oynaklık) - %10 ağırlık
       // Fiyat volatilitesi (mutlak değişim)
       // Çok sıkı: %60 değişim = 100 skor (sadece aşırı volatilite 100 alır)
       // %30 = 50, %15 = 25, %0 = 0
       const volatilityScore = Math.min(100, Math.abs(priceChange) * (100 / 60))
-      
+
       // TOPLAM TREND SKORU (Ağırlıklı Ortalama)
       const trendScore = Math.round(
         (liquidityScore * 0.30) +
@@ -2633,9 +2643,9 @@ function calculateTrendingScores(coins) {
         (volumeTrendScore * 0.15) +
         (volatilityScore * 0.10)
       )
-      
+
       // ============ GELİŞMİŞ AI TAHMİN MODELİ (24 Saatlik) ============
-      
+
       // 1. Gelişmiş Momentum Factor (Fiyat momentumu - daha hassas)
       // Momentum'u daha doğru hesapla: sadece değişim değil, değişimin hızı da önemli
       let momentumFactor = 0
@@ -2646,7 +2656,7 @@ function calculateTrendingScores(coins) {
         // Negatif momentum: daha dikkatli
         momentumFactor = priceChange * 0.65
       }
-      
+
       // 2. Gelişmiş Reversion Factor (Geri dönüş faktörü - daha akıllı)
       let reversionFactor = 0
       if (priceChange > 15) {
@@ -2662,7 +2672,7 @@ function calculateTrendingScores(coins) {
       } else if (priceChange < -5) {
         reversionFactor = 1.5  // Orta düşüş → hafif toparlanma
       }
-      
+
       // 3. Gelişmiş Liquidity Impact (Likidite etkisi - daha detaylı)
       let liquidityImpact = 0
       if (volumeRatio > 0.25) {
@@ -2676,7 +2686,7 @@ function calculateTrendingScores(coins) {
       } else {
         liquidityImpact = -0.8  // Çok düşük likidite → negatif etki
       }
-      
+
       // 4. Gelişmiş Stability Factor (İstikrar faktörü - rank bazlı)
       let stabilityFactor = 0
       if (rank <= 5) {
@@ -2690,31 +2700,31 @@ function calculateTrendingScores(coins) {
       } else {
         stabilityFactor = -0.3  // Alt sıralar → daha az istikrarlı
       }
-      
+
       // 5. Volatility Factor (Volatilite faktörü - yeni)
       const volatilityFactor = Math.abs(priceChange) > 20 ? -0.5 : 0  // Aşırı volatilite → negatif
-      
+
       // 6. Market Cap Factor (Piyasa değeri faktörü - yeni)
       const marketCapFactor = marketCap > 10000000000 ? 0.3 : (marketCap > 1000000000 ? 0.1 : 0)  // Büyük market cap → pozitif
-      
+
       // Gelişmiş AI Prediction (tüm faktörler birleştirilmiş)
       const aiPrediction = momentumFactor + reversionFactor + liquidityImpact + stabilityFactor + volatilityFactor + marketCapFactor
-      
+
       // Tahmin'i sınırla: çok aşırı tahminler yapma
       // NaN veya undefined kontrolü ekle
-      const clampedPrediction = isNaN(aiPrediction) || !isFinite(aiPrediction) 
-        ? 0 
+      const clampedPrediction = isNaN(aiPrediction) || !isFinite(aiPrediction)
+        ? 0
         : Math.max(-15, Math.min(15, aiPrediction))
-      
+
       // ============ POZİSYON BELİRLEME ============
       // Sınırlanmış tahmin'i kullan
       const finalPrediction = clampedPrediction
-      
+
       let predictionDirection = 'neutral'
       let predictionEmoji = '➖'
       let predictionColor = 'gray'
       let positionType = 'neutral'
-      
+
       if (finalPrediction > 5) {
         predictionDirection = 'strongBullish'
         predictionEmoji = '🚀'
@@ -2736,12 +2746,12 @@ function calculateTrendingScores(coins) {
         predictionColor = 'orange'
         positionType = 'short'
       }
-      
+
       // ============ TREND LEVEL ============
       let trendLevel = 'weakTrend'
       let trendEmoji = '📉'
       let trendColor = 'red'
-      
+
       if (trendScore >= 80) {
         trendLevel = 'veryStrongTrend'
         trendEmoji = '🔥'
@@ -2763,21 +2773,21 @@ function calculateTrendingScores(coins) {
         trendEmoji = '📉'
         trendColor = 'red'
       }
-      
+
       // ============ TAHMİN EDİLEN FİYAT ============
       // prediction_base_price: Tahmin yapılırkenki gerçek fiyat (güncel fiyat)
       // Bu fiyat, tahmin yapıldığı anda MongoDB'deki güncel fiyat olmalı
       const predictionBasePrice = coin.current_price || coin.price || 0
       // Sınırlanmış tahmin'i kullan
       const predictedPrice = predictionBasePrice * (1 + (clampedPrediction / 100))
-      
+
       // ============ CONFIDENCE SCORE ============
       const confidenceScore = Math.min(100, Math.abs(aiPrediction) * 10)
-      
+
       // ============ SHORT POZİSYON VERİLERİ ============
       const shortSignalStrength = Math.abs(aiPrediction)
       const shortConfidence = priceChange < -5 ? Math.min(100, Math.abs(priceChange) * 3) : 0
-      
+
       // ============ POSITION BONUS (Composite Score için) ============
       const absPrediction = Math.abs(aiPrediction)
       let positionBonus = 0
@@ -2788,9 +2798,9 @@ function calculateTrendingScores(coins) {
       } else if (absPrediction > 0) {
         positionBonus = 10  // Normal
       }
-      
+
       const compositeScore = trendScore + positionBonus
-      
+
       return {
         id: coin.id,
         name: coin.name,
@@ -2806,7 +2816,7 @@ function calculateTrendingScores(coins) {
         circulating_supply: coin.circulating_supply,
         market_cap_rank: rank,
         sparkline_in_7d: coin.sparkline_in_7d,
-        
+
         // Trend Score ve detayları
         trend_score: trendScore,
         trend_level: trendLevel,
@@ -2819,7 +2829,7 @@ function calculateTrendingScores(coins) {
         volatility_score: Math.round(volatilityScore),
         volume_ratio: parseFloat(volumeRatio.toFixed(4)),
         volume_ratio_percentage: parseFloat((volumeRatio * 100).toFixed(2)),
-        
+
         // AI Prediction (sınırlanmış)
         ai_prediction: parseFloat(clampedPrediction.toFixed(2)),
         ai_direction: predictionDirection,
@@ -2830,14 +2840,14 @@ function calculateTrendingScores(coins) {
         predicted_price: predictedPrice,
         prediction_base_price: predictionBasePrice,
         predicted_change: parseFloat(aiPrediction.toFixed(2)),
-        
+
         // Short pozisyon verileri
         short_signal_strength: Math.round(shortSignalStrength * 10),
         short_confidence: Math.round(shortConfidence),
-        
+
         // Composite score (sıralama için)
         composite_score: compositeScore,
-        
+
         updatedAt: new Date()
       }
     })
@@ -2865,27 +2875,27 @@ export { calculateTrendingScores }
 app.post('/api/news/refresh', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const collection = db.collection('crypto_news')
-    
+
     // Tüm haberleri sil
     const deleteResult = await collection.deleteMany({})
     console.log(`🗑️ Tüm haberler silindi: ${deleteResult.deletedCount} haber`)
-    
+
     // Haberleri yeniden çek
     const { updateNews, setDb, setWss } = await import('./services/apiHandlers/news.js')
     setDb(db)
     if (wss) setWss(wss)
     await updateNews()
-    
+
     // Yeni haber sayısını al
     const newCount = await collection.countDocuments()
-    
+
     return res.json({
       success: true,
       message: `Tüm haberler silindi ve yeniden çekildi. ${newCount} yeni haber eklendi.`,
@@ -2905,18 +2915,18 @@ app.post('/api/news/refresh', async (req, res) => {
 app.post('/api/news/update', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const { updateNews, setDb, setWss } = await import('./services/apiHandlers/news.js')
     setDb(db)
     if (wss) setWss(wss)
-    
+
     const news = await updateNews()
-    
+
     return res.json({
       success: true,
       count: news.length,
@@ -2935,9 +2945,9 @@ app.post('/api/news/update', async (req, res) => {
 app.get('/api/news', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        ok: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        ok: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
@@ -2948,13 +2958,13 @@ app.get('/api/news', async (req, res) => {
       .sort({ [orderBy]: sort })
       .limit(parseInt(limit))
     const docs = await cursor.toArray()
-    
+
     // Date objelerini ISO string'e çevir (JSON serialize için)
     // MongoDB'den gelen Date objeleri JSON'a serialize edilirken otomatik ISO string'e çevrilir
     // Ama emin olmak için manuel çevirelim
     const serializedDocs = docs.map(doc => {
       const serialized = { ...doc }
-      
+
       // publishedAt'i ISO string'e çevir
       if (serialized.publishedAt instanceof Date) {
         serialized.publishedAt = serialized.publishedAt.toISOString()
@@ -2962,7 +2972,7 @@ app.get('/api/news', async (req, res) => {
         // MongoDB Extended JSON formatı
         serialized.publishedAt = new Date(serialized.publishedAt.$date).toISOString()
       }
-      
+
       // createdAt ve updatedAt'i de çevir
       if (serialized.createdAt instanceof Date) {
         serialized.createdAt = serialized.createdAt.toISOString()
@@ -2970,15 +2980,10 @@ app.get('/api/news', async (req, res) => {
       if (serialized.updatedAt instanceof Date) {
         serialized.updatedAt = serialized.updatedAt.toISOString()
       }
-      
-      // Debug: CoinTelegraph haberleri için log
-      if (serialized.source === 'cointelegraph') {
-        console.log(`🔍 GET /api/news - CoinTelegraph: publishedAt=${serialized.publishedAt}, source=${serialized.source}, title=${serialized.title?.substring(0, 50)}`)
-      }
-      
+
       return serialized
     })
-    
+
     res.json({ ok: true, data: serializedDocs })
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message })
@@ -2989,9 +2994,9 @@ app.get('/api/news', async (req, res) => {
 app.post('/api/news', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        ok: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        ok: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
@@ -3014,9 +3019,9 @@ app.post('/api/news', async (req, res) => {
 app.put('/api/news/:id', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        ok: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        ok: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
@@ -3033,9 +3038,9 @@ app.put('/api/news/:id', async (req, res) => {
 app.delete('/api/news/:id', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        ok: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        ok: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
@@ -3052,15 +3057,15 @@ app.delete('/api/news/:id', async (req, res) => {
 app.get('/cache/supply_tracking', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const collection = db.collection('api_cache')
     const cacheDoc = await collection.findOne({ _id: 'supply_tracking' })
-    
+
     if (cacheDoc && cacheDoc.data) {
       return res.json({
         ok: true,
@@ -3071,7 +3076,7 @@ app.get('/cache/supply_tracking', async (req, res) => {
         }
       })
     }
-    
+
     return res.status(404).json({
       ok: false,
       success: false,
@@ -3091,16 +3096,16 @@ app.get('/cache/supply_tracking', async (req, res) => {
 app.get('/cache/whale_transactions', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
+      return res.status(503).json({
         ok: false,
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const collection = db.collection('api_cache')
     const cacheDoc = await collection.findOne({ _id: 'whale_transactions' })
-    
+
     if (cacheDoc && cacheDoc.data && cacheDoc.data.trades && Array.isArray(cacheDoc.data.trades)) {
       const tradesCount = cacheDoc.data.trades.length
       return res.json({
@@ -3141,7 +3146,7 @@ app.post('/api/kucoin/bullet-public', async (req, res) => {
   console.log('📡 POST /api/kucoin/bullet-public isteği alındı')
   try {
     const { fetch } = await import('undici')
-    
+
     const response = await fetch('https://openapi-v2.kucoin.com/api/v1/bullet-public', {
       method: 'POST',
       headers: {
@@ -3159,7 +3164,7 @@ app.post('/api/kucoin/bullet-public', async (req, res) => {
     }
 
     const data = await response.json()
-    
+
     return res.json({
       success: true,
       data: data
@@ -3177,41 +3182,41 @@ app.post('/api/kucoin/bullet-public', async (req, res) => {
 app.get('/api/whale/recent-trades', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const minValue = Math.max(parseFloat(req.query.minValue) || 200000, 200000) // Minimum $200K
-    
+
     const collection = db.collection('api_cache')
     const cacheDoc = await collection.findOne({ _id: 'whale_transactions' })
     const allTrades = cacheDoc?.data?.trades || []
-    
+
     // 24 saat öncesini hesapla
     const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000)
-    
+
     // 24 saat içindeki ve minimum değerin üstündeki trade'leri filtrele
     const filteredTrades = allTrades.filter(trade => {
       const tradeValue = trade.tradeValue || (trade.price * trade.quantity || 0)
       const tradeTime = trade.timestamp ? new Date(trade.timestamp).getTime() : 0
-      
+
       // Minimum değer ve 24 saat kontrolü
       return tradeValue >= minValue && tradeTime >= twentyFourHoursAgo
     })
-    
+
     // Eski trade'leri temizle (24 saatten eski)
     const recentTrades = allTrades.filter(trade => {
       const tradeTime = trade.timestamp ? new Date(trade.timestamp).getTime() : 0
       return tradeTime >= twentyFourHoursAgo
     })
-    
+
     // Eğer eski trade'ler varsa, cache'i güncelle
     if (recentTrades.length !== allTrades.length) {
       await collection.updateOne(
         { _id: 'whale_transactions' },
-        { 
+        {
           $set: {
             data: {
               trades: recentTrades,
@@ -3225,7 +3230,7 @@ app.get('/api/whale/recent-trades', async (req, res) => {
       )
       console.log(`🧹 ${allTrades.length - recentTrades.length} eski whale trade temizlendi (24 saatten eski)`)
     }
-    
+
     // Son 200 trade'i döndür (tarih sırasına göre - en yeni önce)
     const sortedTrades = filteredTrades
       .sort((a, b) => {
@@ -3234,7 +3239,7 @@ app.get('/api/whale/recent-trades', async (req, res) => {
         return timeB - timeA
       })
       .slice(0, 200)
-    
+
     return res.json({
       success: true,
       trades: sortedTrades,
@@ -3255,14 +3260,14 @@ app.get('/api/whale/recent-trades', async (req, res) => {
 app.post('/api/whale/trades', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const { trades } = req.body
-    
+
     if (!Array.isArray(trades)) {
       return res.status(400).json({
         success: false,
@@ -3279,7 +3284,7 @@ app.post('/api/whale/trades', async (req, res) => {
     }
 
     const collection = db.collection('api_cache')
-    
+
     // Minimum $200K kontrolü - sadece bu değerin üstündeki trade'leri kaydet
     const MIN_TRADE_VALUE = 200000
     const validTrades = trades.filter(trade => {
@@ -3294,20 +3299,20 @@ app.post('/api/whale/trades', async (req, res) => {
         totalTrades: 0
       })
     }
-    
+
     // Mevcut trade'leri al
     const cacheDoc = await collection.findOne({ _id: 'whale_transactions' })
     const existingTrades = cacheDoc?.data?.trades || []
-    
+
     // 24 saat öncesini hesapla
     const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000)
-    
+
     // Önce eski trade'leri temizle (24 saatten eski)
     const recentExistingTrades = existingTrades.filter(trade => {
       const tradeTime = trade.timestamp ? new Date(trade.timestamp).getTime() : 0
       return tradeTime >= twentyFourHoursAgo
     })
-    
+
     // Yeni trade'leri ekle (duplicate kontrolü - id + source kombinasyonu)
     const existingKeys = new Set(
       recentExistingTrades.map(t => `${t.id}_${t.source || 'unknown'}`)
@@ -3316,7 +3321,7 @@ app.post('/api/whale/trades', async (req, res) => {
       const key = `${t.id}_${t.source || 'unknown'}`
       return !existingKeys.has(key)
     })
-    
+
     if (newTrades.length === 0 && recentExistingTrades.length === existingTrades.length) {
       return res.json({
         success: true,
@@ -3324,19 +3329,19 @@ app.post('/api/whale/trades', async (req, res) => {
         totalTrades: recentExistingTrades.length
       })
     }
-    
+
     // Yeni trade'leri başa ekle (24 saat içindeki trade'lerle birleştir)
     const allTrades = [...newTrades, ...recentExistingTrades]
-    
+
     // Eski trade'ler temizlendiyse log
     if (recentExistingTrades.length !== existingTrades.length) {
       console.log(`🧹 ${existingTrades.length - recentExistingTrades.length} eski whale trade temizlendi (24 saatten eski)`)
     }
-    
+
     // MongoDB'ye kaydet
     await collection.updateOne(
       { _id: 'whale_transactions' },
-      { 
+      {
         $set: {
           data: {
             trades: allTrades,
@@ -3349,8 +3354,6 @@ app.post('/api/whale/trades', async (req, res) => {
       { upsert: true }
     )
 
-    console.log(`✅ ${newTrades.length} yeni whale trade kaydedildi (toplam: ${allTrades.length})`)
-    
     return res.json({
       success: true,
       message: `${newTrades.length} yeni trade kaydedildi`,
@@ -3373,61 +3376,58 @@ app.get('/supply-history/all', async (req, res) => {
   console.log('📥 [Supply History] GET /supply-history/all isteği alındı')
   console.log('📥 [Supply History] Request method:', req.method)
   console.log('📥 [Supply History] Request URL:', req.url)
-  
+
   try {
     if (!db) {
       console.error('❌ [Supply History] MongoDB bağlantısı yok')
-      return res.status(503).json({ 
-        ok: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        ok: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const supplyHistoryCollection = db.collection('supply_history')
-    
+
     // Collection'ın var olup olmadığını kontrol et
     const collections = await db.listCollections().toArray()
     const collectionExists = collections.some(c => c.name === 'supply_history')
-    console.log(`🔍 [Supply History] Collection var mı? ${collectionExists}`)
-    
+
     if (!collectionExists) {
       console.log('⚠️ [Supply History] supply_history collection bulunamadı, boş array döndürülüyor')
-      return res.json({ 
-        ok: true, 
-        data: [] 
+      return res.json({
+        ok: true,
+        data: []
       })
     }
-    
+
     // Collection'daki toplam document sayısını kontrol et
     const totalCount = await supplyHistoryCollection.countDocuments({})
-    console.log(`📊 [Supply History] Collection'da toplam ${totalCount} document var`)
-    
+
     console.log('📖 [Supply History] MongoDB\'den mevcut snapshot\'lar okunuyor (yeni veri çekilmiyor)...')
     const queryStartTime = Date.now()
-    
+
     // Sadece gerekli alanları çek (projection) - performans için
     // _id ve supplies alanlarını çek, diğer alanları çekme
     // Limit'i daha da düşür (supplies alanı çok büyük olabilir)
-    console.log('⚡ [Supply History] Query optimize edildi: projection + limit 500')
     const queryPromise = supplyHistoryCollection
-      .find({}, { 
-        projection: { 
-          _id: 1, 
+      .find({}, {
+        projection: {
+          _id: 1,
           supplies: 1,
-          timestamp: 1 
-        } 
+          timestamp: 1
+        }
       })
       .sort({ _id: -1 }) // En yeni önce
       .limit(500) // Son 500 snapshot (daha hızlı - supplies alanı büyük olabilir)
       .toArray()
-    
+
     // 60 saniye timeout ekle (daha büyük veri için)
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => {
         reject(new Error('MongoDB query timeout (60 saniye)'))
       }, 60000)
     })
-    
+
     let snapshots
     try {
       snapshots = await Promise.race([queryPromise, timeoutPromise])
@@ -3436,18 +3436,16 @@ app.get('/supply-history/all', async (req, res) => {
       console.error(`❌ [Supply History] Query hatası (${queryDuration}ms):`, queryError)
       throw queryError
     }
-    
+
     const queryDuration = Date.now() - queryStartTime
-    console.log(`✅ [Supply History] ${snapshots.length} mevcut snapshot okundu (${queryDuration}ms) - YENİ VERİ ÇEKİLMEDİ`)
-    
+
     const totalDuration = Date.now() - startTime
-    console.log(`✅ [Supply History] Mevcut veriler response olarak gönderiliyor (toplam süre: ${totalDuration}ms)`)
-    
-    res.json({ 
-      ok: true, 
-      data: snapshots 
+
+    res.json({
+      ok: true,
+      data: snapshots
     })
-    
+
     console.log(`✅ [Supply History] Mevcut veriler gönderildi (sadece okuma, veri çekme yok)`)
   } catch (error) {
     const totalDuration = Date.now() - startTime
@@ -3456,11 +3454,11 @@ app.get('/supply-history/all', async (req, res) => {
     console.error('❌ Error message:', error.message)
     console.error('❌ Error stack:', error.stack)
     console.error(`❌ Hata süresi: ${totalDuration}ms`)
-    
+
     // Response zaten gönderilmişse tekrar gönderme
     if (!res.headersSent) {
-      res.status(500).json({ 
-        ok: false, 
+      res.status(500).json({
+        ok: false,
         error: error.message || 'Bilinmeyen hata'
       })
       console.log('❌ [Supply History] Error response gönderildi')
@@ -3475,9 +3473,9 @@ app.get('/supply-history/all', async (req, res) => {
 app.get('/api/supply-snapshots/:coinId', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
@@ -3490,13 +3488,12 @@ app.get('/api/supply-snapshots/:coinId', async (req, res) => {
     }
 
     const supplyHistoryCollection = db.collection('supply_history')
-    
-    console.log(`🔍 [Supply Snapshots] ${coinId} için snapshot'lar aranıyor...`)
-    
+
+
     // Collection'ın varlığını kontrol et
     const collections = await db.listCollections().toArray()
     const hasCollection = collections.some(col => col.name === 'supply_history')
-    
+
     if (!hasCollection) {
       console.warn(`⚠️ [Supply Snapshots] supply_history collection bulunamadı`)
       return res.json({
@@ -3509,7 +3506,7 @@ app.get('/api/supply-snapshots/:coinId', async (req, res) => {
         }
       })
     }
-    
+
     // Tüm snapshot'ları çek
     let snapshots = []
     try {
@@ -3529,19 +3526,19 @@ app.get('/api/supply-snapshots/:coinId', async (req, res) => {
 
     // Her snapshot'tan sadece bu coin'e ait veriyi çıkar
     const coinSnapshots = []
-    
+
     for (const snapshot of snapshots) {
       try {
         // supplies objesi var mı kontrol et
         if (!snapshot.supplies || typeof snapshot.supplies !== 'object') {
           continue
         }
-        
+
         // Bu coin'e ait veri var mı kontrol et
         if (snapshot.supplies[coinId] === undefined || snapshot.supplies[coinId] === null) {
           continue
         }
-        
+
         // Timestamp'i kontrol et - yoksa _id'den çıkar
         let timestamp = snapshot.timestamp
         if (!timestamp || typeof timestamp !== 'number') {
@@ -3566,7 +3563,7 @@ app.get('/api/supply-snapshots/:coinId', async (req, res) => {
             timestamp = Date.now()
           }
         }
-        
+
         coinSnapshots.push({
           date: snapshot.date || snapshot._id?.toString() || 'N/A',
           timestamp: timestamp,
@@ -3577,14 +3574,14 @@ app.get('/api/supply-snapshots/:coinId', async (req, res) => {
         continue
       }
     }
-    
+
     // Timestamp'e göre sırala
     coinSnapshots.sort((a, b) => a.timestamp - b.timestamp)
-    
+
     console.log(`✅ [Supply Snapshots] ${coinId} için ${coinSnapshots.length} snapshot bulundu`)
 
     console.log(`✅ [Supply Snapshots] ${coinId} için ${coinSnapshots.length} snapshot döndürülüyor`)
-    
+
     return res.json({
       success: true,
       data: {
@@ -3610,22 +3607,22 @@ app.get('/api/supply-snapshots/:coinId', async (req, res) => {
 app.get('/api/fed-rate', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const collection = db.collection('api_cache')
     const cacheDoc = await collection.findOne({ _id: 'fed_rate' })
-    
+
     if (cacheDoc && cacheDoc.data) {
       // Cache'de nextDecisionDate varsa kontrol et
       if (cacheDoc.data.nextDecisionDate) {
         const nextDecisionTime = new Date(cacheDoc.data.nextDecisionDate).getTime()
         const now = Date.now()
         const diff = nextDecisionTime - now
-        
+
         // Sonraki karar tarihine kadar cache geçerli
         if (diff > 0) {
           return res.json({
@@ -3635,7 +3632,7 @@ app.get('/api/fed-rate', async (req, res) => {
           })
         }
       }
-      
+
       // Fallback: 30 dakika içindeki cache'i kabul et (nextDecisionDate null olsa bile)
       const age = Date.now() - (cacheDoc.updatedAt || cacheDoc.lastUpdate || 0)
       if (age < 30 * 60 * 1000) {
@@ -3646,17 +3643,17 @@ app.get('/api/fed-rate', async (req, res) => {
         })
       }
     }
-    
+
     // Cache yok veya geçersiz - otomatik güncelleme yap
     try {
       console.log('⚠️ GET /api/fed-rate: Cache yok veya geçersiz, otomatik güncelleme yapılıyor...')
       const { fetchFedRateData } = await import('./services/apiHandlers/fedRate.js')
       const fedRateData = await fetchFedRateData(db)
-      
+
       // MongoDB'ye kaydet
       await collection.updateOne(
         { _id: 'fed_rate' },
-        { 
+        {
           $set: {
             data: fedRateData,
             updatedAt: Date.now(),
@@ -3665,7 +3662,7 @@ app.get('/api/fed-rate', async (req, res) => {
         },
         { upsert: true }
       )
-      
+
       return res.json({
         success: true,
         data: fedRateData,
@@ -3691,9 +3688,9 @@ app.get('/api/fed-rate', async (req, res) => {
 app.post('/api/fed-rate/update', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
@@ -3705,7 +3702,7 @@ app.post('/api/fed-rate/update', async (req, res) => {
     const collection = db.collection('api_cache')
     await collection.updateOne(
       { _id: 'fed_rate' },
-      { 
+      {
         $set: {
           data: fedRateData,
           updatedAt: Date.now(),
@@ -3737,15 +3734,15 @@ app.post('/api/fed-rate/update', async (req, res) => {
 app.post('/api/supply-tracking/update', async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ 
-        success: false, 
-        error: 'MongoDB bağlantısı yok' 
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
       })
     }
 
     const { updateSupplyTracking } = await import('./services/apiHandlers/supplyTracking.js')
     const success = await updateSupplyTracking(db)
-    
+
     if (success) {
       return res.json({
         success: true,
@@ -3769,8 +3766,8 @@ app.post('/api/supply-tracking/update', async (req, res) => {
 // Health check
 // Health check endpoint (Heroku için kritik)
 app.get('/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'ok', 
+  res.status(200).json({
+    status: 'ok',
     timestamp: new Date().toISOString(),
     mongodb: db ? 'connected' : 'disconnected',
     uptime: process.uptime()
@@ -3787,7 +3784,7 @@ app.use((req, res, next) => {
     const rootDir = join(__dirname, '..')
     const maintenancePath = join(rootDir, 'public', 'maintenance.html')
     const distMaintenancePath = join(rootDir, 'dist', 'maintenance.html')
-    
+
     if (existsSync(maintenancePath)) {
       return res.status(503).sendFile(maintenancePath)
     } else if (existsSync(distMaintenancePath)) {
@@ -3804,259 +3801,277 @@ async function startServer() {
     if (!httpServer) {
       httpServer = createServer(app)
     }
-    
+
     // MongoDB bağlantısını başlat (başarısız olsa bile server başlamalı)
     await connectToMongoDB()
-  
-  // Memory cache'i yükle (MongoDB varsa - ilk kullanıcı için hızlı erişim)
-  if (db) {
-    await loadMemoryCache()
-  } else {
-    console.warn('⚠️ MongoDB bağlantısı yok, memory cache atlanıyor')
-  }
-  
-  // Static dosyaları serve et (Heroku için - build edilmiş frontend)
-  const rootDir = join(__dirname, '..')
-  const distDir = join(rootDir, 'dist')
-  const publicDir = join(rootDir, 'public')
-  
-  // Public klasörünü serve et (maintenance.html ve error.html için)
-  // Development VE Production modunda her zaman serve et
-  if (existsSync(publicDir)) {
-    app.use('/public', express.static(publicDir))
-    // Development modunda public klasörünü root path'ten de serve et
-    if (process.env.NODE_ENV !== 'production') {
-      app.use(express.static(publicDir))
-    }
-  }
-  
-  // Production modunda dist klasörünü serve et
-  if (existsSync(distDir)) {
-    // Production: Static dosyaları serve et
-    app.use(express.static(distDir))
-    console.log(`✅ Static dosyalar serve ediliyor: ${distDir}`)
-    
-    // Tüm route'ları index.html'e yönlendir (SPA için)
-    // API route'larından sonra ekle (yoksa API route'ları çalışmaz)
-    // Health check ve static dosyalar zaten tanımlı, bu route en sona eklenmeli
-    const indexPath = join(distDir, 'index.html')
-    if (existsSync(indexPath)) {
-      app.get('*', (req, res, next) => {
-        // API route'ları, health check, static dosyalar ve maintenance/error dosyaları değilse
-        const path = req.path
-        const isApiRoute = path.startsWith('/api')
-        const isHealthCheck = path === '/health'
-        const isStaticFile = path.startsWith('/assets') || 
-                           path.startsWith('/icons') || 
-                           path.startsWith('/public') ||
-                           path.startsWith('/kriptotek.jpg') ||
-                           path === '/favicon.ico' ||
-                           /\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/i.test(path)
-        const isMaintenanceOrError = path.includes('maintenance.html') || path.includes('error.html')
-        
-        if (!isApiRoute && !isHealthCheck && !isStaticFile && !isMaintenanceOrError) {
-          // SPA route'u - index.html gönder
-          res.sendFile(indexPath, (err) => {
-            // Dosya bulunamazsa error.html göster
-            if (err) {
-              console.error('❌ index.html sendFile hatası:', err.message, 'Path:', path)
-              const errorPath = join(publicDir, 'error.html')
-              const distErrorPath = join(distDir, 'error.html')
-              
-              if (existsSync(errorPath)) {
-                return res.status(404).sendFile(errorPath)
-              } else if (existsSync(distErrorPath)) {
-                return res.status(404).sendFile(distErrorPath)
-              } else {
-                return res.status(404).json({ error: 'File not found', path: path })
-              }
-            }
-          })
-        } else {
-          next()
-        }
-      })
+
+    // Memory cache'i yükle (MongoDB varsa - ilk kullanıcı için hızlı erişim)
+    if (db) {
+      await loadMemoryCache()
     } else {
-      console.error('❌ index.html bulunamadı:', indexPath)
-      // index.html yoksa tüm route'lar için 503 döndür (API route'ları hariç)
-      app.get('*', (req, res, next) => {
-        if (!req.path.startsWith('/api') && req.path !== '/health') {
-          res.status(503).json({ 
-            error: 'Frontend build not found',
-            message: 'Please ensure the build process completed successfully',
-            mongodb: db ? 'connected' : 'disconnected',
-            indexPath: indexPath
-          })
-        } else {
-          next()
-        }
-      })
+      console.warn('⚠️ MongoDB bağlantısı yok, memory cache atlanıyor')
     }
-  } else {
-    console.warn('⚠️ dist klasörü bulunamadı - Production modunda frontend dosyaları serve edilemiyor')
-    console.warn('⚠️ Heroku build sürecini kontrol edin: npm run build')
-    
-    // dist klasörü yoksa bile root path'ten bir mesaj döndür
-    app.get('/', (req, res) => {
-      res.status(503).json({
-        error: 'Frontend build not found',
-        message: 'Please ensure the build process completed successfully',
-        mongodb: db ? 'connected' : 'disconnected'
-      })
-    })
-  }
-  
-  // Error Handler Middleware (500 vb. için) - Route'lardan SONRA
-  app.use((err, req, res, next) => {
-    console.error('❌ Server Error:', err)
-    
-    // API istekleri için JSON döndür
-    if (req.path.startsWith('/api')) {
-      return res.status(err.status || 500).json({
-        success: false,
-        error: process.env.NODE_ENV === 'production' 
-          ? 'Bir hata oluştu. Lütfen daha sonra tekrar deneyin.' 
-          : err.message
-      })
-    }
-    
-    // Frontend istekleri için error.html göster
+
+    // Static dosyaları serve et (Heroku için - build edilmiş frontend)
     const rootDir = join(__dirname, '..')
-    const errorPath = join(rootDir, 'public', 'error.html')
-    const distErrorPath = join(rootDir, 'dist', 'error.html')
-    
-    if (existsSync(errorPath)) {
-      return res.status(err.status || 500).sendFile(errorPath)
-    } else if (existsSync(distErrorPath)) {
-      return res.status(err.status || 500).sendFile(distErrorPath)
-    }
-    
-    next(err)
-  })
-  
-  // 404 Handler (API route'ları hariç) - En sonda
-  app.use((req, res) => {
-    // API route'ları için JSON döndür
-    if (req.path.startsWith('/api')) {
-      return res.status(404).json({
-        success: false,
-        error: 'Endpoint bulunamadı'
-      })
-    }
-    
-    // Frontend için 404 - error.html göster
-    const rootDir = join(__dirname, '..')
-    const errorPath = join(rootDir, 'public', 'error.html')
-    const distErrorPath = join(rootDir, 'dist', 'error.html')
-    
-    if (existsSync(errorPath)) {
-      return res.status(404).sendFile(errorPath)
-    } else if (existsSync(distErrorPath)) {
-      return res.status(404).sendFile(distErrorPath)
-    }
-    
-    // Error.html bulunamazsa basit mesaj döndür
-    res.status(404).send('404 - Sayfa bulunamadı')
-  })
-  
-  // Development mode - mesaj gösterme (production'da hiçbir şey yazdırma)
-  
-  // HTTP server zaten oluşturuldu (yukarıda), sadece WebSocket server oluştur
-  if (!httpServer) {
-    httpServer = createServer(app)
-  }
-  
-  // WebSocket server - path kontrolü ile
-  wss = new WebSocketServer({ 
-    server: httpServer,
-    path: '/ws' // WebSocket path'i
-  })
-  
-  // WebSocket heartbeat ve bağlantı sınırı
-  {
-    const MAX_CLIENTS = parseInt(process.env.WS_MAX_CLIENTS || '500', 10)
-    const PING_INTERVAL_MS = 30000
-    wss.on('connection', (ws, req) => {
-      if (wss.clients.size > MAX_CLIENTS) {
-        try { ws.close(1013, 'Server is busy') } catch {}
-        return
+    const distDir = join(rootDir, 'dist')
+    const publicDir = join(rootDir, 'public')
+
+    // Public klasörünü serve et (maintenance.html ve error.html için)
+    // Development VE Production modunda her zaman serve et
+    if (existsSync(publicDir)) {
+      app.use('/public', express.static(publicDir))
+      // Development modunda public klasörünü root path'ten de serve et
+      if (process.env.NODE_ENV !== 'production') {
+        app.use(express.static(publicDir))
       }
-      ws.isAlive = true
-      ws.on('pong', () => { ws.isAlive = true })
-      console.log(`📡 Yeni WebSocket bağlantısı (toplam: ${wss.clients.size})`)
+    }
+
+    // Production modunda dist klasörünü serve et
+    if (existsSync(distDir)) {
+      // Production: Static dosyaları serve et + PERFORMANS: 1 yıl cache
+      app.use(express.static(distDir, {
+        maxAge: '1y', // 1 yıl cache (assets hash'li olduğu için safe)
+        etag: true,
+        lastModified: true,
+        immutable: true, // Hash'li assets değişmez, tarayıcı cache'i update etmesin
+        setHeaders: (res, filePath) => {
+          // CSS/JS dosyaları için uzun cache
+          if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+          }
+          // Resimler için uzun cache
+          else if (/\.(png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot)$/i.test(filePath)) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+          }
+          // HTML için kısa cache (SPA routing için)
+          else if (filePath.endsWith('.html')) {
+            res.setHeader('Cache-Control', 'no-cache, must-revalidate')
+          }
+        }
+      }))
+      console.log(`✅ Static dosyalar serve ediliyor: ${distDir}`)
+
+      // Tüm route'ları index.html'e yönlendir (SPA için)
+      // API route'larından sonra ekle (yoksa API route'ları çalışmaz)
+      // Health check ve static dosyalar zaten tanımlı, bu route en sona eklenmeli
+      const indexPath = join(distDir, 'index.html')
+      if (existsSync(indexPath)) {
+        app.get('*', (req, res, next) => {
+          // API route'ları, health check, static dosyalar ve maintenance/error dosyaları değilse
+          const path = req.path
+          const isApiRoute = path.startsWith('/api')
+          const isHealthCheck = path === '/health'
+          const isStaticFile = path.startsWith('/assets') ||
+            path.startsWith('/icons') ||
+            path.startsWith('/public') ||
+            path.startsWith('/kriptotek.jpg') ||
+            path === '/favicon.ico' ||
+            path === '/robots.txt' ||
+            /\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|txt|xml)$/i.test(path)
+          const isMaintenanceOrError = path.includes('maintenance.html') || path.includes('error.html')
+
+          if (!isApiRoute && !isHealthCheck && !isStaticFile && !isMaintenanceOrError) {
+            // SPA route'u - index.html gönder
+            res.sendFile(indexPath, (err) => {
+              // Dosya bulunamazsa error.html göster
+              if (err) {
+                console.error('❌ index.html sendFile hatası:', err.message, 'Path:', path)
+                const errorPath = join(publicDir, 'error.html')
+                const distErrorPath = join(distDir, 'error.html')
+
+                if (existsSync(errorPath)) {
+                  return res.status(404).sendFile(errorPath)
+                } else if (existsSync(distErrorPath)) {
+                  return res.status(404).sendFile(distErrorPath)
+                } else {
+                  return res.status(404).json({ error: 'File not found', path: path })
+                }
+              }
+            })
+          } else {
+            next()
+          }
+        })
+      } else {
+        console.error('❌ index.html bulunamadı:', indexPath)
+        // index.html yoksa tüm route'lar için 503 döndür (API route'ları hariç)
+        app.get('*', (req, res, next) => {
+          if (!req.path.startsWith('/api') && req.path !== '/health') {
+            res.status(503).json({
+              error: 'Frontend build not found',
+              message: 'Please ensure the build process completed successfully',
+              mongodb: db ? 'connected' : 'disconnected',
+              indexPath: indexPath
+            })
+          } else {
+            next()
+          }
+        })
+      }
+    } else {
+      console.warn('⚠️ dist klasörü bulunamadı - Production modunda frontend dosyaları serve edilemiyor')
+      console.warn('⚠️ Heroku build sürecini kontrol edin: npm run build')
+
+      // dist klasörü yoksa bile root path'ten bir mesaj döndür
+      app.get('/', (req, res) => {
+        res.status(503).json({
+          error: 'Frontend build not found',
+          message: 'Please ensure the build process completed successfully',
+          mongodb: db ? 'connected' : 'disconnected'
+        })
+      })
+    }
+
+    // Error Handler Middleware (500 vb. için) - Route'lardan SONRA
+    app.use((err, req, res, next) => {
+      console.error('❌ Server Error:', err)
+
+      // API istekleri için JSON döndür
+      if (req.path.startsWith('/api')) {
+        return res.status(err.status || 500).json({
+          success: false,
+          error: process.env.NODE_ENV === 'production'
+            ? 'Bir hata oluştu. Lütfen daha sonra tekrar deneyin.'
+            : err.message
+        })
+      }
+
+      // Frontend istekleri için error.html göster
+      const rootDir = join(__dirname, '..')
+      const errorPath = join(rootDir, 'public', 'error.html')
+      const distErrorPath = join(rootDir, 'dist', 'error.html')
+
+      if (existsSync(errorPath)) {
+        return res.status(err.status || 500).sendFile(errorPath)
+      } else if (existsSync(distErrorPath)) {
+        return res.status(err.status || 500).sendFile(distErrorPath)
+      }
+
+      next(err)
     })
-    const interval = setInterval(() => {
-      wss.clients.forEach((ws) => {
-        if (ws.isAlive === false) {
-          try { ws.terminate() } catch {}
+
+    // 404 Handler (API route'ları hariç) - En sonda
+    app.use((req, res) => {
+      // API route'ları için JSON döndür
+      if (req.path.startsWith('/api')) {
+        return res.status(404).json({
+          success: false,
+          error: 'Endpoint bulunamadı'
+        })
+      }
+
+      // Frontend için 404 - error.html göster
+      const rootDir = join(__dirname, '..')
+      const errorPath = join(rootDir, 'public', 'error.html')
+      const distErrorPath = join(rootDir, 'dist', 'error.html')
+
+      if (existsSync(errorPath)) {
+        return res.status(404).sendFile(errorPath)
+      } else if (existsSync(distErrorPath)) {
+        return res.status(404).sendFile(distErrorPath)
+      }
+
+      // Error.html bulunamazsa basit mesaj döndür
+      res.status(404).send('404 - Sayfa bulunamadı')
+    })
+
+    // Development mode - mesaj gösterme (production'da hiçbir şey yazdırma)
+
+    // HTTP server zaten oluşturuldu (yukarıda), sadece WebSocket server oluştur
+    if (!httpServer) {
+      httpServer = createServer(app)
+    }
+
+    // WebSocket server - path kontrolü ile
+    wss = new WebSocketServer({
+      server: httpServer,
+      path: '/ws' // WebSocket path'i
+    })
+
+    // WebSocket heartbeat ve bağlantı sınırı
+    {
+      const MAX_CLIENTS = parseInt(process.env.WS_MAX_CLIENTS || '500', 10)
+      const PING_INTERVAL_MS = 30000
+      wss.on('connection', (ws, req) => {
+        if (wss.clients.size > MAX_CLIENTS) {
+          try { ws.close(1013, 'Server is busy') } catch { }
           return
         }
-        ws.isAlive = false
-        try { ws.ping() } catch {}
+        ws.isAlive = true
+        ws.on('pong', () => { ws.isAlive = true })
+        console.log(`📡 Yeni WebSocket bağlantısı (toplam: ${wss.clients.size})`)
       })
-    }, PING_INTERVAL_MS)
-    wss.on('close', () => clearInterval(interval))
-  }
-  
-  // Change Streams'i başlat (MongoDB realtime updates için - sadece MongoDB varsa)
-  if (db) {
-    try {
-      const { startChangeStreams } = await import('./services/changeStreams.js')
-      startChangeStreams(db, wss)
-    } catch (error) {
-      console.warn('⚠️ Change Streams başlatılamadı:', error.message)
+      const interval = setInterval(() => {
+        wss.clients.forEach((ws) => {
+          if (ws.isAlive === false) {
+            try { ws.terminate() } catch { }
+            return
+          }
+          ws.isAlive = false
+          try { ws.ping() } catch { }
+        })
+      }, PING_INTERVAL_MS)
+      wss.on('close', () => clearInterval(interval))
     }
-  } else {
-    console.warn('⚠️ MongoDB bağlantısı yok, Change Streams atlanıyor')
-  }
-  
-  // API Scheduler'ı import et
-  try {
-    const { start, setDbInstance } = await import('./services/apiScheduler.js')
-    
-    // MongoDB db instance'ını scheduler'a geç
+
+    // Change Streams'i başlat (MongoDB realtime updates için - sadece MongoDB varsa)
     if (db) {
-      setDbInstance(db)
-      // API Scheduler'ı başlat (sadece MongoDB varsa)
-      start()
+      try {
+        const { startChangeStreams } = await import('./services/changeStreams.js')
+        startChangeStreams(db, wss)
+      } catch (error) {
+        console.warn('⚠️ Change Streams başlatılamadı:', error.message)
+      }
     } else {
-      console.warn('⚠️ MongoDB bağlantısı yok, API Scheduler atlanıyor')
+      console.warn('⚠️ MongoDB bağlantısı yok, Change Streams atlanıyor')
     }
-  } catch (error) {
-    console.warn('⚠️ API Scheduler import/başlatma hatası:', error.message)
-  }
-  
-  // Exchange Whale Tracking'i başlat (MongoDB varsa)
-  if (db) {
+
+    // API Scheduler'ı import et
     try {
-      const { startExchangeWhaleTracking, setWebSocketServer } = await import('./services/apiHandlers/exchangeWhale.js')
-      // WebSocket server'ı whale tracker'a geç
-      if (wss) {
-        setWebSocketServer(wss)
+      const { start, setDbInstance } = await import('./services/apiScheduler.js')
+
+      // MongoDB db instance'ını scheduler'a geç
+      if (db) {
+        setDbInstance(db)
+        // API Scheduler'ı başlat (sadece MongoDB varsa)
+        start()
+      } else {
+        console.warn('⚠️ MongoDB bağlantısı yok, API Scheduler atlanıyor')
       }
-      startExchangeWhaleTracking(db, 200000) // Minimum $200K
-      console.log('✅ Exchange whale tracking başlatıldı (Binance, Bybit, KuCoin, OKX, Bitget, Gate.io, HTX, MEXC)')
     } catch (error) {
-      console.warn('⚠️ Exchange whale tracking başlatma hatası:', error.message)
+      console.warn('⚠️ API Scheduler import/başlatma hatası:', error.message)
     }
-  } else {
-    console.warn('⚠️ MongoDB bağlantısı yok, Exchange whale tracking atlanıyor')
-  }
-  
-  // Server'ı başlat (MongoDB olsun ya da olmasın)
-  // Eğer httpServer zaten dinliyorsa, tekrar başlatma
-  if (httpServer && !httpServer.listening) {
-    httpServer.listen(PORT, () => {
-      console.log(`✅ Backend API çalışıyor: http://localhost:${PORT}`)
-      console.log(`✅ WebSocket server çalışıyor: ws://localhost:${PORT}/ws`)
-      if (process.env.NODE_ENV === 'production') {
-        console.log(`✅ Frontend static dosyalar serve ediliyor`)
+
+    if (db) {
+      try {
+        const { startExchangeWhaleTracking, setWebSocketServer } = await import('./services/apiHandlers/exchangeWhale.js')
+        // WebSocket server'ı whale tracker'a geç
+        if (wss) {
+          setWebSocketServer(wss)
+        }
+        startExchangeWhaleTracking(db, 500000) // Minimum $500K
+      } catch (error) {
+        console.warn('⚠️ Exchange whale tracking başlatma hatası:', error.message)
       }
-      if (!db) {
-        console.warn('⚠️ MongoDB bağlantısı yok - bazı özellikler çalışmayabilir')
-      }
-    })
-  }
+    } else {
+      console.warn('⚠️ MongoDB bağlantısı yok, Exchange whale tracking atlanıyor')
+    }
+
+    // Server'ı başlat (MongoDB olsun ya da olmasın)
+    // Eğer httpServer zaten dinliyorsa, tekrar başlatma
+    if (httpServer && !httpServer.listening) {
+      httpServer.listen(PORT, () => {
+        console.log(`✅ Backend API çalışıyor: http://localhost:${PORT}`)
+        console.log(`✅ WebSocket server çalışıyor: ws://localhost:${PORT}/ws`)
+        if (process.env.NODE_ENV === 'production') {
+          console.log(`✅ Frontend static dosyalar serve ediliyor`)
+        }
+        if (!db) {
+          console.warn('⚠️ MongoDB bağlantısı yok - bazı özellikler çalışmayabilir')
+        }
+      })
+    }
   } catch (error) {
     console.error('❌ startServer() içinde hata:', error)
     console.error('❌ Stack trace:', error.stack)

@@ -8,10 +8,10 @@ import { loadUserFavorites, addFavorite, removeFavorite } from '../services/user
 import { updatePageSEO } from '../utils/seoMetaTags'
 import { formatCurrency, formatLargeNumber, formatLargeCurrency } from '../utils/currencyConverter'
 import MiniChart from '../components/MiniChart'
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  Search, 
+import {
+  TrendingUp,
+  TrendingDown,
+  Search,
   RotateCcw,
   Activity,
   Sparkles,
@@ -28,14 +28,14 @@ const Home = () => {
   const { isDark } = useTheme()
   const { currency } = useCurrency()
   const { user } = useAuth()
-  
+
   useEffect(() => {
     updatePageSEO('home', language)
   }, [language])
-  
+
   // Merkezi veri yönetim sisteminden veri al
   const { coins, topMovers, loading, isUpdating, refresh } = useCryptoData()
-  
+
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState('market_cap')
   const [sortOrder, setSortOrder] = useState('desc')
@@ -95,30 +95,30 @@ const Home = () => {
   const filteredCoins = useMemo(() => {
     if (searchTerm.trim() && coins.length > 0) {
       const searchLower = searchTerm.toLowerCase().trim()
-      
+
       return coins.filter(coin => {
         const nameLower = coin.name?.toLowerCase() || ''
         const symbolLower = coin.symbol?.toLowerCase() || ''
         return nameLower.includes(searchLower) || symbolLower.includes(searchLower)
       })
     }
-    
+
     return coins
   }, [coins, searchTerm])
 
   const sortedCoins = useMemo(() => {
     if (!filteredCoins || !Array.isArray(filteredCoins)) return []
-    
+
     return [...filteredCoins].sort((a, b) => {
       let aValue = a[sortBy]
       let bValue = b[sortBy]
-      
+
       if (sortBy === 'market_cap') {
         aValue = a.market_cap || 0
         bValue = b.market_cap || 0
         return sortOrder === 'desc' ? bValue - aValue : aValue - bValue
       }
-      
+
       if (sortBy === 'name' || sortBy === 'symbol') {
         aValue = aValue?.toLowerCase() || ''
         bValue = bValue?.toLowerCase() || ''
@@ -128,7 +128,7 @@ const Home = () => {
           return aValue < bValue ? 1 : -1
         }
       }
-      
+
       if (sortOrder === 'asc') {
         return aValue > bValue ? 1 : -1
       } else {
@@ -245,11 +245,11 @@ const Home = () => {
                 </div>
               </div>
             </div>
-            
+
             <div className="space-y-2 sm:space-y-3">
               {(topMovers.topGainers.length > 0 ? topMovers.topGainers : []).map((coin, index) => (
-                <div 
-                  key={coin.id} 
+                <div
+                  key={coin.id}
                   className="group relative overflow-hidden bg-gradient-to-r from-green-50/50 to-emerald-50/50 dark:from-green-900/10 dark:to-emerald-900/10 rounded-lg sm:rounded-xl p-2 sm:p-2.5 md:p-3 lg:p-4 border border-green-200/50 dark:border-green-800/50 hover:shadow-lg transition-all duration-300 hover:scale-[1.01] sm:hover:scale-[1.02]"
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -261,7 +261,7 @@ const Home = () => {
                             #{index + 1}
                           </div>
                         </div>
-                        <img 
+                        <img
                           src={coin.image}
                           alt={coin.name}
                           className="h-7 w-7 sm:h-8 sm:w-8 md:h-10 md:w-10 lg:h-12 lg:w-12 rounded-full object-cover ring-2 ring-green-200 dark:ring-green-800 flex-shrink-0"
@@ -275,7 +275,7 @@ const Home = () => {
                             e.target.dataset.errorAttempts = (attempts + 1).toString()
                             const coinId = coin.id
                             if (attempts === 0) {
-                              e.target.src = `https://assets.coingecko.com/coins/images/${coinId}/large/${coinId}.png`
+                              e.target.src = `https://assets.coingecko.com/coins/images/${coinId}/small/${coinId}.png`
                             } else {
                               e.target.style.display = 'none'
                               e.target.onerror = null
@@ -340,11 +340,11 @@ const Home = () => {
                 </div>
               </div>
             </div>
-            
+
             <div className="space-y-2 sm:space-y-3">
               {(topMovers.topLosers.length > 0 ? topMovers.topLosers : []).map((coin, index) => (
-                <div 
-                  key={coin.id} 
+                <div
+                  key={coin.id}
                   className="group relative overflow-hidden bg-gradient-to-r from-red-50/50 to-orange-50/50 dark:from-red-900/10 dark:to-orange-900/10 rounded-lg sm:rounded-xl p-2 sm:p-2.5 md:p-3 lg:p-4 border border-red-200/50 dark:border-red-800/50 hover:shadow-lg transition-all duration-300 hover:scale-[1.01] sm:hover:scale-[1.02]"
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -356,7 +356,7 @@ const Home = () => {
                             #{index + 1}
                           </div>
                         </div>
-                        <img 
+                        <img
                           src={coin.image}
                           alt={coin.name}
                           className="h-7 w-7 sm:h-8 sm:w-8 md:h-10 md:w-10 lg:h-12 lg:w-12 rounded-full object-cover ring-2 ring-red-200 dark:ring-red-800 flex-shrink-0"
@@ -370,7 +370,7 @@ const Home = () => {
                             e.target.dataset.errorAttempts = (attempts + 1).toString()
                             const coinId = coin.id
                             if (attempts === 0) {
-                              e.target.src = `https://assets.coingecko.com/coins/images/${coinId}/large/${coinId}.png`
+                              e.target.src = `https://assets.coingecko.com/coins/images/${coinId}/small/${coinId}.png`
                             } else {
                               e.target.style.display = 'none'
                               e.target.onerror = null
@@ -455,11 +455,10 @@ const Home = () => {
                     key={option.key}
                     type="button"
                     onClick={() => handleSort(option.key)}
-                    className={`px-2 sm:px-2.5 md:px-3 lg:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl font-medium text-[10px] sm:text-xs md:text-sm transition-all duration-200 ${
-                      sortBy === option.key
-                        ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg scale-105'
-                        : 'bg-white/50 dark:bg-gray-800/50 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-                    }`}
+                    className={`px-2 sm:px-2.5 md:px-3 lg:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl font-medium text-[10px] sm:text-xs md:text-sm transition-all duration-200 ${sortBy === option.key
+                      ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg scale-105'
+                      : 'bg-white/50 dark:bg-gray-800/50 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                      }`}
                   >
                     <span className="hidden sm:inline">{option.label}</span>
                     <span className="sm:hidden">{option.label.split(' ')[0]}</span>
@@ -515,7 +514,7 @@ const Home = () => {
                   const isPositive = coin.price_change_percentage_24h >= 0
                   const isFavorite = favorites.has(coin.id)
                   const isExpanded = expandedRows.has(coin.id)
-                  
+
                   return (
                     <React.Fragment key={coin.id}>
                       <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
@@ -524,7 +523,7 @@ const Home = () => {
                         </td>
                         <td className="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 crypto-name-column">
                           <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3">
-                            <img 
+                            <img
                               src={coin.image}
                               alt={coin.name}
                               className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-full flex-shrink-0 object-cover"
@@ -538,7 +537,7 @@ const Home = () => {
                                 e.target.dataset.errorAttempts = (attempts + 1).toString()
                                 const coinId = coin.id
                                 if (attempts === 0) {
-                                  e.target.src = `https://assets.coingecko.com/coins/images/${coinId}/large/${coinId}.png`
+                                  e.target.src = `https://assets.coingecko.com/coins/images/${coinId}/small/${coinId}.png`
                                 } else {
                                   e.target.style.display = 'none'
                                   e.target.onerror = null
@@ -582,8 +581,8 @@ const Home = () => {
                             className="p-0.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
                             title={isFavorite ? t('removeFavorite') : t('addFavorite')}
                           >
-                            <Star 
-                              className={`w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 ${isFavorite ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} 
+                            <Star
+                              className={`w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 ${isFavorite ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`}
                             />
                           </button>
                         </td>
@@ -614,11 +613,11 @@ const Home = () => {
                         <tr style={{ backgroundColor: '#1a1a1a' }}>
                           <td colSpan={8} className="px-4 py-4" style={{ backgroundColor: '#1a1a1a' }}>
                             <div className="w-full h-[300px]" style={{ backgroundColor: '#1a1a1a' }}>
-                              <MiniChart 
-                                coinId={coin.id} 
-                                coinSymbol={coin.symbol} 
-                                sparklineData={coin.sparkline_in_7d} 
-                                isVisible={isExpanded} 
+                              <MiniChart
+                                coinId={coin.id}
+                                coinSymbol={coin.symbol}
+                                sparklineData={coin.sparkline_in_7d}
+                                isVisible={isExpanded}
                               />
                             </div>
                           </td>
@@ -638,10 +637,10 @@ const Home = () => {
                 const isPositive = coin.price_change_percentage_24h >= 0
                 const isFavorite = favorites.has(coin.id)
                 const isExpanded = expandedRows.has(coin.id)
-                
+
                 return (
-                  <div 
-                    key={coin.id} 
+                  <div
+                    key={coin.id}
                     className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-lg sm:rounded-xl shadow-md border border-gray-200/50 dark:border-gray-700/50 p-3 sm:p-4 hover:shadow-lg transition-all duration-200 hover:scale-[1.01]"
                   >
                     {/* Main Card Content */}
@@ -653,7 +652,7 @@ const Home = () => {
                           <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 font-semibold w-5 sm:w-6 flex-shrink-0 text-center bg-gray-100 dark:bg-gray-700 rounded-md py-0.5">
                             {coin.market_cap_rank || index + 1}
                           </div>
-                          <img 
+                          <img
                             src={coin.image}
                             alt={coin.name}
                             className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex-shrink-0 object-cover ring-2 ring-gray-200 dark:ring-gray-700"
@@ -667,7 +666,7 @@ const Home = () => {
                               e.target.dataset.errorAttempts = (attempts + 1).toString()
                               const coinId = coin.id
                               if (attempts === 0) {
-                                e.target.src = `https://assets.coingecko.com/coins/images/${coinId}/large/${coinId}.png`
+                                e.target.src = `https://assets.coingecko.com/coins/images/${coinId}/small/${coinId}.png`
                               } else {
                                 e.target.style.display = 'none'
                                 e.target.onerror = null
@@ -702,8 +701,8 @@ const Home = () => {
                               className="p-1 sm:p-1.5 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 rounded-lg transition-colors"
                               title={isFavorite ? t('removeFavorite') : t('addFavorite')}
                             >
-                              <Star 
-                                className={`w-4 h-4 sm:w-5 sm:h-5 ${isFavorite ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} 
+                              <Star
+                                className={`w-4 h-4 sm:w-5 sm:h-5 ${isFavorite ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`}
                               />
                             </button>
                             <button
@@ -750,11 +749,11 @@ const Home = () => {
                       {isExpanded && (
                         <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
                           <div className="w-full h-[300px] rounded-lg overflow-hidden" style={{ backgroundColor: '#1a1a1a' }}>
-                            <MiniChart 
-                              coinId={coin.id} 
-                              coinSymbol={coin.symbol} 
-                              sparklineData={coin.sparkline_in_7d} 
-                              isVisible={isExpanded} 
+                            <MiniChart
+                              coinId={coin.id}
+                              coinSymbol={coin.symbol}
+                              sparklineData={coin.sparkline_in_7d}
+                              isVisible={isExpanded}
                             />
                           </div>
                         </div>

@@ -16,60 +16,115 @@ const getApiUrl = () => {
 }
 const MONGO_API_URL = getApiUrl()
 
+// PERFORMANS: localStorage cache key prefix
+const CACHE_PREFIX = 'kriptotek_settings_'
+const CACHE_TTL = 5 * 60 * 1000 // 5 dakika cache TTL
+
 /**
- * MongoDB'den kullanıcı ayarlarını yükle
+ * PERFORMANS: LocalStorage'dan cache'lenmiş ayarları al
+ * @param {string} userId - Kullanıcı ID
+ * @returns {Object|null} Cache'lenmiş ayarlar veya null
+ */
+const getCachedSettings = (userId) => {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return null
+
+    const cacheKey = `${CACHE_PREFIX}${userId}`
+    const cached = localStorage.getItem(cacheKey)
+
+    if (!cached) return null
+
+    const { data, timestamp } = JSON.parse(cached)
+    const now = Date.now()
+
+    // Cache hala geçerli mi?
+    if (now - timestamp < CACHE_TTL) {
+      return data
+    }
+
+    // Cache expired, arka planda güncelle ama eski veriyi döndür (stale-while-revalidate)
+    return { ...data, _stale: true }
+  } catch (error) {
+    return null
+  }
+}
+
+/**
+ * PERFORMANS: Ayarları localStorage'a cache'le
+ * @param {string} userId - Kullanıcı ID
+ * @param {Object} settings - Ayarlar
+ */
+const setCachedSettings = (userId, settings) => {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return
+
+    const cacheKey = `${CACHE_PREFIX}${userId}`
+    localStorage.setItem(cacheKey, JSON.stringify({
+      data: settings,
+      timestamp: Date.now()
+    }))
+  } catch (error) {
+    // localStorage full veya disabled - sessizce devam et
+  }
+}
+
+/**
+ * PERFORMANS: Cache'i temizle (logout veya ayar değişikliğinde)
+ * @param {string} userId - Kullanıcı ID (opsiyonel, verilmezse tüm cache temizlenir)
+ */
+export const clearSettingsCache = (userId = null) => {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return
+
+    if (userId) {
+      localStorage.removeItem(`${CACHE_PREFIX}${userId}`)
+    } else {
+      // Tüm settings cache'ini temizle
+      Object.keys(localStorage)
+        .filter(key => key.startsWith(CACHE_PREFIX))
+        .forEach(key => localStorage.removeItem(key))
+    }
+  } catch (error) {
+    // Sessizce devam et
+  }
+}
+
+/**
+ * MongoDB'den kullanıcı ayarlarını yükle (localStorage cache ile)
  * @param {string} userId - Kullanıcı ID
  * @returns {Promise<Object>} Kullanıcı ayarları
  */
 export const loadUserSettingsFromMongo = async (userId) => {
   try {
-    // Backend API'den çek
-    const response = await fetch(`${MONGO_API_URL}/api/user-settings/${userId}`, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      }
-    })
-
-    if (response.ok) {
-      const result = await response.json()
-      
-      if (result.success && result.data) {
-        const settings = result.data
-        
-        // Timestamp'leri düzelt (MongoDB'de number olabilir)
-        const normalizedSettings = { ...settings }
-        if (normalizedSettings.createdAt && typeof normalizedSettings.createdAt === 'number') {
-          normalizedSettings.createdAt = new Date(normalizedSettings.createdAt).toISOString()
-        }
-        if (normalizedSettings.updatedAt && typeof normalizedSettings.updatedAt === 'number') {
-          normalizedSettings.updatedAt = new Date(normalizedSettings.updatedAt).toISOString()
-        }
-        
-        return {
-          success: true,
-          exists: true,
-          source: 'mongodb',
-          settings: normalizedSettings
-        }
-      }
-    } else if (response.status === 404) {
+    // PERFORMANS: Önce cache'e bak (anında dönüş)
+    const cached = getCachedSettings(userId)
+    if (cached && !cached._stale) {
       return {
         success: true,
-        exists: false,
-        source: 'mongodb',
-        settings: null
+        exists: true,
+        source: 'cache',
+        settings: cached
       }
-    } else {
-      const errorText = await response.text()
-      throw new Error(`Backend API error: ${response.status} - ${errorText}`)
     }
-    
+
+    // Cache stale ise arka planda güncelle, stale veriyi hemen döndür
+    if (cached && cached._stale) {
+      delete cached._stale
+      // Arka planda MongoDB'den güncelle (await etme - non-blocking)
+      fetchAndCacheFromMongo(userId).catch(() => { })
+      return {
+        success: true,
+        exists: true,
+        source: 'stale-cache',
+        settings: cached
+      }
+    }
+
+    // Cache yok, MongoDB'den çek
+    return await fetchAndCacheFromMongo(userId)
+
   } catch (error) {
     console.error('❌ [MongoDB] Error loading user settings:', error.message)
-    console.error('❌ [MongoDB] Backend API URL:', MONGO_API_URL)
-    
     return {
       success: false,
       exists: false,
@@ -77,6 +132,64 @@ export const loadUserSettingsFromMongo = async (userId) => {
       error: error.message,
       settings: null
     }
+  }
+}
+
+/**
+ * MongoDB'den çek ve cache'le
+ * @param {string} userId - Kullanıcı ID
+ */
+const fetchAndCacheFromMongo = async (userId) => {
+  const response = await fetch(`${MONGO_API_URL}/api/user-settings/${userId}`, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    }
+  })
+
+  if (response.ok) {
+    const result = await response.json()
+
+    if (result.success && result.data) {
+      const settings = result.data
+
+      // Timestamp'leri düzelt (MongoDB'de number olabilir)
+      const normalizedSettings = { ...settings }
+      if (normalizedSettings.createdAt && typeof normalizedSettings.createdAt === 'number') {
+        normalizedSettings.createdAt = new Date(normalizedSettings.createdAt).toISOString()
+      }
+      if (normalizedSettings.updatedAt && typeof normalizedSettings.updatedAt === 'number') {
+        normalizedSettings.updatedAt = new Date(normalizedSettings.updatedAt).toISOString()
+      }
+
+      // PERFORMANS: Cache'e kaydet
+      setCachedSettings(userId, normalizedSettings)
+
+      return {
+        success: true,
+        exists: true,
+        source: 'mongodb',
+        settings: normalizedSettings
+      }
+    }
+  } else if (response.status === 404) {
+    return {
+      success: true,
+      exists: false,
+      source: 'mongodb',
+      settings: null
+    }
+  } else {
+    const errorText = await response.text()
+    throw new Error(`Backend API error: ${response.status} - ${errorText}`)
+  }
+
+  return {
+    success: true,
+    exists: false,
+    source: 'mongodb',
+    settings: null
   }
 }
 
@@ -115,11 +228,11 @@ export const saveUserSettingsToMongo = async (userId, settings) => {
 
     const errorText = await response.text()
     throw new Error(`Backend API error: ${response.status} - ${errorText}`)
-    
+
   } catch (error) {
     console.error('❌ [MongoDB] Save error:', error.message)
     console.error('❌ [MongoDB] Backend API URL:', MONGO_API_URL)
-    
+
     return {
       success: false,
       source: 'mongodb',
@@ -142,7 +255,7 @@ export const loadUserSettings = async (userId) => {
     logger.log('ℹ️ [mongoUserSettings] No user settings found in MongoDB (this is normal for new users)')
     return mongoResult
   }
-  
+
   // Hata durumu
   if (mongoResult.error) {
     console.error('❌ [mongoUserSettings] Error loading from MongoDB:', mongoResult.error)
@@ -164,7 +277,12 @@ export const loadUserSettings = async (userId) => {
 export const saveUserSettings = async (userId, settings) => {
   // MongoDB'ye kaydet (sadece MongoDB kullanılıyor)
   const mongoResult = await saveUserSettingsToMongo(userId, settings)
-  
+
+  // PERFORMANS: Başarılı kayıtta cache'i güncelle
+  if (mongoResult.success) {
+    setCachedSettings(userId, { ...settings, updatedAt: Date.now() })
+  }
+
   // Sonucu döndür
   return mongoResult
 }
@@ -185,7 +303,7 @@ export const resetUserSettings = async (userId) => {
     adminEncrypted: null, // Admin durumu korunur (client-side'da kontrol edilir)
     updatedAt: Date.now()
   }
-  
+
   return await saveUserSettings(userId, defaultSettings)
 }
 

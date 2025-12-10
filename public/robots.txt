@@ -1,0 +1,8 @@
+# Kriptotek - Robots.txt
+# https://kriptotek.com
+
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://kriptotek.com/sitemap.xml

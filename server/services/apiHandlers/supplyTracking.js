@@ -1,17 +1,3 @@
-/**
- * Supply Tracking Handler
- * Her 5 dakikada bir tüm coin'lerin circulating_supply değerlerini snapshot olarak kaydeder
- * 24 saat, 7 gün, 1 ay öncesindeki en eski ve en yeni snapshot'ları bulur
- * Değişimleri hesaplar ve MongoDB'ye kaydeder
- */
-
-/**
- * Supply tracking verilerini güncelle
- * 1. Crypto listesinden circulating_supply değerlerini al
- * 2. Snapshot olarak kaydet
- * 3. 24h/7d/1m değişimlerini hesapla
- * 4. MongoDB'ye kaydet
- */
 export async function updateSupplyTracking(db) {
   try {
     if (!db) {
@@ -54,7 +40,6 @@ export async function updateSupplyTracking(db) {
 
     // 4. Snapshot'ı MongoDB'ye kaydet
     const supplyCount = Object.keys(snapshot.supplies).length
-    console.log(`📸 Snapshot kaydediliyor: ${snapshotKey}, ${supplyCount} coin supply verisi`)
 
     const saveResult = await supplyHistoryCollection.updateOne(
       { _id: snapshotKey },
@@ -62,7 +47,6 @@ export async function updateSupplyTracking(db) {
       { upsert: true, maxTimeMS: 30000 } // 30 saniye timeout
     )
 
-    console.log(`✅ Snapshot kaydedildi: ${snapshotKey}, upserted: ${saveResult.upsertedCount > 0}, modified: ${saveResult.modifiedCount > 0}`)
 
     // 5. Eski snapshot'ları temizle (30 günden eski)
     // NOT: Eski snapshot'larda timestamp Date objesi olabilir, yenilerde Number
@@ -77,10 +61,6 @@ export async function updateSupplyTracking(db) {
       },
       { maxTimeMS: 30000 } // 30 saniye timeout
     )
-    if (deleteResult.deletedCount > 0) {
-      console.log(`🗑️ ${deleteResult.deletedCount} eski supply snapshot silindi (30 günden eski)`)
-    }
-
     // 6. Değişimleri hesapla (24h, 7d, 1m)
     const supplyChanges = await calculateSupplyChanges(supplyHistoryCollection, now)
 
@@ -98,7 +78,6 @@ export async function updateSupplyTracking(db) {
     )
 
     const timeStr = now.toLocaleTimeString('tr-TR')
-    console.log(`✅ [${timeStr}] Supply tracking verisi güncellendi (${Object.keys(supplyChanges).length} coin)`)
 
     return true
   } catch (error) {
@@ -135,9 +114,6 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
     .limit(1000) // Maksimum 1000 snapshot
     .toArray()
 
-  console.log(`📊 MongoDB'den ${allSnapshotsRaw.length} raw snapshot çekildi`)
-
-  // Timestamp'i normalize et ve 30 günden eski olanları filtrele
   const allSnapshots = []
   const updatesToApply = [] // Batch update için
 

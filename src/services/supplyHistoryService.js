@@ -30,27 +30,26 @@ class SupplyHistoryService {
         return []
       }
 
-      console.log(`\n🔍 [Supply History Debug] ${coinId} için mevcut snapshot'lar veritabanından okunuyor (yeni veri çekilmiyor)...\n`)
 
       // MongoDB'den mevcut snapshot'ları oku (yeni veri çekme)
       const mongoApiUrl = BASE_URL
       const url = `${mongoApiUrl}/supply-history/all`
       console.log(`📡 [Supply History] Mevcut veriler için istek gönderiliyor (sadece okuma): ${url}`)
-      
+
       // Timeout controller ekle (70 saniye - backend 60 saniye timeout kullanıyor)
       const controller = new AbortController()
       const timeoutId = setTimeout(() => {
         controller.abort()
         console.error('❌ [Supply History] İstek timeout oldu (70 saniye)')
       }, 70000)
-      
+
       let response
       try {
         response = await fetch(url, {
           headers: { 'Accept': 'application/json' },
           signal: controller.signal
         })
-        
+
         clearTimeout(timeoutId)
       } catch (fetchError) {
         clearTimeout(timeoutId)
@@ -73,7 +72,7 @@ class SupplyHistoryService {
 
       const result = await response.json()
       console.log(`📊 [Supply History] Response alındı, ok: ${result.ok}, data length: ${result.data?.length || 0}`)
-      
+
       if (!result.ok || !result.data) {
         console.error(`❌ MongoDB API response hatası:`, result)
         throw new Error('MongoDB API response hatası')

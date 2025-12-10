@@ -764,7 +764,7 @@ class GlobalDataManager {
 
   // Tüm abonelere bildir (THROTTLED - performans için)
   notifySubscribers() {
-    // Throttle: 500ms içinde bir kez bildir (aşırı re-render'ları önle)
+    // Throttle: 100ms içinde bir kez bildir (aşırı re-render'ları önle)
     if (this._notifyTimeout) {
       // Zaten planlanmış bir bildirim var, tekrar planlama
       return
@@ -783,7 +783,7 @@ class GlobalDataManager {
           console.error('❌ Error notifying global subscriber:', error)
         }
       })
-    }, 500) // 500ms throttle (100ms'den artırıldı - performans için)
+    }, 100) // 100ms throttle
   }
 
   // Acil bildirim (throttle bypass) - sadece kritik durumlar için
@@ -822,7 +822,7 @@ class GlobalDataManager {
       id: coin.id,
       name: coin.name,
       symbol: coin.symbol,
-      image: coin.image || `https://assets.coingecko.com/coins/images/${coin.id}/large/${coin.id}.png`,
+      image: coin.image || `https://assets.coingecko.com/coins/images/${coin.id}/small/${coin.id}.png`,
       current_price: coin.current_price,
       price_change_percentage_24h: coin.price_change_percentage_24h
     })

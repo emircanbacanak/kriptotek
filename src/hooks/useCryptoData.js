@@ -58,18 +58,8 @@ const useCryptoData = () => {
           // Veri değişmedi, gereksiz güncelleme yapma
         }
       }
-      // isUpdating değişikliği varsa güncelle (gereksiz güncellemeyi önle)
-      const newIsUpdating = data.isUpdating || false
-      setIsUpdating(prev => prev !== newIsUpdating ? newIsUpdating : prev)
-
-      // lastUpdate sadece değiştiyse güncelle
-      if (data.lastCryptoUpdate) {
-        setLastUpdate(prev => {
-          const newTime = new Date(data.lastCryptoUpdate).getTime()
-          const prevTime = prev ? new Date(prev).getTime() : 0
-          return newTime !== prevTime ? data.lastCryptoUpdate : prev
-        })
-      }
+      setIsUpdating(data.isUpdating || false)
+      setLastUpdate(data.lastCryptoUpdate)
     })
 
     // Cleanup
