@@ -53,11 +53,16 @@ export async function updateSupplyTracking(db) {
     })
 
     // 4. Snapshot'ı MongoDB'ye kaydet
-    await supplyHistoryCollection.updateOne(
+    const supplyCount = Object.keys(snapshot.supplies).length
+    console.log(`📸 Snapshot kaydediliyor: ${snapshotKey}, ${supplyCount} coin supply verisi`)
+
+    const saveResult = await supplyHistoryCollection.updateOne(
       { _id: snapshotKey },
       { $set: snapshot },
       { upsert: true, maxTimeMS: 30000 } // 30 saniye timeout
     )
+
+    console.log(`✅ Snapshot kaydedildi: ${snapshotKey}, upserted: ${saveResult.upsertedCount > 0}, modified: ${saveResult.modifiedCount > 0}`)
 
     // 5. Eski snapshot'ları temizle (30 günden eski)
     const thirtyDaysAgo = now.getTime() - (30 * 24 * 60 * 60 * 1000)
@@ -122,6 +127,8 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
     .sort({ _id: 1 }) // _id'ye göre sırala (YYYY-MM-DD-HHMM formatı)
     .limit(1000) // Maksimum 1000 snapshot (30 gün için yeterli - her 5 dakikada bir = ~8640 snapshot, ama limit koyuyoruz)
     .toArray()
+
+  console.log(`📊 MongoDB'den ${allSnapshotsRaw.length} raw snapshot çekildi`)
 
   // Timestamp'i normalize et ve 30 günden eski olanları filtrele
   const allSnapshots = []
