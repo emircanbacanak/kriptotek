@@ -4,9 +4,9 @@ import { useCurrency } from '../contexts/CurrencyContext'
 import { useTheme } from '../contexts/ThemeContext'
 import multiExchangeWhaleService from '../services/multiExchangeWhaleService'
 import { formatCurrency, formatLargeNumber } from '../utils/currencyConverter'
-import { 
-  Waves, 
-  Search, 
+import {
+  Waves,
+  Search,
   RefreshCw,
   Activity,
   TrendingUp,
@@ -21,7 +21,7 @@ const WhaleTracking = () => {
   const { t, language } = useLanguage()
   const { currency } = useCurrency()
   const { isDark } = useTheme()
-  
+
   const [whaleTrades, setWhaleTrades] = useState([])
   const [loading, setLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -30,9 +30,13 @@ const WhaleTracking = () => {
   const [inputValue, setInputValue] = useState('200000') // Input için ayrı state
   const [minValueError, setMinValueError] = useState('') // Minimum değer hatası
   const [saveSuccess, setSaveSuccess] = useState(false) // Kaydetme başarı durumu
-  
+
   const whaleUnsubscribeRef = useRef(null)
   const wsRef = useRef(null)
+
+  // PERFORMANS: Batch update için ref'ler
+  const pendingTradesRef = useRef([]) // Bekleyen trade'ler
+  const batchUpdateTimerRef = useRef(null) // Batch update timer
   const getApiUrl = () => {
     if (import.meta.env.VITE_MONGO_API_URL) return import.meta.env.VITE_MONGO_API_URL
     if (import.meta.env.VITE_API_ENDPOINT) return import.meta.env.VITE_API_ENDPOINT
@@ -41,7 +45,7 @@ const WhaleTracking = () => {
     }
     return 'http://localhost:3000'
   }
-  
+
   const getWebSocketUrl = () => {
     const apiUrl = getApiUrl()
     // WebSocket URL'i oluştur
@@ -63,10 +67,10 @@ const WhaleTracking = () => {
       setLoading(true)
       const apiUrl = getApiUrl()
       logger.log(`🔍 Cache'den trade'ler yükleniyor: ${apiUrl}/api/whale/recent-trades`)
-      
+
       // 24 saat öncesini hesapla
       const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000)
-      
+
       const response = await fetch(`${apiUrl}/api/whale/recent-trades?minValue=${minValue}`, {
         headers: { 'Accept': 'application/json' },
         signal: AbortSignal.timeout(10000)
@@ -75,7 +79,7 @@ const WhaleTracking = () => {
       if (response.ok) {
         const result = await response.json()
         logger.log('📦 Cache response:', result)
-        
+
         if (result.success && result.trades) {
           // Cache'den gelen trade'leri ekle ve timestamp'leri Date objesine çevir
           // Backend zaten 24 saatlik filtreleme yapıyor, ama ekstra güvenlik için frontend'de de filtrele
@@ -94,7 +98,7 @@ const WhaleTracking = () => {
               const tradeTime = trade.timestamp ? new Date(trade.timestamp).getTime() : 0
               return tradeTime >= twentyFourHoursAgo
             })
-          
+
           if (cachedTrades.length > 0) {
             setWhaleTrades(cachedTrades)
             logger.log(`✅ Cache'den ${cachedTrades.length} trade yüklendi (son 24 saat)`)
@@ -115,17 +119,72 @@ const WhaleTracking = () => {
     }
   }, [minValue])
 
+  // PERFORMANS: Bekleyen trade'leri batch olarak işle (500ms'de bir)
+  const flushPendingTrades = useCallback(() => {
+    if (pendingTradesRef.current.length === 0) return
+
+    const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000)
+    const newTrades = [...pendingTradesRef.current]
+    pendingTradesRef.current = [] // Temizle
+
+    setWhaleTrades(prev => {
+      // Mevcut trade ID'lerini al (hızlı lookup için Set kullan)
+      const existingIds = new Set(prev.map(t => `${t.id}-${t.source}-${t.timestamp?.getTime?.() || t.timestamp}`))
+
+      // Sadece yeni trade'leri filtrele
+      const uniqueNewTrades = newTrades.filter(trade => {
+        const tradeKey = `${trade.id}-${trade.source}-${trade.timestamp?.getTime?.() || new Date(trade.timestamp).getTime()}`
+        return !existingIds.has(tradeKey)
+      })
+
+      if (uniqueNewTrades.length === 0) return prev
+
+      // Yeni trade'leri ekle ve filtrele
+      const allTrades = [...uniqueNewTrades, ...prev]
+      const recentTrades = allTrades
+        .filter(t => {
+          const tradeTime = t.timestamp ? new Date(t.timestamp).getTime() : 0
+          return tradeTime >= twentyFourHoursAgo
+        })
+        .slice(0, 200)
+
+      // Backend'e kaydet (batch olarak)
+      if (uniqueNewTrades.length > 0) {
+        saveTradesToBackend(uniqueNewTrades)
+      }
+
+      return recentTrades
+    })
+  }, [saveTradesToBackend])
+
+  // PERFORMANS: Trade'i batch'e ekle (hemen state güncellemez)
+  const addTradeToBatch = useCallback((trade) => {
+    const tradeTimestamp = trade.timestamp instanceof Date ? trade.timestamp : new Date(trade.timestamp)
+    pendingTradesRef.current.push({
+      ...trade,
+      timestamp: tradeTimestamp
+    })
+
+    // Timer yoksa başlat (500ms sonra flush)
+    if (!batchUpdateTimerRef.current) {
+      batchUpdateTimerRef.current = setTimeout(() => {
+        batchUpdateTimerRef.current = null
+        flushPendingTrades()
+      }, 500)
+    }
+  }, [flushPendingTrades])
+
   // Trade'leri backend'e kaydet
   const saveTradesToBackend = useCallback(async (trades) => {
     if (!trades || trades.length === 0) return
-    
+
     try {
       // Trade'leri serialize et (Date objelerini timestamp'e çevir)
       const serializedTrades = trades.map(trade => ({
         ...trade,
         timestamp: trade.timestamp instanceof Date ? trade.timestamp.getTime() : trade.timestamp
       }))
-      
+
       const response = await fetch(`${getApiUrl()}/api/whale/trades`, {
         method: 'POST',
         headers: {
@@ -134,7 +193,7 @@ const WhaleTracking = () => {
         },
         body: JSON.stringify({ trades: serializedTrades })
       })
-      
+
       if (response.ok) {
         logger.log(`✅ ${trades.length} trade backend'e kaydedildi`)
       } else {
@@ -149,119 +208,70 @@ const WhaleTracking = () => {
   const startPeriodicTracking = useCallback(() => {
     // Minimum değeri ayarla
     multiExchangeWhaleService.setMinTradeValue(minValue)
-    
-    // 24 saat öncesini hesapla
-    const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000)
-    
-    // Trade handler - yeni trade'leri ekle ve eski trade'leri temizle
+
+    // PERFORMANS: Trade handler - batch update kullan
     const handleTrade = (trade) => {
-      setWhaleTrades(prev => {
-        const exists = prev.find(t => 
-          t.id === trade.id && 
-          t.source === trade.source &&
-          t.timestamp?.getTime() === (trade.timestamp instanceof Date ? trade.timestamp.getTime() : new Date(trade.timestamp).getTime())
-        )
-        if (exists) return prev
-        
-        const tradeTimestamp = trade.timestamp instanceof Date ? trade.timestamp : new Date(trade.timestamp)
-        const newTrade = {
-          ...trade,
-          timestamp: tradeTimestamp
-        }
-        
-        // Yeni trade'i ekle ve 24 saat içindeki trade'leri tut
-        const allTrades = [newTrade, ...prev]
-        const recentTrades = allTrades.filter(t => {
-          const tradeTime = t.timestamp ? new Date(t.timestamp).getTime() : 0
-          return tradeTime >= twentyFourHoursAgo
-        }).slice(0, 200) // Son 200 trade'i tut
-        
-        // Her yeni trade'i backend'e kaydet
-        saveTradesToBackend([newTrade])
-        
-        return recentTrades
-      })
+      addTradeToBatch(trade)
     }
-    
+
     // Periyodik tracking'i başlat
     if (!multiExchangeWhaleService.isConnected && !whaleUnsubscribeRef.current) {
       multiExchangeWhaleService.start()
       whaleUnsubscribeRef.current = multiExchangeWhaleService.subscribe(handleTrade)
     }
-  }, [minValue, saveTradesToBackend])
+  }, [minValue, addTradeToBatch])
 
   // WebSocket bağlantısı - gerçek zamanlı trade güncellemeleri için
   useEffect(() => {
     const wsUrl = getWebSocketUrl()
     logger.log(`🔌 WebSocket bağlantısı kuruluyor: ${wsUrl}`)
-    
+
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
-    
+
     ws.onopen = () => {
       logger.log('✅ WebSocket bağlantısı kuruldu (whale trades için)')
     }
-    
+
     ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data)
-        
+
         // Whale trade mesajı kontrolü
         if (message.type === 'whale_trade' && message.trade) {
           const trade = message.trade
           const tradeTimestamp = trade.timestamp ? new Date(trade.timestamp) : new Date()
-          
+
           // Minimum değer kontrolü
           const tradeValue = trade.tradeValue || (trade.price * trade.quantity || 0)
           if (tradeValue < minValue) {
             return // Minimum değerin altındaysa ekleme
           }
-          
+
           // 24 saat kontrolü
           const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000)
           const tradeTime = tradeTimestamp.getTime()
           if (tradeTime < twentyFourHoursAgo) {
             return // 24 saatten eskiyse ekleme
           }
-          
-          // Yeni trade'i ekle
-          setWhaleTrades(prev => {
-            // Duplicate kontrolü
-            const exists = prev.find(t => 
-              t.id === trade.id && 
-              t.source === trade.source &&
-              t.timestamp?.getTime() === tradeTime
-            )
-            if (exists) return prev
-            
-            const newTrade = {
-              ...trade,
-              timestamp: tradeTimestamp,
-              source: trade.source || 'unknown',
-              type: trade.type || (trade.isBuyerMaker === false ? 'buy' : 'sell')
-            }
-            
-            // Yeni trade'i başa ekle ve 24 saat içindeki trade'leri tut
-            const allTrades = [newTrade, ...prev]
-            const recentTrades = allTrades.filter(t => {
-              const tTime = t.timestamp ? new Date(t.timestamp).getTime() : 0
-              return tTime >= twentyFourHoursAgo
-            }).slice(0, 200) // Son 200 trade'i tut
-            
-            logger.log(`🆕 Yeni whale trade eklendi: ${newTrade.symbol} - $${newTrade.tradeValue.toLocaleString()}`)
-            
-            return recentTrades
+
+          // PERFORMANS: Batch update kullan (direkt state güncelleme yerine)
+          addTradeToBatch({
+            ...trade,
+            timestamp: tradeTimestamp,
+            source: trade.source || 'unknown',
+            type: trade.type || (trade.isBuyerMaker === false ? 'buy' : 'sell')
           })
         }
       } catch (error) {
         logger.warn('WebSocket mesaj parse hatası:', error)
       }
     }
-    
+
     ws.onerror = (error) => {
       logger.warn('WebSocket hatası:', error)
     }
-    
+
     ws.onclose = () => {
       logger.log('📡 WebSocket bağlantısı kapatıldı, yeniden bağlanılıyor...')
       // Yeniden bağlanmayı dene (5 saniye sonra)
@@ -271,7 +281,7 @@ const WhaleTracking = () => {
         }
       }, 5000)
     }
-    
+
     return () => {
       if (wsRef.current) {
         wsRef.current.close()
@@ -279,14 +289,14 @@ const WhaleTracking = () => {
       }
     }
   }, []) // Sadece mount/unmount'ta bağlan/kapat
-  
+
   // İlk yükleme
   useEffect(() => {
     let isActive = true
-    
+
     // Cache'den veri yükle
     loadCachedData()
-    
+
     // Periyodik tracking'i başlat (kısa gecikme ile React Strict Mode için)
     const connectTimer = setTimeout(() => {
       if (isActive) {
@@ -297,13 +307,19 @@ const WhaleTracking = () => {
     return () => {
       isActive = false
       clearTimeout(connectTimer)
-      
+
+      // PERFORMANS: Batch timer'ı temizle
+      if (batchUpdateTimerRef.current) {
+        clearTimeout(batchUpdateTimerRef.current)
+        batchUpdateTimerRef.current = null
+      }
+
       // Cleanup - unsubscribe'ları temizle
       if (whaleUnsubscribeRef.current) {
         whaleUnsubscribeRef.current()
         whaleUnsubscribeRef.current = null
       }
-      
+
       // Disconnect'i geciktir - React Strict Mode double mount için
       const disconnectTimer = setTimeout(() => {
         // Sadece gerçekten unmount olduysa disconnect et
@@ -311,7 +327,7 @@ const WhaleTracking = () => {
           multiExchangeWhaleService.stop()
         }
       }, 500)
-      
+
       return () => {
         clearTimeout(disconnectTimer)
       }
@@ -329,21 +345,21 @@ const WhaleTracking = () => {
   useEffect(() => {
     const cleanupInterval = setInterval(() => {
       const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000)
-      
+
       setWhaleTrades(prev => {
         const recentTrades = prev.filter(trade => {
           const tradeTime = trade.timestamp ? new Date(trade.timestamp).getTime() : 0
           return tradeTime >= twentyFourHoursAgo
         })
-        
+
         if (recentTrades.length !== prev.length) {
           logger.log(`🧹 ${prev.length - recentTrades.length} eski whale trade temizlendi (24 saatten eski)`)
         }
-        
+
         return recentTrades
       })
     }, 5 * 60 * 1000) // Her 5 dakikada bir temizle
-    
+
     return () => clearInterval(cleanupInterval)
   }, [])
 
@@ -351,7 +367,7 @@ const WhaleTracking = () => {
   const filteredTrades = useMemo(() => {
     // 24 saat öncesini hesapla
     const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000)
-    
+
     // Önce 24 saat içindeki trade'leri filtrele
     let filtered = whaleTrades.filter(trade => {
       const tradeTime = trade.timestamp ? new Date(trade.timestamp).getTime() : 0
@@ -361,7 +377,7 @@ const WhaleTracking = () => {
     // Arama filtresi
     if (searchTerm.trim()) {
       const searchLower = searchTerm.toLowerCase()
-      filtered = filtered.filter(trade => 
+      filtered = filtered.filter(trade =>
         trade.symbol?.toLowerCase().includes(searchLower)
       )
     }
@@ -495,7 +511,7 @@ const WhaleTracking = () => {
                     const value = e.target.value.replace(/[^0-9]/g, '') // Sadece rakam
                     setInputValue(value)
                     setSaveSuccess(false) // Başarı mesajını temizle
-                    
+
                     // Minimum değer kontrolü
                     const numValue = parseFloat(value) || 0
                     if (value && numValue < 200000) {
@@ -511,9 +527,8 @@ const WhaleTracking = () => {
                       setMinValueError('')
                     }
                   }}
-                  className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 md:py-3 bg-white/50 dark:bg-gray-800/50 border ${
-                    minValueError ? 'border-red-300 dark:border-red-700' : 'border-gray-200 dark:border-gray-700'
-                  } rounded-lg sm:rounded-xl text-sm sm:text-base text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-all duration-200 placeholder-gray-400`}
+                  className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 md:py-3 bg-white/50 dark:bg-gray-800/50 border ${minValueError ? 'border-red-300 dark:border-red-700' : 'border-gray-200 dark:border-gray-700'
+                    } rounded-lg sm:rounded-xl text-sm sm:text-base text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-all duration-200 placeholder-gray-400`}
                   placeholder="200000"
                 />
                 {minValueError && (
@@ -596,7 +611,7 @@ const WhaleTracking = () => {
           ) : filteredTrades.length > 0 ? (
             <div className="space-y-2 max-h-[600px] sm:max-h-[700px] overflow-y-auto crypto-list-scrollbar">
               {filteredTrades.map((trade, index) => (
-                <div 
+                <div
                   key={trade.id || index}
                   className="group/trade relative animate-fade-in transform transition-all duration-300 hover:-translate-y-0.5"
                   style={{ animationDelay: `${index * 30}ms` }}
@@ -609,21 +624,20 @@ const WhaleTracking = () => {
                       <div className={`w-3 h-3 rounded-full flex-shrink-0 shadow-sm ${trade.type === 'buy' ? 'bg-green-500 dark:bg-green-400' : 'bg-red-500 dark:bg-red-400'} animate-pulse`}></div>
                       <span className="font-bold text-sm sm:text-base md:text-lg text-gray-900 dark:text-white truncate">{trade.symbol}</span>
                       <span className="text-xs px-2 py-0.5 sm:py-1 bg-gradient-to-r from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30 text-blue-700 dark:text-blue-400 rounded-lg border border-blue-200 dark:border-blue-800 font-semibold shadow-sm flex-shrink-0">
-                        {trade.source === 'binance' || trade.source === 'binance_realtime' ? 'BN' : 
-                         trade.source === 'kucoin' || trade.source === 'kucoin_realtime' ? 'KC' : 
-                         trade.source === 'bybit' || trade.source === 'bybit_realtime' ? 'BY' : 
-                         trade.source === 'okx' || trade.source === 'okx_realtime' ? 'OK' : 
-                         trade.source === 'bitget' || trade.source === 'bitget_realtime' ? 'BG' : 
-                         trade.source === 'gateio' || trade.source === 'gateio_realtime' ? 'GT' : 
-                         trade.source === 'htx' || trade.source === 'htx_realtime' ? 'HT' : 
-                         trade.source === 'mexc' || trade.source === 'mexc_realtime' ? 'MX' : '?'}
+                        {trade.source === 'binance' || trade.source === 'binance_realtime' ? 'BN' :
+                          trade.source === 'kucoin' || trade.source === 'kucoin_realtime' ? 'KC' :
+                            trade.source === 'bybit' || trade.source === 'bybit_realtime' ? 'BY' :
+                              trade.source === 'okx' || trade.source === 'okx_realtime' ? 'OK' :
+                                trade.source === 'bitget' || trade.source === 'bitget_realtime' ? 'BG' :
+                                  trade.source === 'gateio' || trade.source === 'gateio_realtime' ? 'GT' :
+                                    trade.source === 'htx' || trade.source === 'htx_realtime' ? 'HT' :
+                                      trade.source === 'mexc' || trade.source === 'mexc_realtime' ? 'MX' : '?'}
                       </span>
                       {/* Mobilde type badge */}
-                      <div className={`sm:hidden px-2 py-0.5 rounded-lg border font-semibold flex items-center gap-1 text-xs transition-all duration-300 ${
-                        trade.type === 'buy'
-                          ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800' 
-                          : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800'
-                      }`}>
+                      <div className={`sm:hidden px-2 py-0.5 rounded-lg border font-semibold flex items-center gap-1 text-xs transition-all duration-300 ${trade.type === 'buy'
+                        ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800'
+                        : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800'
+                        }`}>
                         {trade.type === 'buy' ? (
                           <TrendingUp className="w-3 h-3" />
                         ) : (
@@ -632,7 +646,7 @@ const WhaleTracking = () => {
                         <span>{trade.type === 'buy' ? '↑' : '↓'}</span>
                       </div>
                     </div>
-                    
+
                     {/* Orta satır - Quantity ve Price (mobilde) */}
                     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 sm:flex-1 sm:min-w-0">
                       <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 sm:hidden">
@@ -645,15 +659,14 @@ const WhaleTracking = () => {
                         = {formatCurrency(trade.tradeValue, currency)}
                       </span>
                     </div>
-                    
+
                     {/* Alt satır - Type ve Tarih (mobilde) */}
                     <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3">
                       {/* Desktop'ta type badge */}
-                      <div className={`hidden sm:flex px-2 sm:px-3 py-1 rounded-lg border font-semibold items-center gap-1.5 text-xs sm:text-sm transition-all duration-300 ${
-                        trade.type === 'buy'
-                          ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800' 
-                          : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800'
-                      }`}>
+                      <div className={`hidden sm:flex px-2 sm:px-3 py-1 rounded-lg border font-semibold items-center gap-1.5 text-xs sm:text-sm transition-all duration-300 ${trade.type === 'buy'
+                        ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800'
+                        : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800'
+                        }`}>
                         {trade.type === 'buy' ? (
                           <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4" />
                         ) : (
@@ -663,20 +676,20 @@ const WhaleTracking = () => {
                       </div>
                       <span className="text-[10px] sm:text-xs md:text-sm text-gray-500 dark:text-gray-400 font-mono px-1.5 sm:px-2 py-0.5 sm:py-1 bg-gray-100 dark:bg-gray-700/50 rounded-lg whitespace-nowrap">
                         <span className="hidden sm:inline">
-                          {trade.timestamp.toLocaleString('tr-TR', { 
+                          {trade.timestamp.toLocaleString('tr-TR', {
                             year: 'numeric',
                             month: '2-digit',
                             day: '2-digit',
-                            hour: '2-digit', 
-                            minute: '2-digit', 
+                            hour: '2-digit',
+                            minute: '2-digit',
                             second: '2-digit'
                           })}
                         </span>
                         <span className="sm:hidden">
-                          {trade.timestamp.toLocaleString('tr-TR', { 
+                          {trade.timestamp.toLocaleString('tr-TR', {
                             month: '2-digit',
                             day: '2-digit',
-                            hour: '2-digit', 
+                            hour: '2-digit',
                             minute: '2-digit'
                           })}
                         </span>

@@ -762,24 +762,45 @@ class GlobalDataManager {
     }
   }
 
-  // Tüm abonelere bildir
+  // Tüm abonelere bildir (THROTTLED - performans için)
   notifySubscribers() {
-    // KRİTİK: getData() her çağrıldığında güncel veriyi döndürmeli
-    // Bu yüzden getData()'yı her callback için ayrı ayrı çağırmalıyız
-    // Böylece her callback en güncel veriyi alır
+    // Throttle: 100ms içinde bir kez bildir (aşırı re-render'ları önle)
+    if (this._notifyTimeout) {
+      // Zaten planlanmış bir bildirim var, tekrar planlama
+      return
+    }
 
+    this._notifyTimeout = setTimeout(() => {
+      this._notifyTimeout = null
+
+      // getData() bir kez çağır, tüm subscriber'lara aynı veriyi gönder
+      const data = this.getData()
+
+      this.subscribers.forEach(callback => {
+        try {
+          callback(data)
+        } catch (error) {
+          console.error('❌ Error notifying global subscriber:', error)
+        }
+      })
+    }, 100) // 100ms throttle
+  }
+
+  // Acil bildirim (throttle bypass) - sadece kritik durumlar için
+  notifySubscribersImmediate() {
+    if (this._notifyTimeout) {
+      clearTimeout(this._notifyTimeout)
+      this._notifyTimeout = null
+    }
+
+    const data = this.getData()
     this.subscribers.forEach(callback => {
       try {
-        // Her callback için güncel veriyi al (async güncellemeler için)
-        const data = this.getData()
         callback(data)
       } catch (error) {
         console.error('❌ Error notifying global subscriber:', error)
       }
     })
-
-    // NOT: saveToLocalStorage() artık sadece veri güncellendiğinde manuel olarak çağrılmalı
-    // notifySubscribers() içinde otomatik çağrılmıyor - gereksiz kayıtları önlemek için
   }
 
   // Top movers hesapla
