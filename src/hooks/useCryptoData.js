@@ -10,10 +10,10 @@ const useCryptoData = () => {
   const [loading, setLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
   const [lastUpdate, setLastUpdate] = useState(null)
-  
+
   // KRİTİK: Closure sorununu önlemek için useRef kullan
   const coinsRef = useRef([])
-  
+
   useEffect(() => {
     // Mevcut veriyi al - ANINDA (cache'den)
     const currentData = globalDataManager.getData()
@@ -27,7 +27,7 @@ const useCryptoData = () => {
       // Cache'de veri yoksa MongoDB'den çekilecek, loading true kalsın
       // loadMissingDataFromMongoDB() constructor'da çağrılıyor
     }
-    
+
     // Abone ol - veri geldiğinde ANINDA göster (cache veya MongoDB'den)
     const unsubscribe = globalDataManager.subscribe((data) => {
       // KRİTİK: Yeni veri geldiğinde her zaman güncelle (eski veriye dönme)
@@ -37,13 +37,13 @@ const useCryptoData = () => {
         // İlk coin'in ID'si ve fiyatını karşılaştır - useRef kullan (closure sorununu önle)
         const newFirstCoin = data.coins[0]
         const currentFirstCoin = coinsRef.current[0] // Ref'ten al (güncel değer)
-        
+
         // Eğer veri gerçekten değiştiyse güncelle
-        const dataChanged = !currentFirstCoin || 
-                           currentFirstCoin.id !== newFirstCoin.id || 
-                           currentFirstCoin.current_price !== newFirstCoin.current_price ||
-                           coinsRef.current.length !== data.coins.length
-        
+        const dataChanged = !currentFirstCoin ||
+          currentFirstCoin.id !== newFirstCoin.id ||
+          currentFirstCoin.current_price !== newFirstCoin.current_price ||
+          coinsRef.current.length !== data.coins.length
+
         if (dataChanged) {
           // KRİTİK: React state'i her zaman güncelle (yeni referans ile)
           // Array referansı değişmeli ki React güncellemeyi algılasın
@@ -58,8 +58,18 @@ const useCryptoData = () => {
           // Veri değişmedi, gereksiz güncelleme yapma
         }
       }
-      setIsUpdating(data.isUpdating || false)
-      setLastUpdate(data.lastCryptoUpdate)
+      // isUpdating değişikliği varsa güncelle (gereksiz güncellemeyi önle)
+      const newIsUpdating = data.isUpdating || false
+      setIsUpdating(prev => prev !== newIsUpdating ? newIsUpdating : prev)
+
+      // lastUpdate sadece değiştiyse güncelle
+      if (data.lastCryptoUpdate) {
+        setLastUpdate(prev => {
+          const newTime = new Date(data.lastCryptoUpdate).getTime()
+          const prevTime = prev ? new Date(prev).getTime() : 0
+          return newTime !== prevTime ? data.lastCryptoUpdate : prev
+        })
+      }
     })
 
     // Cleanup

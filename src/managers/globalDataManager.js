@@ -764,7 +764,7 @@ class GlobalDataManager {
 
   // Tüm abonelere bildir (THROTTLED - performans için)
   notifySubscribers() {
-    // Throttle: 100ms içinde bir kez bildir (aşırı re-render'ları önle)
+    // Throttle: 500ms içinde bir kez bildir (aşırı re-render'ları önle)
     if (this._notifyTimeout) {
       // Zaten planlanmış bir bildirim var, tekrar planlama
       return
@@ -783,7 +783,7 @@ class GlobalDataManager {
           console.error('❌ Error notifying global subscriber:', error)
         }
       })
-    }, 100) // 100ms throttle
+    }, 500) // 500ms throttle (100ms'den artırıldı - performans için)
   }
 
   // Acil bildirim (throttle bypass) - sadece kritik durumlar için

@@ -12,7 +12,7 @@ export default defineConfig({
     assetsDir: 'assets',
     sourcemap: false,
     minify: 'terser',
-    chunkSizeWarningLimit: 1200, // 1.2MB limit (react-vendor + chart kütüphaneleri büyük olduğu için)
+    chunkSizeWarningLimit: 1500, // 1.5MB limit (react-vendor + chart kütüphaneleri büyük olduğu için)
     terserOptions: {
       compress: {
         drop_console: true,
@@ -28,12 +28,10 @@ export default defineConfig({
             if (id.includes('firebase')) {
               return 'firebase-vendor'
             }
-            // Chart kütüphaneleri ayrı chunk
-            if (id.includes('apexcharts') || id.includes('recharts')) {
-              return 'charts-vendor'
-            }
-            // React core ayrı chunk
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+            // React core + Chart kütüphaneleri aynı chunk (React bağımlılık sorunu için)
+            // ApexCharts ve Recharts React'e bağımlı, aynı chunk'ta olmalı
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router') ||
+              id.includes('apexcharts') || id.includes('recharts')) {
               return 'react-vendor'
             }
             // Lucide icons ayrı chunk (büyük)

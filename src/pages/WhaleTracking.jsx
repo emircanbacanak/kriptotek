@@ -165,12 +165,12 @@ const WhaleTracking = () => {
       timestamp: tradeTimestamp
     })
 
-    // Timer yoksa başlat (500ms sonra flush)
+    // Timer yoksa başlat (1000ms sonra flush - performans için artırıldı)
     if (!batchUpdateTimerRef.current) {
       batchUpdateTimerRef.current = setTimeout(() => {
         batchUpdateTimerRef.current = null
         flushPendingTrades()
-      }, 500)
+      }, 1000) // 1000ms (500ms'den artırıldı - performans için)
     }
   }, [flushPendingTrades])
 

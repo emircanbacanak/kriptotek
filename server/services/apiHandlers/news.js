@@ -14,16 +14,16 @@ export function setWss(websocketServer) {
  */
 function parseRSSFeed(xml, source) {
   const newsItems = []
-  
+
   try {
     // Basit XML parsing (RSS format)
     const itemMatches = xml.match(/<item[^>]*>([\s\S]*?)<\/item>/gi)
-    
+
     if (!itemMatches) return newsItems
-    
+
     const now = new Date()
     const cutoff = new Date(now.getTime() - (48 * 60 * 60 * 1000)) // Son 48 saat
-    
+
     for (const itemXml of itemMatches) {
       try {
         const titleMatch = itemXml.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
@@ -31,9 +31,9 @@ function parseRSSFeed(xml, source) {
         const pubDateMatch = itemXml.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i)
         const descriptionMatch = itemXml.match(/<description[^>]*>([\s\S]*?)<\/description>/i)
         const contentEncodedMatch = itemXml.match(/<content:encoded[^>]*>([\s\S]*?)<\/content:encoded>/i)
-        
+
         if (!titleMatch || !linkMatch) continue
-        
+
         // HTML entity decode helper function
         const decodeHtmlEntities = (text) => {
           if (!text) return text
@@ -60,10 +60,10 @@ function parseRSSFeed(xml, source) {
             .replace(/&hellip;/g, '...')   // Horizontal ellipsis
             .replace(/&#8230;/g, '...')    // Horizontal ellipsis (numeric)
         }
-        
+
         let title = (titleMatch[1] || '').trim().replace(/<[^>]*>/g, '')
         title = decodeHtmlEntities(title)
-        
+
         const url = (linkMatch[1] || '').trim()
         const pubDateStr = pubDateMatch ? pubDateMatch[1].trim() : new Date().toISOString()
         const rawDescription = descriptionMatch ? (descriptionMatch[1] || '').trim() : ''
@@ -73,7 +73,7 @@ function parseRSSFeed(xml, source) {
 
         // Resim URL'i çıkar (client-side extractImageFromItem mantığına göre)
         let imageUrl = null
-        
+
         // 1. Enclosure tag (genellikle en güvenilir)
         const enclosureMatch = itemXml.match(/<enclosure[^>]+(?:url|link)=["']([^"']+)["'][^>]*(?:type=["']([^"']+)["'])?/i)
         if (enclosureMatch) {
@@ -83,7 +83,7 @@ function parseRSSFeed(xml, source) {
             imageUrl = enclosureUrl
           }
         }
-        
+
         // 2. Media namespace tags (media:content, media:thumbnail)
         if (!imageUrl) {
           const mediaContentMatch = itemXml.match(/<media:content[^>]+(?:url|href)=["']([^"']+)["'][^>]*>/i)
@@ -91,23 +91,23 @@ function parseRSSFeed(xml, source) {
             imageUrl = mediaContentMatch[1]
           }
         }
-        
+
         if (!imageUrl) {
           const mediaThumbnailMatch = itemXml.match(/<media:thumbnail[^>]+(?:url|href)=["']([^"']+)["'][^>]*>/i)
           if (mediaThumbnailMatch && mediaThumbnailMatch[1]) {
             imageUrl = mediaThumbnailMatch[1]
           }
         }
-        
+
         // 3. Image tag (direct)
         if (!imageUrl) {
-          const imageTagMatch = itemXml.match(/<image[^>]*>(?:.*?<(?:url|href)>([^<]+)<\/\1>|.*?)/i) || 
-                                 itemXml.match(/<image[^>]+(?:url|href)=["']([^"']+)["'][^>]*>/i)
+          const imageTagMatch = itemXml.match(/<image[^>]*>(?:.*?<(?:url|href)>([^<]+)<\/\1>|.*?)/i) ||
+            itemXml.match(/<image[^>]+(?:url|href)=["']([^"']+)["'][^>]*>/i)
           if (imageTagMatch && imageTagMatch[1]) {
             imageUrl = imageTagMatch[1].trim()
           }
         }
-        
+
         // 4. WordPress featured image (wp:attachment_url, wp:featured_image)
         if (!imageUrl) {
           const wpAttachmentMatch = itemXml.match(/<(?:wp:attachment_url|featured_image)[^>]*>([^<]+)<\/(?:wp:attachment_url|featured_image)>/i)
@@ -115,7 +115,7 @@ function parseRSSFeed(xml, source) {
             imageUrl = wpAttachmentMatch[1].trim()
           }
         }
-        
+
         // 5. content:encoded veya description içindeki HTML img tags (en detaylı)
         if (!imageUrl) {
           const html = contentEncoded || rawDescription
@@ -128,22 +128,22 @@ function parseRSSFeed(xml, source) {
               .replace(/&#39;/g, "'")
               .replace(/&quot;/g, '"')
               .replace(/&amp;/g, '&')
-            
+
             // Tüm img tag'lerini bul
             const allImgTags = decodedHtml.match(/<img[^>]*>/gi) || []
-            
+
             for (const imgTag of allImgTags) {
               // data-lazy-src, data-src (lazyload) - en yüksek öncelik
-              const lazySrcMatch = imgTag.match(/data-(?:lazy-)?src=["']([^"'>]+)["']/i) || 
-                                   imgTag.match(/data-(?:lazy-)?src=([^\s>]+)/i)
+              const lazySrcMatch = imgTag.match(/data-(?:lazy-)?src=["']([^"'>]+)["']/i) ||
+                imgTag.match(/data-(?:lazy-)?src=([^\s>]+)/i)
               if (lazySrcMatch) {
                 imageUrl = lazySrcMatch[1].replace(/["']/g, '').trim()
                 break
               }
-              
+
               // src attribute
-              const srcMatch = imgTag.match(/src=["']([^"'>]+)["']/i) || 
-                              imgTag.match(/src=([^\s>]+)/i)
+              const srcMatch = imgTag.match(/src=["']([^"'>]+)["']/i) ||
+                imgTag.match(/src=([^\s>]+)/i)
               if (srcMatch) {
                 imageUrl = srcMatch[1].replace(/["']/g, '').trim()
                 break
@@ -151,7 +151,7 @@ function parseRSSFeed(xml, source) {
             }
           }
         }
-        
+
         // URL normalize (kriptofoni.com için özel)
         if (imageUrl) {
           imageUrl = imageUrl.trim()
@@ -180,13 +180,13 @@ function parseRSSFeed(xml, source) {
             imageUrl = imageUrl.replace(/&$/, '')
           }
         }
-        
+
         // PubDate'i parse et
         let publishedAt = new Date(pubDateStr)
         if (isNaN(publishedAt.getTime())) {
           publishedAt = new Date()
         }
-        
+
         // CoinTelegraph için +3 saat ekleme KALDIRILDI
         // RSS feed'den gelen tarih zaten UTC formatında ve doğru
         // Örnek: "Thu, 28 Nov 2025 12:18:00 +0000" veya "2025-11-28T12:18:00.000Z"
@@ -200,10 +200,10 @@ function parseRSSFeed(xml, source) {
           const diffMinutes = Math.floor(diff / 60000)
           console.log(`🕐 CoinTelegraph (RSS) tarih (değiştirilmedi): ${originalTime}, şimdi: ${now.toISOString()}, fark: ${diffMinutes} dakika`)
         }
-              
+
         // Son 48 saat içindeki haberleri filtrele
         if (publishedAt < cutoff) continue
-        
+
         // URL'yi unique ID olarak kullan
         newsItems.push({
           id: url,
@@ -220,13 +220,13 @@ function parseRSSFeed(xml, source) {
         continue
       }
     }
-    
+
     // Tarihe göre sırala (en yeni önce)
     newsItems.sort((a, b) => b.publishedAt - a.publishedAt)
   } catch (error) {
     console.error('❌ RSS parse hatası:', error.message)
   }
-  
+
   return newsItems
 }
 
@@ -240,16 +240,16 @@ export async function updateNews() {
 
   try {
     console.log('📊 News güncelleniyor...')
-    
+
     // RSS feed'lerden haberleri çek (PARALEL - 3 kaynak aynı anda)
     const RSS_FEEDS = {
       kriptofoni: 'https://kriptofoni.com/feed/',
       cointelegraph: 'https://cointelegraph.com.tr/rss',
       bitcoinsistemi: 'https://www.bitcoinsistemi.com/feed/'
     }
-    
+
     const allNews = []
-    
+
     // 3 kaynaktan PARALEL çek
     const [kriptofoniResult, cointelegraphResult, bitcoinsistemiResult] = await Promise.allSettled([
       // Kriptofoni RSS feed'ini çek
@@ -272,7 +272,7 @@ export async function updateNews() {
           return []
         }
       })(),
-      
+
       // CoinTelegraph RSS feed'ini çek (+3 saat eklenecek)
       (async () => {
         try {
@@ -283,17 +283,17 @@ export async function updateNews() {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
           })
-          
+
           let news = []
-          
+
           if (response.ok) {
             try {
               const data = await response.json()
               const items = Array.isArray(data.items) ? data.items : []
-              
+
               const now = new Date()
               const cutoff = new Date(now.getTime() - (48 * 60 * 60 * 1000)) // Son 48 saat
-              
+
               news = items
                 .map(item => {
                   const title = item.title || ''
@@ -302,7 +302,7 @@ export async function updateNews() {
                   const description = descriptionRaw.replace(/<[^>]*>/g, '').substring(0, 500)
                   const pubDateRaw = item.pubDate || item.pubdate || ''
                   let pubDate = pubDateRaw ? new Date(pubDateRaw) : new Date()
-                  
+
                   // CoinTelegraph için +3 saat ekleme KALDIRILDI
                   // RSS feed'den gelen tarih zaten UTC formatında ve doğru
                   // Örnek: "Thu, 28 Nov 2025 12:18:00 +0000" veya "2025-11-28T12:18:00.000Z"
@@ -316,7 +316,7 @@ export async function updateNews() {
                     const diffMinutes = Math.floor(diff / 60000)
                     console.log(`🕐 CoinTelegraph tarih (değiştirilmedi): ${originalTime}, şimdi: ${now.toISOString()}, fark: ${diffMinutes} dakika`)
                   }
-                  
+
                   // Resim URL'i çıkar
                   let imageUrl = item.enclosure?.link || item.thumbnail || ''
                   if (!imageUrl && descriptionRaw) {
@@ -326,7 +326,7 @@ export async function updateNews() {
                   if (imageUrl && imageUrl.startsWith('//')) {
                     imageUrl = 'https:' + imageUrl
                   }
-                  
+
                   return {
                     id: url,
                     url: url,
@@ -340,7 +340,7 @@ export async function updateNews() {
                 })
                 .filter(item => item.publishedAt >= cutoff)
                 .sort((a, b) => b.publishedAt - a.publishedAt)
-              
+
               if (news.length > 0) {
                 console.log(`✅ ${news.length} CoinTelegraph haberi çekildi (rss2json)`)
                 return news
@@ -349,14 +349,14 @@ export async function updateNews() {
               console.warn('⚠️ rss2json parse hatası, direkt RSS deneniyor:', jsonError.message)
             }
           }
-          
+
           // rss2json başarısız olursa direkt RSS feed'i parse et
           response = await fetch('https://tr.cointelegraph.com/rss', {
             headers: {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
           })
-          
+
           if (response.ok) {
             const xml = await response.text()
             news = parseRSSFeed(xml, 'cointelegraph')
@@ -365,14 +365,14 @@ export async function updateNews() {
           } else {
             console.error(`❌ CoinTelegraph RSS hatası: HTTP ${response.status}`)
           }
-          
+
           return []
         } catch (err) {
           console.error('❌ CoinTelegraph RSS hatası:', err.message)
           return []
         }
       })(),
-      
+
       // Bitcoinsistemi RSS feed'ini çek
       (async () => {
         try {
@@ -394,7 +394,7 @@ export async function updateNews() {
         }
       })()
     ])
-    
+
     // Sonuçları topla
     if (kriptofoniResult.status === 'fulfilled') {
       allNews.push(...kriptofoniResult.value)
@@ -405,36 +405,27 @@ export async function updateNews() {
     if (bitcoinsistemiResult.status === 'fulfilled') {
       allNews.push(...bitcoinsistemiResult.value)
     }
-    
+
     // Tüm haberleri publishedAt'a göre sırala (en yeni önce)
     allNews.sort((a, b) => {
       const dateA = new Date(a.publishedAt).getTime()
       const dateB = new Date(b.publishedAt).getTime()
       return dateB - dateA // Azalan sıra (en yeni önce)
     })
-    
+
     // MongoDB'ye kaydet (URL'yi unique ID olarak kullan)
     if (allNews.length > 0) {
       let savedCount = 0
       let skippedCount = 0
-      
+
       for (const newsItem of allNews) {
         try {
           // publishedAt zaten doğru (CoinTelegraph için +3 saat eklenmiyor artık)
           // Diğer kaynaklar (kriptofoni, bitcoinsistemi) için değişiklik yok
-          let publishedAt = newsItem.publishedAt instanceof Date 
-            ? newsItem.publishedAt 
+          let publishedAt = newsItem.publishedAt instanceof Date
+            ? newsItem.publishedAt
             : new Date(newsItem.publishedAt)
-          
-          // CoinTelegraph için +3 saat ekleme KALDIRILDI
-          // RSS feed'den gelen tarih zaten UTC formatında ve doğru
-          // Kriptofoni ve Bitcoinsistemi için saat değişikliği YOK
-          
-          // CoinTelegraph için publishedAt'in doğru kaydedildiğinden emin ol
-          if (newsItem.source === 'cointelegraph') {
-            console.log(`🔍 CoinTelegraph kayıt öncesi - publishedAt: ${publishedAt.toISOString()}, getTime(): ${publishedAt.getTime()}, type: ${publishedAt instanceof Date ? 'Date' : typeof publishedAt}`)
-          }
-          
+
           // MongoDB'ye kaydet - publishedAt Date objesi olarak kaydedilecek
           const documentToSave = {
             _id: newsItem.url,
@@ -443,26 +434,20 @@ export async function updateNews() {
             createdAt: new Date(),
             updatedAt: new Date()
           }
-          
-          // Debug: Kaydedilecek document'i kontrol et
-          if (newsItem.source === 'cointelegraph') {
-            console.log(`🔍 CoinTelegraph documentToSave.publishedAt: ${documentToSave.publishedAt instanceof Date ? documentToSave.publishedAt.toISOString() : documentToSave.publishedAt}, type: ${documentToSave.publishedAt instanceof Date ? 'Date' : typeof documentToSave.publishedAt}`)
-          }
-          
+
           await db.collection('crypto_news').replaceOne(
             { _id: newsItem.url },
             documentToSave,
             { upsert: true }
           )
-          
+
           // CoinTelegraph için kayıt sonrası doğrulama
           if (newsItem.source === 'cointelegraph') {
             const savedDoc = await db.collection('crypto_news').findOne({ _id: newsItem.url })
             if (savedDoc && savedDoc.publishedAt) {
-              const savedDate = savedDoc.publishedAt instanceof Date 
-                ? savedDoc.publishedAt 
+              const savedDate = savedDoc.publishedAt instanceof Date
+                ? savedDoc.publishedAt
                 : new Date(savedDoc.publishedAt)
-              console.log(`✅ CoinTelegraph kayıt sonrası - publishedAt: ${savedDate.toISOString()}, getTime(): ${savedDate.getTime()}, type: ${savedDoc.publishedAt instanceof Date ? 'Date' : typeof savedDoc.publishedAt}`)
             }
           }
           savedCount++
@@ -470,9 +455,8 @@ export async function updateNews() {
           skippedCount++
         }
       }
-      
-      console.log(`✅ ${savedCount} haber kaydedildi (en yeni önce sıralandı), ${skippedCount} haber atlandı`)
-      
+
+
       // Tüm haberler kaydedildikten sonra frontend'e refresh bildirimi gönder
       if (wss && savedCount > 0) {
         try {
@@ -482,7 +466,7 @@ export async function updateNews() {
             count: savedCount,
             timestamp: new Date().toISOString()
           })
-          
+
           wss.clients.forEach((client) => {
             if (client.readyState === 1) { // WebSocket.OPEN
               try {
