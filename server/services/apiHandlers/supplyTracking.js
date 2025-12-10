@@ -20,7 +20,7 @@ export async function updateSupplyTracking(db) {
 
     const collection = db.collection('api_cache')
     const supplyHistoryCollection = db.collection('supply_history')
-    
+
     // 1. Crypto listesini MongoDB'den al
     const cryptoDoc = await collection.findOne(
       { _id: 'crypto_list' },
@@ -33,30 +33,32 @@ export async function updateSupplyTracking(db) {
 
     const coins = cryptoDoc.data
     const now = new Date()
-    
+
+    console.log(`📊 Supply tracking güncelleme başladı - ${coins.length} coin, zaman: ${now.toISOString()}`)
+
     // 2. Snapshot formatı: YYYY-MM-DD-HHMM (örn: 2025-01-15-1430)
     const snapshotKey = now.toISOString().slice(0, 16).replace(/[-T:]/g, '-').replace(/-(\d{2})-(\d{2})$/, '-$1$2')
-    
+
     // 3. Her coin için circulating_supply snapshot'ı kaydet
     const snapshot = {
       timestamp: now.getTime(),
       date: snapshotKey,
       supplies: {}
     }
-    
+
     coins.forEach(coin => {
       if (coin.id && coin.circulating_supply !== null && coin.circulating_supply !== undefined) {
         snapshot.supplies[coin.id] = coin.circulating_supply
       }
     })
-    
+
     // 4. Snapshot'ı MongoDB'ye kaydet
     await supplyHistoryCollection.updateOne(
       { _id: snapshotKey },
       { $set: snapshot },
       { upsert: true, maxTimeMS: 30000 } // 30 saniye timeout
     )
-    
+
     // 5. Eski snapshot'ları temizle (30 günden eski)
     const thirtyDaysAgo = now.getTime() - (30 * 24 * 60 * 60 * 1000)
     const deleteResult = await supplyHistoryCollection.deleteMany(
@@ -66,14 +68,14 @@ export async function updateSupplyTracking(db) {
     if (deleteResult.deletedCount > 0) {
       console.log(`🗑️ ${deleteResult.deletedCount} eski supply snapshot silindi (30 günden eski)`)
     }
-    
+
     // 6. Değişimleri hesapla (24h, 7d, 1m)
     const supplyChanges = await calculateSupplyChanges(supplyHistoryCollection, now)
-    
+
     // 7. Değişimleri MongoDB'ye kaydet
     await collection.updateOne(
       { _id: 'supply_tracking' },
-      { 
+      {
         $set: {
           data: supplyChanges,
           lastUpdate: now.getTime(),
@@ -82,10 +84,10 @@ export async function updateSupplyTracking(db) {
       },
       { upsert: true, maxTimeMS: 30000 } // 30 saniye timeout
     )
-    
+
     const timeStr = now.toLocaleTimeString('tr-TR')
     console.log(`✅ [${timeStr}] Supply tracking verisi güncellendi (${Object.keys(supplyChanges).length} coin)`)
-    
+
     return true
   } catch (error) {
     const timeStr = new Date().toLocaleTimeString('tr-TR')
@@ -99,35 +101,35 @@ export async function updateSupplyTracking(db) {
  */
 async function calculateSupplyChanges(supplyHistoryCollection, now) {
   const changes = {}
-  
+
   // Zaman aralıkları (milisaniye)
   const hours24 = 24 * 60 * 60 * 1000
   const hours168 = 168 * 60 * 60 * 1000 // 7 gün
   const hours720 = 720 * 60 * 60 * 1000 // 30 gün
-  
+
   // Tüm snapshot'ları al (son 30 gün)
   // NOT: Eski snapshot'larda timestamp alanı olmayabilir veya Date objesi olabilir
   // Bu yüzden önce tüm snapshot'ları al, sonra filtrele
   const thirtyDaysAgo = now.getTime() - hours720
-  
+
   // Önce timestamp'i olan snapshot'ları al (daha hızlı)
   // Sonra timestamp'i olmayan snapshot'ları al
   const allSnapshotsRaw = await supplyHistoryCollection
-    .find({}, { 
+    .find({}, {
       maxTimeMS: 60000, // 60 saniye timeout
       projection: { _id: 1, timestamp: 1, supplies: 1 } // Sadece gerekli alanları çek
     })
     .sort({ _id: 1 }) // _id'ye göre sırala (YYYY-MM-DD-HHMM formatı)
     .limit(1000) // Maksimum 1000 snapshot (30 gün için yeterli - her 5 dakikada bir = ~8640 snapshot, ama limit koyuyoruz)
     .toArray()
-  
+
   // Timestamp'i normalize et ve 30 günden eski olanları filtrele
   const allSnapshots = []
   const updatesToApply = [] // Batch update için
-  
+
   for (const snapshot of allSnapshotsRaw) {
     let snapshotTime = null
-    
+
     // 1. Önce timestamp alanını kontrol et
     if (snapshot.timestamp) {
       if (snapshot.timestamp instanceof Date) {
@@ -136,7 +138,7 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
         snapshotTime = snapshot.timestamp
       }
     }
-    
+
     // 2. Timestamp yoksa _id'den çıkar (YYYY-MM-DD-HHMM formatı)
     if (!snapshotTime && snapshot._id && typeof snapshot._id === 'string') {
       try {
@@ -149,7 +151,7 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
           const hour = parseInt(parts[4])
           const minute = parseInt(parts[5])
           snapshotTime = new Date(year, month, day, hour, minute).getTime()
-          
+
           // Timestamp güncellemesini batch'e ekle (her snapshot için ayrı update yerine)
           updatesToApply.push({
             updateOne: {
@@ -162,7 +164,7 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
         console.warn(`⚠️ Supply tracking: ${snapshot._id} için timestamp çıkarılamadı:`, error.message)
       }
     }
-    
+
     // 3. 30 günden eski değilse ekle
     if (snapshotTime && snapshotTime >= thirtyDaysAgo) {
       // Timestamp'i normalize et
@@ -170,11 +172,11 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
       allSnapshots.push(snapshot)
     }
   }
-  
+
   // Batch update uygula (tüm timestamp güncellemelerini tek seferde yap)
   if (updatesToApply.length > 0) {
     try {
-      await supplyHistoryCollection.bulkWrite(updatesToApply, { 
+      await supplyHistoryCollection.bulkWrite(updatesToApply, {
         ordered: false, // Paralel çalışsın
         maxTimeMS: 60000 // 60 saniye timeout
       })
@@ -186,38 +188,40 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
       // Hata olsa bile devam et
     }
   }
-  
+
   // Timestamp'e göre sırala
   allSnapshots.sort((a, b) => {
     const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : a.timestamp
     const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : b.timestamp
     return timeA - timeB
   })
-  
+
+  console.log(`📊 Supply tracking: ${allSnapshots.length} snapshot bulundu (değişim hesaplaması için)`)
+
   if (allSnapshots.length === 0) {
     console.warn('⚠️ Supply tracking: Hiç snapshot yok, değişim hesaplanamıyor')
     return changes
   }
-  
+
   if (allSnapshots.length === 1) {
-    console.warn('⚠️ Supply tracking: Sadece 1 snapshot var, değişim hesaplanamıyor (en az 2 snapshot gerekli)')
-    // Tek snapshot varsa bile, en azından coin'leri kaydet (değişimler null olacak)
+    console.warn('⚠️ Supply tracking: Sadece 1 snapshot var, değişimler 0 olarak gösterilecek')
+    // Tek snapshot varsa değişimler 0 olarak göster (null yerine - UI'da "-" yerine "0" göstersin)
     const latestSnapshot = allSnapshots[0]
     if (latestSnapshot.supplies) {
       Object.keys(latestSnapshot.supplies).forEach(coinId => {
         changes[coinId] = {
-          change24h: null,
-          absoluteChange24h: null,
-          change7d: null,
-          absoluteChange7d: null,
-          change1m: null,
-          absoluteChange1m: null
+          change24h: 0,
+          absoluteChange24h: 0,
+          change7d: 0,
+          absoluteChange7d: 0,
+          change1m: 0,
+          absoluteChange1m: 0
         }
       })
     }
     return changes
   }
-  
+
   // En yeni snapshot
   const latestSnapshot = allSnapshots[allSnapshots.length - 1]
   let latestTime = latestSnapshot.timestamp
@@ -231,7 +235,7 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
   const time24hAgo = latestTime - hours24
   const time7dAgo = latestTime - hours168
   const time1mAgo = latestTime - hours720
-  
+
   // Her zaman aralığı için en eski ve en yeni snapshot'ları bul
   let oldest24h = null
   let newest24h = null
@@ -239,7 +243,7 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
   let newest7d = null
   let oldest1m = null
   let newest1m = null
-  
+
   for (const snapshot of allSnapshots) {
     // timestamp alanını number'a çevir (Date objesi ise getTime() kullan)
     let snapshotTime = snapshot.timestamp
@@ -250,7 +254,7 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
       console.warn(`⚠️ Supply tracking: Geçersiz timestamp: ${snapshot._id}`, snapshot.timestamp)
       continue
     }
-    
+
     // 24 saat
     if (snapshotTime >= time24hAgo && snapshotTime <= latestTime) {
       if (!oldest24h || snapshotTime < (oldest24h.timestamp instanceof Date ? oldest24h.timestamp.getTime() : oldest24h.timestamp)) {
@@ -260,7 +264,7 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
         newest24h = snapshot
       }
     }
-    
+
     // 7 gün
     if (snapshotTime >= time7dAgo && snapshotTime <= latestTime) {
       if (!oldest7d || snapshotTime < (oldest7d.timestamp instanceof Date ? oldest7d.timestamp.getTime() : oldest7d.timestamp)) {
@@ -270,7 +274,7 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
         newest7d = snapshot
       }
     }
-    
+
     // 1 ay
     if (snapshotTime >= time1mAgo && snapshotTime <= latestTime) {
       if (!oldest1m || snapshotTime < (oldest1m.timestamp instanceof Date ? oldest1m.timestamp.getTime() : oldest1m.timestamp)) {
@@ -282,7 +286,7 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
     }
   }
 
-  
+
   if (oldest7d && newest7d) {
     const oldest7dTime = oldest7d.timestamp instanceof Date ? oldest7d.timestamp.getTime() : oldest7d.timestamp
     const newest7dTime = newest7d.timestamp instanceof Date ? newest7d.timestamp.getTime() : newest7d.timestamp
@@ -291,7 +295,7 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
   } else {
     console.warn(`  ⚠️ 7d: oldest veya newest bulunamadı (oldest7d=${!!oldest7d}, newest7d=${!!newest7d})`)
   }
-  
+
   if (oldest1m && newest1m) {
     const oldest1mTime = oldest1m.timestamp instanceof Date ? oldest1m.timestamp.getTime() : oldest1m.timestamp
     const newest1mTime = newest1m.timestamp instanceof Date ? newest1m.timestamp.getTime() : newest1m.timestamp
@@ -300,26 +304,26 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
   } else {
     console.warn(`  ⚠️ 1m: oldest veya newest bulunamadı (oldest1m=${!!oldest1m}, newest1m=${!!newest1m})`)
   }
-  
+
   // Tüm coin'ler için değişimleri hesapla
   const allCoinIds = new Set()
   if (latestSnapshot.supplies) {
     Object.keys(latestSnapshot.supplies).forEach(id => allCoinIds.add(id))
   }
-  
+
   allCoinIds.forEach(coinId => {
     const latestSupply = latestSnapshot.supplies?.[coinId]
     if (latestSupply === null || latestSupply === undefined) {
       return
     }
-    
+
     // 24 saatlik değişim
     let change24h = null
     let absoluteChange24h = null
     if (oldest24h && newest24h && oldest24h.supplies && newest24h.supplies) {
       const oldest24hTime = oldest24h.timestamp instanceof Date ? oldest24h.timestamp.getTime() : oldest24h.timestamp
       const newest24hTime = newest24h.timestamp instanceof Date ? newest24h.timestamp.getTime() : newest24h.timestamp
-      
+
       // Eğer oldest ve newest aynı snapshot ise, değişim hesaplama
       if (oldest24hTime !== newest24hTime) {
         const old24h = oldest24h.supplies[coinId]
@@ -330,14 +334,14 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
         }
       }
     }
-    
+
     // 7 günlük değişim
     let change7d = null
     let absoluteChange7d = null
     if (oldest7d && newest7d && oldest7d.supplies && newest7d.supplies) {
       const oldest7dTime = oldest7d.timestamp instanceof Date ? oldest7d.timestamp.getTime() : oldest7d.timestamp
       const newest7dTime = newest7d.timestamp instanceof Date ? newest7d.timestamp.getTime() : newest7d.timestamp
-      
+
       // Eğer oldest ve newest aynı snapshot ise, değişim hesaplama
       if (oldest7dTime !== newest7dTime) {
         const old7d = oldest7d.supplies[coinId]
@@ -348,14 +352,14 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
         }
       }
     }
-    
+
     // 1 aylık değişim
     let change1m = null
     let absoluteChange1m = null
     if (oldest1m && newest1m && oldest1m.supplies && newest1m.supplies) {
       const oldest1mTime = oldest1m.timestamp instanceof Date ? oldest1m.timestamp.getTime() : oldest1m.timestamp
       const newest1mTime = newest1m.timestamp instanceof Date ? newest1m.timestamp.getTime() : newest1m.timestamp
-      
+
       // Eğer oldest ve newest aynı snapshot ise, değişim hesaplama
       if (oldest1mTime !== newest1mTime) {
         const old1m = oldest1m.supplies[coinId]
@@ -366,7 +370,7 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
         }
       }
     }
-    
+
     // Forward fill: Eğer değişim yoksa, bir önceki snapshot'tan al (en az 2 snapshot varsa)
     if (change24h === null && allSnapshots.length >= 2) {
       const prevSnapshot = allSnapshots[allSnapshots.length - 2]
@@ -378,7 +382,7 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
         }
       }
     }
-    
+
     // 7d ve 1m için de forward fill (eğer yoksa)
     if (change7d === null && allSnapshots.length >= 2) {
       const prevSnapshot = allSnapshots[allSnapshots.length - 2]
@@ -390,7 +394,7 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
         }
       }
     }
-    
+
     if (change1m === null && allSnapshots.length >= 2) {
       const prevSnapshot = allSnapshots[allSnapshots.length - 2]
       if (prevSnapshot && prevSnapshot.supplies && prevSnapshot.supplies[coinId] !== null && prevSnapshot.supplies[coinId] !== undefined) {
@@ -401,7 +405,7 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
         }
       }
     }
-    
+
     // Değişimleri kaydet (0 değerleri de geçerli, sadece null değerler "henüz hesaplanamadı" anlamına gelir)
     changes[coinId] = {
       change24h: change24h !== null ? Number(change24h.toFixed(2)) : null,
@@ -411,9 +415,9 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
       change1m: change1m !== null ? Number(change1m.toFixed(2)) : null,
       absoluteChange1m: absoluteChange1m !== null ? absoluteChange1m : null
     }
-    
+
   })
-  
+
   return changes
 }
 

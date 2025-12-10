@@ -680,7 +680,13 @@ function start() {
 
   console.log('🚀 API Scheduler başlatıldı')
   
-  // İlk güncellemeyi hemen yapma, sadece sonraki güncellemeyi planla (sabit zamanlarda)
+  // Server başladığında HEMEN ilk güncellemeyi yap (Heroku restart sonrası anında snapshot oluşsun)
+  console.log('🚀 İlk güncelleme hemen yapılıyor...')
+  updateAll().catch(err => {
+    console.error('❌ İlk updateAll hatası:', err.message)
+  })
+  
+  // Sonraki güncellemeleri planla (sabit zamanlarda)
   scheduleNext()
   
   // Fear & Greed scheduler'ı başlat (10 dakikada bir) - SADECE PLANLA, HEMEN ÇALIŞTIRMA
