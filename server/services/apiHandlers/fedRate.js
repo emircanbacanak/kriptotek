@@ -304,15 +304,30 @@ export async function fetchFedRateData(dbInstance = null) {
     }
   }
 
-  // 3. FOMC Calendar'dan sonraki karar tarihini çek (proxy kullan)
+  // 3. Sonraki karar tarihini hesapla
+  // MongoDB'deki önceki kayıttan sonraki toplantı tarihini al (fallback)
+  let nextDecisionFromCache = null
+  if (previousRecord?.nextDecisionDate) {
+    const cachedDate = new Date(previousRecord.nextDecisionDate)
+    const now = new Date()
+    const daysDiff = (cachedDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+    // Cache'deki tarih gelecekte VE 7-120 gün içinde olmalı (geçerli FOMC aralığı)
+    if (daysDiff >= 7 && daysDiff <= 120) {
+      nextDecisionFromCache = cachedDate
+      console.log('📦 MongoDB\'den sonraki karar tarihi bulundu:', previousRecord.nextDecisionDate)
+    } else if (daysDiff > 0) {
+      console.log('⚠️ MongoDB cache\'deki tarih geçersiz aralıkta:', previousRecord.nextDecisionDate, `(${Math.round(daysDiff)} gün)`)
+    }
+  }
+
   try {
     console.log('📅 FOMC Calendar\'dan veri çekiliyor...')
     const calendarUrl = 'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm'
 
     // Proxy URL'leri dene
     const proxyUrls = [
-      `https://api.allorigins.win/raw?url=${encodeURIComponent(calendarUrl)}`,
       `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(calendarUrl)}`,
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(calendarUrl)}`,
       calendarUrl // Direkt dene
     ]
 
@@ -321,14 +336,13 @@ export async function fetchFedRateData(dbInstance = null) {
     for (const proxyUrl of proxyUrls) {
       try {
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 saniye timeout
+        const timeoutId = setTimeout(() => controller.abort(), 15000)
 
         try {
           const calendarResponse = await fetch(proxyUrl, {
             headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-              'Accept-Language': 'en-US,en;q=0.9'
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
             },
             signal: controller.signal
           })
@@ -336,19 +350,19 @@ export async function fetchFedRateData(dbInstance = null) {
           clearTimeout(timeoutId)
 
           if (calendarResponse.ok) {
-            html = await calendarResponse.text()
-            break
+            const text = await calendarResponse.text()
+            // HTML'in geçerli olup olmadığını kontrol et
+            if (text.length > 50000 && text.includes('fomc-meeting__date')) {
+              html = text
+              console.log('✅ FOMC Calendar HTML alındı, boyut:', text.length)
+              break
+            }
           }
         } catch (fetchError) {
           clearTimeout(timeoutId)
           throw fetchError
         }
       } catch (proxyError) {
-        // Sessizce devam et, bir sonraki proxy'yi dene
-        if (proxyUrl === calendarUrl) {
-          // Son proxy (direkt) başarısız olduysa uyar
-          console.warn(`⚠️ FOMC Calendar hatası (${proxyUrl}):`, proxyError.message)
-        }
         continue
       }
     }
@@ -356,78 +370,93 @@ export async function fetchFedRateData(dbInstance = null) {
     if (html) {
       const now = new Date()
       const currentYear = now.getFullYear()
-      const nextYear = currentYear + 1
-      const validYears = [currentYear, nextYear]
+
+      // Tüm toplantı tarihlerini çıkar
+      // Format: class="fomc-meeting__date...">28-29* veya >27-28
+      // Ve öncesinde ay bilgisi: <strong>January</strong>
+      const allDates = []
 
       const months = {
         january: 0, february: 1, march: 2, april: 3, may: 4, june: 5,
         july: 6, august: 7, september: 8, october: 9, november: 10, december: 11,
       }
 
-      // HTML yapısı: <div class="fomc-meeting__month"><strong>December</strong></div>
-      //              <div class="fomc-meeting__date">9-10*</div>
-      // Yıl bilgisi: <h4><a id="...">2025 FOMC Meetings</a></h4>
+      // Yıl bölümlerini bul
+      for (let year = currentYear; year <= currentYear + 2; year++) {
+        const yearPattern = new RegExp(`${year}\\s+FOMC\\s+Meetings`, 'i')
+        const yearIdx = html.search(yearPattern)
 
-      // Önce yıl panellerini bul
-      const yearPanelRegex = /<h4><a[^>]*>(\d{4})\s+FOMC\s+Meetings<\/a><\/h4>/gi
-      const yearPanels = []
-      let yearMatch
-      while ((yearMatch = yearPanelRegex.exec(html))) {
-        const year = Number(yearMatch[1])
-        if (validYears.includes(year)) {
-          yearPanels.push({
-            year,
-            startIndex: yearMatch.index,
-            endIndex: yearMatch.index + yearMatch[0].length
-          })
-        }
-      }
+        if (yearIdx === -1) continue
 
-      // Her yıl paneli için toplantı tarihlerini bul
-      let nextDate = null
+        // Bu yılın bölümündeki toplantıları bul (sonraki yıla kadar)
+        const nextYearPattern = new RegExp(`${year + 1}\\s+FOMC\\s+Meetings`, 'i')
+        const nextYearIdx = html.search(nextYearPattern)
+        const sectionEnd = nextYearIdx > yearIdx ? nextYearIdx : html.length
+        const sectionHtml = html.substring(yearIdx, sectionEnd)
 
-      for (const panel of yearPanels) {
-        // Panel içindeki HTML'i al
-        const panelEndIndex = panel.endIndex
-        const nextPanelIndex = yearPanels.find(p => p.startIndex > panel.startIndex)?.startIndex || html.length
-        const panelHtml = html.substring(panelEndIndex, nextPanelIndex)
+        // Bu bölümdeki ay-gün eşleşmelerini bul
+        // <strong>January</strong> ... fomc-meeting__date...">27-28
+        const meetingPattern = /<strong>(January|February|March|April|May|June|July|August|September|October|November|December)<\/strong>[\s\S]{0,500}?fomc-meeting__date[^>]*>(\d{1,2})(?:\s*[-–—]\s*(\d{1,2}))?/gi
 
-        // Ay ve gün bilgilerini bul
-        // Format: <strong>December</strong> ... <div class="fomc-meeting__date">9-10*</div>
-        const meetingRegex = /<strong>(January|February|March|April|May|June|July|August|September|October|November|December)<\/strong>[\s\S]*?<div[^>]*class="[^"]*fomc-meeting__date[^"]*"[^>]*>(\d{1,2})(?:\s*(?:–|-|\u2013|\u2014|to)\s*(\d{1,2}))?/gi
+        let match
+        while ((match = meetingPattern.exec(sectionHtml))) {
+          const monthName = match[1].toLowerCase()
+          const day1 = parseInt(match[2])
+          const day2 = match[3] ? parseInt(match[3]) : day1
+          const monthIdx = months[monthName]
 
-        let meetingMatch
-        while ((meetingMatch = meetingRegex.exec(panelHtml))) {
-          const monthName = meetingMatch[1].toLowerCase()
-          const day1 = Number(meetingMatch[2])
-          const day2 = meetingMatch[3] ? Number(meetingMatch[3]) : day1
-          const mIdx = months[monthName]
-
-          if (mIdx != null) {
-            const decisionDate = new Date(Date.UTC(panel.year, mIdx, day2, 19, 0, 0))
-            if (decisionDate > now && (!nextDate || decisionDate < nextDate)) {
-              nextDate = decisionDate
-            }
+          if (monthIdx !== undefined) {
+            // Karar günü: toplantının son günü, 19:00 UTC
+            const decisionDate = new Date(Date.UTC(year, monthIdx, day2, 19, 0, 0))
+            allDates.push(decisionDate)
           }
         }
       }
 
-      if (nextDate) {
-        const horizonMs = 180 * 24 * 60 * 60 * 1000 // 6 ay
-        const timeDiff = nextDate.getTime() - now.getTime()
-        if (timeDiff > 0 && timeDiff <= horizonMs) {
-          nextDecisionDate = nextDate.toISOString()
+      // Gelecekteki en yakın tarihi bul
+      const now2 = new Date()
+      const futureDates = allDates.filter(d => d > now2).sort((a, b) => a - b)
+
+      if (futureDates.length > 0) {
+        const candidateDate = futureDates[0]
+        const daysDiff = (candidateDate.getTime() - now2.getTime()) / (1000 * 60 * 60 * 24)
+        // Geçerli bir sonraki toplantı tarihi 7-120 gün içinde olmalı
+        // (6-8 hafta arayla toplantılar yapılıyor)
+        if (daysDiff >= 7 && daysDiff <= 120) {
+          nextDecisionDate = candidateDate.toISOString()
+          console.log('✅ FOMC Calendar\'dan sonraki karar tarihi bulundu:', nextDecisionDate)
         } else {
-          console.warn('⚠️ FOMC Calendar: Bulunan tarih çok uzak, atlanıyor')
+          console.warn(`⚠️ FOMC Calendar: Bulunan tarih makul aralıkta değil (${Math.round(daysDiff)} gün), atlanıyor`)
         }
       } else {
-        console.warn('⚠️ FOMC Calendar: Geçerli yıllar içinde tarih bulunamadı')
+        console.warn('⚠️ FOMC Calendar: Gelecekte tarih bulunamadı')
       }
     } else {
-      console.warn('⚠️ FOMC Calendar: HTML çekilemedi')
+      console.warn('⚠️ FOMC Calendar: Geçerli HTML çekilemedi')
     }
   } catch (calendarError) {
     console.warn('⚠️ FOMC Calendar hatası:', calendarError.message)
+  }
+
+  // Fallback 1: MongoDB cache'den al
+  if (!nextDecisionDate && nextDecisionFromCache) {
+    nextDecisionDate = nextDecisionFromCache.toISOString()
+    console.log('✅ MongoDB cache\'den sonraki karar tarihi kullanıldı:', nextDecisionDate)
+  }
+
+  // Fallback 2: Son açıklama tarihinden ~45 gün sonrasını tahmin et
+  if (!nextDecisionDate && lastAnnounceDate) {
+    const lastDate = new Date(lastAnnounceDate)
+    // FOMC toplantıları genellikle 6-7 hafta arayla yapılır (ortalama 45 gün)
+    const estimatedNext = new Date(lastDate.getTime() + (45 * 24 * 60 * 60 * 1000))
+    // Karar günü genellikle Çarşamba'dır, en yakın Çarşamba'yı bul
+    const dayOfWeek = estimatedNext.getUTCDay()
+    const daysToWednesday = (3 - dayOfWeek + 7) % 7
+    estimatedNext.setUTCDate(estimatedNext.getUTCDate() + daysToWednesday)
+    estimatedNext.setUTCHours(19, 0, 0, 0)
+
+    nextDecisionDate = estimatedNext.toISOString()
+    console.log('✅ Son açıklama tarihinden tahmini sonraki karar tarihi hesaplandı:', nextDecisionDate)
   }
 
   return {
