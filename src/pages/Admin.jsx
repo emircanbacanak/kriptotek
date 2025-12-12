@@ -4,11 +4,12 @@ import { useTheme } from '../contexts/ThemeContext'
 import { updatePageSEO } from '../utils/seoMetaTags'
 import adminService from '../services/adminService'
 import { useAuth } from '../contexts/AuthContext'
-import { 
-  Search, 
-  User, 
-  Shield, 
-  Crown, 
+import { clearSettingsCache } from '../services/mongoUserSettings'
+import {
+  Search,
+  User,
+  Shield,
+  Crown,
   Power,
   Users,
   AlertTriangle,
@@ -19,28 +20,28 @@ const Admin = () => {
   const { t, language } = useLanguage()
   const { theme } = useTheme()
   const { user, isAdmin, refreshUserSettings, updatePremiumStatus, updateAdminStatus } = useAuth()
-  
+
   const [users, setUsers] = useState([])
   const [filteredUsers, setFilteredUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterType, setFilterType] = useState('all') // all, premium, regular, admin, inactive
   const [refreshing, setRefreshing] = useState(false)
-  
+
   // Header gradients
-  const headerIconGradient = theme === 'dark' 
+  const headerIconGradient = theme === 'dark'
     ? 'from-red-600 to-orange-600'
     : 'from-red-500 to-orange-500'
-  
+
   const headerTextGradient = theme === 'dark'
     ? 'from-red-400 to-orange-400'
     : 'from-red-600 to-orange-600'
-  
+
   // SEO
   useEffect(() => {
     updatePageSEO('admin', language)
   }, [language])
-  
+
   // Admin kontrolü
   if (!isAdmin) {
     return (
@@ -59,7 +60,7 @@ const Admin = () => {
       </div>
     )
   }
-  
+
   // Load users
   const loadUsers = async (showLoading = false) => {
     // Sadece ilk yüklemede veya manuel yenilemede loading göster
@@ -69,7 +70,7 @@ const Admin = () => {
       // Sessiz güncelleme için refreshing state'ini kullan (sadece refresh butonu animasyonu için)
       setRefreshing(true)
     }
-    
+
     try {
       const result = await adminService.getAllUsers()
       if (result.success) {
@@ -92,32 +93,32 @@ const Admin = () => {
       }
     }
   }
-  
+
   // İlk yükleme
   useEffect(() => {
     // İlk yüklemede loading göster
     loadUsers(true)
-    
+
     // Polling: Her 30 saniyede bir sessizce güncelle (loading gösterme)
     const interval = setInterval(() => {
       loadUsers(false) // Sessiz güncelleme
     }, 30000) // 30 saniye
-    
+
     return () => {
       clearInterval(interval)
     }
   }, [])
-  
+
   // Manual refresh
   const handleRefresh = async () => {
     // Manuel yenilemede loading göster
     await loadUsers(true)
   }
-  
+
   // Filter and search users
   useEffect(() => {
     let filtered = users
-    
+
     // Filter by type
     if (filterType === 'premium') {
       filtered = filtered.filter(user => user.isPremium)
@@ -128,201 +129,204 @@ const Admin = () => {
     } else if (filterType === 'inactive') {
       filtered = filtered.filter(user => user.isActive === false)
     }
-    
+
     // Search filter
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase()
-      filtered = filtered.filter(user => 
+      filtered = filtered.filter(user =>
         user.email.toLowerCase().includes(searchLower) ||
         user.displayName.toLowerCase().includes(searchLower) ||
         user.uid.toLowerCase().includes(searchLower)
       )
     }
-    
+
     // Separate premium and regular users
     const premiumUsers = filtered.filter(user => user.isPremium)
     const regularUsers = filtered.filter(user => !user.isPremium)
-    
+
     // Combine: premium first, then regular
     const sortedFiltered = [...premiumUsers, ...regularUsers]
     setFilteredUsers(sortedFiltered)
   }, [searchTerm, filterType, users])
-  
+
   const handleTogglePremium = async (userId, currentPremium, userSource) => {
     const newPremiumStatus = !currentPremium
-    
+
     // Önce local state'i anında güncelle (optimistic update)
-    setUsers(prevUsers => 
-      prevUsers.map(u => 
+    setUsers(prevUsers =>
+      prevUsers.map(u =>
         u.uid === userId ? { ...u, isPremium: newPremiumStatus } : u
       )
     )
-    
+
     // Eğer kullanıcı kendisini premium yapıyorsa, AuthContext'i HEMEN güncelle
     if (user && user.uid === userId) {
       updatePremiumStatus(newPremiumStatus)
     }
-    
+
     // Backend'e gönder (await yapmadan, arka planda çalışsın)
     adminService.toggleUserPremium(userId, newPremiumStatus)
       .then((result) => {
-    if (result.success) {
+        if (result.success) {
+          // Kullanıcının cache'ini temizle (taze veri için)
+          clearSettingsCache(userId)
+
           // Kullanıcı listesini sessizce yenile (loading gösterme) - arka planda
           loadUsers(false).catch(() => {
             // Hata olsa bile optimistic update zaten yapıldı
           })
-      
+
           // Eğer kullanıcı kendisini premium yapıyorsa, backend'den doğrulama yap (arka planda)
-      if (user && user.uid === userId) {
+          if (user && user.uid === userId) {
             // Kısa bir süre bekleyip refresh yap (backend'in güncellemesi için)
             setTimeout(() => {
               refreshUserSettings().catch(() => {
                 // Hata olsa bile optimistic update zaten yapıldı
               })
             }, 500) // 0.5 saniye sonra doğrulama yap
-      }
-    } else {
+          }
+        } else {
           // Hata durumunda geri al (rollback)
-          setUsers(prevUsers => 
-            prevUsers.map(u => 
+          setUsers(prevUsers =>
+            prevUsers.map(u =>
               u.uid === userId ? { ...u, isPremium: currentPremium } : u
             )
           )
-          
+
           // Eğer kullanıcı kendisiyse AuthContext'i de geri al
           if (user && user.uid === userId) {
             updatePremiumStatus(currentPremium)
           }
-          
-      alert(t('togglePremiumError') + ': ' + result.error)
-    }
+
+          alert(t('togglePremiumError') + ': ' + result.error)
+        }
       })
       .catch((error) => {
         // Network hatası durumunda geri al (rollback)
-        setUsers(prevUsers => 
-          prevUsers.map(u => 
+        setUsers(prevUsers =>
+          prevUsers.map(u =>
             u.uid === userId ? { ...u, isPremium: currentPremium } : u
           )
         )
-        
+
         // Eğer kullanıcı kendisiyse AuthContext'i de geri al
         if (user && user.uid === userId) {
           updatePremiumStatus(currentPremium)
         }
-        
+
         alert(t('togglePremiumError') + ': ' + error.message)
       })
   }
-  
+
   const handleToggleActive = async (userId, currentActive, userSource) => {
     const newActiveStatus = !currentActive
-    
+
     // Önce local state'i anında güncelle (optimistic update)
-    setUsers(prevUsers => 
-      prevUsers.map(u => 
+    setUsers(prevUsers =>
+      prevUsers.map(u =>
         u.uid === userId ? { ...u, isActive: newActiveStatus } : u
       )
     )
-    
+
     // Backend'e gönder (await yapmadan, arka planda çalışsın)
-    const serviceCall = currentActive 
+    const serviceCall = currentActive
       ? adminService.deactivateUser(userId)
       : adminService.activateUser(userId)
-    
+
     serviceCall
       .then((result) => {
-    if (result.success) {
+        if (result.success) {
           // Kullanıcı listesini sessizce yenile (loading gösterme) - arka planda
           loadUsers(false).catch(() => {
             // Hata olsa bile optimistic update zaten yapıldı
           })
-    } else {
+        } else {
           // Hata durumunda geri al (rollback)
-          setUsers(prevUsers => 
-            prevUsers.map(u => 
+          setUsers(prevUsers =>
+            prevUsers.map(u =>
               u.uid === userId ? { ...u, isActive: currentActive } : u
             )
           )
-      alert(t('toggleActiveError') + ': ' + result.error)
-    }
+          alert(t('toggleActiveError') + ': ' + result.error)
+        }
       })
       .catch((error) => {
         // Network hatası durumunda geri al (rollback)
-        setUsers(prevUsers => 
-          prevUsers.map(u => 
+        setUsers(prevUsers =>
+          prevUsers.map(u =>
             u.uid === userId ? { ...u, isActive: currentActive } : u
           )
         )
         alert(t('toggleActiveError') + ': ' + error.message)
       })
   }
-  
+
   const handleToggleAdmin = async (userId, currentAdmin, userSource) => {
     const newAdminStatus = !currentAdmin
-    
+
     // Önce local state'i anında güncelle (optimistic update)
-    setUsers(prevUsers => 
-      prevUsers.map(u => 
+    setUsers(prevUsers =>
+      prevUsers.map(u =>
         u.uid === userId ? { ...u, isAdmin: newAdminStatus } : u
       )
     )
-    
+
     // Eğer kullanıcı kendisini admin yapıyorsa, AuthContext'i HEMEN güncelle
     if (user && user.uid === userId) {
       updateAdminStatus(newAdminStatus)
     }
-    
+
     // Backend'e gönder (await yapmadan, arka planda çalışsın)
     adminService.setUserAsAdmin(userId, newAdminStatus)
       .then((result) => {
-    if (result.success) {
+        if (result.success) {
           // Kullanıcı listesini sessizce yenile (loading gösterme) - arka planda
           loadUsers(false).catch(() => {
             // Hata olsa bile optimistic update zaten yapıldı
           })
-      
+
           // Eğer kullanıcı kendisini admin yapıyorsa, backend'den doğrulama yap (arka planda)
-      if (user && user.uid === userId) {
+          if (user && user.uid === userId) {
             // Kısa bir süre bekleyip refresh yap (backend'in güncellemesi için)
             setTimeout(() => {
               refreshUserSettings().catch(() => {
                 // Hata olsa bile optimistic update zaten yapıldı
               })
             }, 500) // 0.5 saniye sonra doğrulama yap
-      }
-    } else {
+          }
+        } else {
           // Hata durumunda geri al (rollback)
-          setUsers(prevUsers => 
-            prevUsers.map(u => 
+          setUsers(prevUsers =>
+            prevUsers.map(u =>
               u.uid === userId ? { ...u, isAdmin: currentAdmin } : u
             )
           )
-          
+
           // Eğer kullanıcı kendisiyse AuthContext'i de geri al
           if (user && user.uid === userId) {
             updateAdminStatus(currentAdmin)
           }
-          
-      alert(t('toggleAdminError') + ': ' + result.error)
-    }
+
+          alert(t('toggleAdminError') + ': ' + result.error)
+        }
       })
       .catch((error) => {
         // Network hatası durumunda geri al (rollback)
-        setUsers(prevUsers => 
-          prevUsers.map(u => 
+        setUsers(prevUsers =>
+          prevUsers.map(u =>
             u.uid === userId ? { ...u, isAdmin: currentAdmin } : u
           )
         )
-        
+
         // Eğer kullanıcı kendisiyse AuthContext'i de geri al
         if (user && user.uid === userId) {
           updateAdminStatus(currentAdmin)
         }
-        
+
         alert(t('toggleAdminError') + ': ' + error.message)
       })
   }
-  
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
@@ -330,11 +334,11 @@ const Admin = () => {
       </div>
     )
   }
-  
+
   // Separate users into premium and regular
   const premiumUsers = filteredUsers.filter(user => user.isPremium)
   const regularUsers = filteredUsers.filter(user => !user.isPremium)
-  
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
@@ -365,7 +369,7 @@ const Admin = () => {
           </div>
         </div>
       </div>
-      
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Search and Filter Bar */}
         <div className="mb-6 space-y-4">
@@ -380,67 +384,62 @@ const Admin = () => {
               className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
             />
           </div>
-          
+
           {/* Filter Buttons */}
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setFilterType('all')}
-              className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
-                filterType === 'all'
-                  ? 'bg-primary-500 text-white'
-                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-              }`}
+              className={`flex items-center px-4 py-2 rounded-lg transition-colors ${filterType === 'all'
+                ? 'bg-primary-500 text-white'
+                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                }`}
             >
               <Users className="w-4 h-4 mr-2" />
               {t('all')}
             </button>
             <button
               onClick={() => setFilterType('premium')}
-              className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
-                filterType === 'premium'
-                  ? 'bg-primary-500 text-white'
-                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-              }`}
+              className={`flex items-center px-4 py-2 rounded-lg transition-colors ${filterType === 'premium'
+                ? 'bg-primary-500 text-white'
+                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                }`}
             >
               <Crown className="w-4 h-4 mr-2" />
               {t('premium')}
             </button>
             <button
               onClick={() => setFilterType('regular')}
-              className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
-                filterType === 'regular'
-                  ? 'bg-primary-500 text-white'
-                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-              }`}
+              className={`flex items-center px-4 py-2 rounded-lg transition-colors ${filterType === 'regular'
+                ? 'bg-primary-500 text-white'
+                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                }`}
             >
               <User className="w-4 h-4 mr-2" />
               {t('regular')}
             </button>
             <button
               onClick={() => setFilterType('admin')}
-              className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
-                filterType === 'admin'
-                  ? 'bg-primary-500 text-white'
-                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-              }`}
+              className={`flex items-center px-4 py-2 rounded-lg transition-colors ${filterType === 'admin'
+                ? 'bg-primary-500 text-white'
+                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                }`}
             >
               <Shield className="w-4 h-4 mr-2" />
               {t('admin')}
             </button>
             <button
               onClick={() => setFilterType('inactive')}
-              className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
-                filterType === 'inactive'
-                  ? 'bg-primary-500 text-white'
-                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-              }`}
+              className={`flex items-center px-4 py-2 rounded-lg transition-colors ${filterType === 'inactive'
+                ? 'bg-primary-500 text-white'
+                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                }`}
             >
               <Power className="w-4 h-4 mr-2" />
               {t('inactive')}
             </button>
           </div>
         </div>
-        
+
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 border border-gray-200 dark:border-gray-700">
@@ -460,7 +459,7 @@ const Admin = () => {
             <div className="text-2xl font-bold mt-2">{users.filter(u => u.isAdmin).length}</div>
           </div>
         </div>
-        
+
         {/* Users List - Premium Section */}
         {premiumUsers.length > 0 && (
           <div className="mb-8">
@@ -481,7 +480,7 @@ const Admin = () => {
             </div>
           </div>
         )}
-        
+
         {/* Users List - Regular Section */}
         {regularUsers.length > 0 && (
           <div>
@@ -502,7 +501,7 @@ const Admin = () => {
             </div>
           </div>
         )}
-        
+
         {/* Empty State */}
         {filteredUsers.length === 0 && !loading && (
           <div className="text-center py-12">
@@ -529,8 +528,8 @@ const UserCard = ({ user, onTogglePremium, onToggleActive, onToggleAdmin }) => {
         <div className="flex items-center space-x-4 flex-1">
           <div className="relative">
             {user.photoURL ? (
-              <img 
-                src={user.photoURL} 
+              <img
+                src={user.photoURL}
                 alt={user.displayName || user.email || t('user')}
                 className="w-12 h-12 rounded-full object-cover border-2 border-gray-200 dark:border-gray-700"
                 onError={(e) => {
@@ -540,11 +539,10 @@ const UserCard = ({ user, onTogglePremium, onToggleActive, onToggleAdmin }) => {
                 }}
               />
             ) : null}
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-              user.isPremium 
-                ? 'bg-gradient-to-br from-yellow-500 to-orange-500' 
-                : 'bg-gradient-to-br from-blue-500 to-indigo-500'
-            } ${user.photoURL ? 'hidden' : ''}`}>
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${user.isPremium
+              ? 'bg-gradient-to-br from-yellow-500 to-orange-500'
+              : 'bg-gradient-to-br from-blue-500 to-indigo-500'
+              } ${user.photoURL ? 'hidden' : ''}`}>
               <User className="w-6 h-6 text-white" />
             </div>
             {user.isAdmin && (
@@ -553,7 +551,7 @@ const UserCard = ({ user, onTogglePremium, onToggleActive, onToggleAdmin }) => {
               </div>
             )}
           </div>
-          
+
           <div className="flex-1 min-w-0">
             <div className="flex items-center space-x-2">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
@@ -580,7 +578,7 @@ const UserCard = ({ user, onTogglePremium, onToggleActive, onToggleAdmin }) => {
               )}
             </div>
             <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
-              {user.email || t('unknown')}
+              {user.email || (user.uid ? `ID: ${user.uid.substring(0, 12)}...` : t('unknown'))}
             </p>
             <div className="flex items-center space-x-2 mt-1">
               <p className="text-xs text-gray-500 dark:text-gray-500">
@@ -594,42 +592,39 @@ const UserCard = ({ user, onTogglePremium, onToggleActive, onToggleAdmin }) => {
             </div>
           </div>
         </div>
-        
+
         <div className="flex items-center space-x-2">
           {/* Toggle Premium */}
           <button
             onClick={() => onTogglePremium(user.uid, user.isPremium, user.source)}
-            className={`p-2 rounded-lg transition-colors ${
-              user.isPremium
-                ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-200 dark:hover:bg-yellow-800'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-            }`}
+            className={`p-2 rounded-lg transition-colors ${user.isPremium
+              ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-200 dark:hover:bg-yellow-800'
+              : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
             title={user.isPremium ? t('removePremium') : t('makePremium')}
           >
             <Crown className="w-5 h-5" />
           </button>
-          
+
           {/* Toggle Active/Inactive */}
           <button
             onClick={() => onToggleActive(user.uid, user.isActive !== false, user.source)}
-            className={`p-2 rounded-lg transition-colors ${
-              user.isActive !== false
-                ? 'bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-800'
-                : 'bg-orange-100 dark:bg-orange-900 text-orange-600 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-800'
-            }`}
+            className={`p-2 rounded-lg transition-colors ${user.isActive !== false
+              ? 'bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-800'
+              : 'bg-orange-100 dark:bg-orange-900 text-orange-600 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-800'
+              }`}
             title={user.isActive !== false ? t('deactivate') : t('activate')}
           >
             <Power className="w-5 h-5" />
           </button>
-          
+
           {/* Toggle Admin */}
           <button
             onClick={() => onToggleAdmin(user.uid, user.isAdmin, user.source)}
-            className={`p-2 rounded-lg transition-colors ${
-              user.isAdmin
-                ? 'bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-800'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-            }`}
+            className={`p-2 rounded-lg transition-colors ${user.isAdmin
+              ? 'bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-800'
+              : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
             title={user.isAdmin ? t('removeAdmin') : t('makeAdmin')}
           >
             <Shield className="w-5 h-5" />

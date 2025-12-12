@@ -21,6 +21,8 @@ export const AuthProvider = ({ children }) => {
   const [isActive, setIsActive] = useState(true) // Varsayılan aktif
   const [userSettings, setUserSettings] = useState(null)
   const settingsPollIntervalRef = useRef(null)
+  // Optimistic update yapıldığında timestamp'i sakla (stale data'nın overwrite'ını önlemek için)
+  const lastOptimisticUpdateRef = useRef(null)
 
   // Kullanıcı ayarlarını yükle ve güncelle (sadece MongoDB'den)
   const loadAndUpdateSettings = async (userId) => {
@@ -34,16 +36,16 @@ export const AuthProvider = ({ children }) => {
 
     try {
       const result = await loadUserSettings(userId)
-      
+
       // Veri varsa işle (exists kontrolü esnek olsun, sadece settings varsa yeterli)
       if (result.success && result.settings) {
         const settings = result.settings
-        
+
         // State güncellemelerini optimize et (sadece önemli alanlar değiştiyse güncelle)
         setUserSettings(prevSettings => {
           // Önemli alanları kontrol et (isPremium, adminEncrypted, display)
           if (!prevSettings) return settings
-          
+
           const prevImportant = {
             isPremium: prevSettings.isPremium,
             adminEncrypted: prevSettings.adminEncrypted,
@@ -54,7 +56,7 @@ export const AuthProvider = ({ children }) => {
             adminEncrypted: settings.adminEncrypted,
             display: settings.display
           }
-          
+
           // Önemli alanlar değişmediyse state'i güncelleme (gereksiz render'ı önle)
           if (
             prevImportant.isPremium === newImportant.isPremium &&
@@ -63,20 +65,28 @@ export const AuthProvider = ({ children }) => {
           ) {
             return prevSettings // Aynı referansı döndür (React re-render yapmaz)
           }
-          
+
           return settings
         })
-        
+
         setIsPremium(prevIsPremium => {
           const newIsPremium = settings.isPremium === true || settings.isPremium === 'true'
-          // Eğer state zaten güncellenmişse (optimistic update), backend'den gelen eski veriyi kullanma
-          // Sadece state değişmemişse güncelle
-          if (prevIsPremium !== newIsPremium) {
-            return newIsPremium
+
+          // Optimistic update yapıldıysa ve 10 saniye geçmediyse, backend verisini kullanma
+          // Bu, admin panelinden yapılan değişikliklerin ezilmesini önler
+          if (lastOptimisticUpdateRef.current) {
+            const timeSinceOptimisticUpdate = Date.now() - lastOptimisticUpdateRef.current
+            if (timeSinceOptimisticUpdate < 10000) { // 10 saniye koruma süresi
+              // Optimistic update hala geçerli, backend verisini ignore et
+              return prevIsPremium
+            }
+            // 10 saniye geçti, artık backend verisini kullan
+            lastOptimisticUpdateRef.current = null
           }
-          return prevIsPremium
+
+          return newIsPremium
         })
-        
+
         // isActive kontrolü
         setIsActive(prevIsActive => {
           const newIsActive = settings.isActive !== false // Varsayılan true
@@ -85,7 +95,7 @@ export const AuthProvider = ({ children }) => {
           }
           return prevIsActive
         })
-        
+
         // Admin kontrolü (adminEncrypted varsa ve deşifrelenebiliyorsa admin)
         // State güncellemesini optimize etmek için önce mevcut değeri kontrol et
         let isAdminValue = false
@@ -94,7 +104,7 @@ export const AuthProvider = ({ children }) => {
             // adminEncrypted değerini deşifrele (sync fonksiyon, await gerekmez)
             const { decryptAES } = await import('../utils/advancedSecurity')
             const adminData = decryptAES(settings.adminEncrypted)
-            
+
             // Deşifreleme başarılı ve true ise admin
             if (adminData === true) {
               isAdminValue = true
@@ -110,15 +120,23 @@ export const AuthProvider = ({ children }) => {
             isAdminValue = settings.adminEncrypted && settings.adminEncrypted.trim() !== ''
           }
         }
-        
-        // Sadece değer değiştiyse state'i güncelle (gereksiz render'ları önle)
+
+        // Sadece değer değiştiyse ve optimistic update yoksa state'i güncelle
         setIsAdmin(prevIsAdmin => {
+          // Optimistic update yapıldıysa ve 10 saniye geçmediyse, backend verisini kullanma
+          if (lastOptimisticUpdateRef.current) {
+            const timeSinceOptimisticUpdate = Date.now() - lastOptimisticUpdateRef.current
+            if (timeSinceOptimisticUpdate < 10000) { // 10 saniye koruma süresi
+              return prevIsAdmin
+            }
+          }
+
           if (prevIsAdmin !== isAdminValue) {
             return isAdminValue
           }
           return prevIsAdmin
         })
-        
+
         // Display ayarlarını context'lere uygula (event-based, context'ler dinliyor)
         if (settings.display) {
           // Theme context'e uygula
@@ -126,13 +144,13 @@ export const AuthProvider = ({ children }) => {
             localStorage.setItem('theme', settings.display.theme)
             window.dispatchEvent(new CustomEvent('themeChanged', { detail: settings.display.theme }))
           }
-          
+
           // Language context'e uygula
           if (settings.display.language) {
             localStorage.setItem('language', settings.display.language)
             window.dispatchEvent(new CustomEvent('languageChanged', { detail: settings.display.language }))
           }
-          
+
           // Currency context'e uygula
           if (settings.display.currency) {
             localStorage.setItem('currency', settings.display.currency)
@@ -144,7 +162,7 @@ export const AuthProvider = ({ children }) => {
         if (result.success && !result.exists && !result.backendUnavailable && user) {
           // Backend çalışıyor ama settings yok - varsayılan oluştur (Google login için)
           console.log('ℹ️ [AuthContext] No settings found, creating default settings for Google user...')
-          
+
           const defaultSettings = {
             email: user.email || null,
             displayName: user.displayName || (user.email ? user.email.split('@')[0] : null),
@@ -158,7 +176,7 @@ export const AuthProvider = ({ children }) => {
             createdAt: Date.now(),
             updatedAt: Date.now()
           }
-          
+
           // MongoDB'ye kaydet
           const saveResult = await saveUserSettings(userId, defaultSettings)
           if (saveResult.success) {
@@ -171,7 +189,7 @@ export const AuthProvider = ({ children }) => {
               setIsPremium(settings.isPremium === true || settings.isPremium === 'true')
               setIsActive(settings.isActive !== false)
               setIsAdmin(!!settings.adminEncrypted)
-              
+
               // Display ayarlarını context'lere uygula
               if (settings.display) {
                 if (settings.display.theme) {
@@ -193,7 +211,7 @@ export const AuthProvider = ({ children }) => {
             console.warn('⚠️ [AuthContext] Failed to save default settings:', saveResult.error)
           }
         }
-        
+
         // Ayarlar yok veya backend API çalışmıyor
         if (result.backendUnavailable) {
           console.warn('⚠️ [AuthContext] Backend API çalışmıyor! MongoDB\'den veri alınamıyor.')
@@ -218,17 +236,17 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser)
-      
+
       // Önceki polling'i temizle
       if (settingsPollIntervalRef.current) {
         clearInterval(settingsPollIntervalRef.current)
         settingsPollIntervalRef.current = null
       }
-      
+
       // Kullanıcı ayarlarını MongoDB'den yükle
       if (firebaseUser) {
         await loadAndUpdateSettings(firebaseUser.uid)
-        
+
         // Real-time güncelleme için polling başlat (her 5 saniyede bir kontrol et)
         settingsPollIntervalRef.current = setInterval(() => {
           // Sessizce güncelle (console log yok, sadece state güncelle)
@@ -243,10 +261,10 @@ export const AuthProvider = ({ children }) => {
         setIsAdmin(false)
         setIsActive(true)
       }
-      
+
       setLoading(false)
     })
-    
+
     return () => {
       unsubscribe()
       if (settingsPollIntervalRef.current) {
@@ -286,6 +304,9 @@ export const AuthProvider = ({ children }) => {
 
   // Premium durumunu anında güncelle (optimistic update)
   const updatePremiumStatus = (newPremiumStatus) => {
+    // Optimistic update timestamp'ini kaydet
+    lastOptimisticUpdateRef.current = Date.now()
+
     // State'i hemen güncelle
     setIsPremium(newPremiumStatus)
     // userSettings'i de güncelle
@@ -299,13 +320,13 @@ export const AuthProvider = ({ children }) => {
       }
       return prevSettings
     })
-    
+
     // Polling'i geçici olarak durdur (backend response gelene kadar)
     if (settingsPollIntervalRef.current && user) {
       clearInterval(settingsPollIntervalRef.current)
       settingsPollIntervalRef.current = null
-      
-      // 2 saniye sonra polling'i tekrar başlat (backend güncellemesi için yeterli süre)
+
+      // 5 saniye sonra polling'i tekrar başlat (backend güncellemesi için yeterli süre)
       setTimeout(() => {
         if (user && !settingsPollIntervalRef.current) {
           settingsPollIntervalRef.current = setInterval(() => {
@@ -314,12 +335,15 @@ export const AuthProvider = ({ children }) => {
             })
           }, 5000) // 5 saniye
         }
-      }, 2000) // 2 saniye
+      }, 5000) // 5 saniye (önceden 2 saniyeydi)
     }
   }
 
   // Admin durumunu anında güncelle (optimistic update)
   const updateAdminStatus = (newAdminStatus) => {
+    // Optimistic update timestamp'ini kaydet
+    lastOptimisticUpdateRef.current = Date.now()
+
     // State'i hemen güncelle
     setIsAdmin(newAdminStatus)
     // userSettings'i de güncelle
@@ -333,13 +357,13 @@ export const AuthProvider = ({ children }) => {
       }
       return prevSettings
     })
-    
+
     // Polling'i geçici olarak durdur (backend response gelene kadar)
     if (settingsPollIntervalRef.current && user) {
       clearInterval(settingsPollIntervalRef.current)
       settingsPollIntervalRef.current = null
-      
-      // 2 saniye sonra polling'i tekrar başlat (backend güncellemesi için yeterli süre)
+
+      // 5 saniye sonra polling'i tekrar başlat (backend güncellemesi için yeterli süre)
       setTimeout(() => {
         if (user && !settingsPollIntervalRef.current) {
           settingsPollIntervalRef.current = setInterval(() => {
@@ -348,7 +372,7 @@ export const AuthProvider = ({ children }) => {
             })
           }, 5000) // 5 saniye
         }
-      }, 2000) // 2 saniye
+      }, 5000) // 5 saniye (önceden 2 saniyeydi)
     }
   }
 
@@ -380,11 +404,11 @@ export const AuthProvider = ({ children }) => {
     try {
       const { auth } = await import('../firebase/firebaseConfig')
       const currentUser = auth.currentUser
-      
+
       if (currentUser) {
         await currentUser.reload()
         const refreshedUser = auth.currentUser
-        
+
         const userData = {
           uid: refreshedUser.uid,
           email: refreshedUser.email,
@@ -393,12 +417,12 @@ export const AuthProvider = ({ children }) => {
           emailVerified: refreshedUser.emailVerified,
           providerData: refreshedUser.providerData
         }
-        
+
         setUser(userData)
-        
+
         return { success: true, user: userData }
       }
-      
+
       return { success: false, error: 'No authenticated user' }
     } catch (error) {
       console.error('Refresh user error:', error)
@@ -448,14 +472,14 @@ export const useAuth = () => {
       isAdmin: false,
       isActive: true,
       userSettings: null,
-      refreshUserSettings: async () => {},
-      updatePremiumStatus: () => {},
-      updateAdminStatus: () => {},
+      refreshUserSettings: async () => { },
+      updatePremiumStatus: () => { },
+      updateAdminStatus: () => { },
       loginWithEmailPassword: async () => ({ success: false, error: 'Auth context not available' }),
       loginWithGoogleAuth: async () => ({ success: false, error: 'Auth context not available' }),
       registerWithEmailPassword: async () => ({ success: false, error: 'Auth context not available' }),
-      logout: async () => {},
-      logoutUser: async () => {},
+      logout: async () => { },
+      logoutUser: async () => { },
       updateProfile: async () => ({ success: false, error: 'Auth context not available' }),
       deleteAccount: async () => ({ success: false, error: 'Auth context not available' }),
       refreshUser: async () => ({ success: false, error: 'Auth context not available' })

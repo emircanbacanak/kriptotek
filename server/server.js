@@ -873,11 +873,15 @@ app.get('/api/admin/users', async (req, res) => {
       // Email: Önce MongoDB'den, yoksa Firebase'den, yoksa null
       const email = userWithoutId.email || fbUserData.email || null
 
-      // DisplayName: Önce MongoDB'den, yoksa Firebase'den, yoksa email'den oluştur, yoksa null
+      // DisplayName: Önce MongoDB'den, yoksa Firebase'den, yoksa email'den oluştur, yoksa uid'den kısaltma
       let displayName = userWithoutId.displayName || fbUserData.displayName || null
       if (!displayName && email) {
         const emailPart = email.split('@')[0]
         displayName = emailPart.charAt(0).toUpperCase() + emailPart.slice(1).toLowerCase()
+      }
+      // displayName ve email yoksa uid'den oluştur
+      if (!displayName && !email && userId) {
+        displayName = 'User_' + userId.substring(0, 8)
       }
 
       return {
@@ -913,7 +917,14 @@ app.get('/api/admin/users', async (req, res) => {
 
             // MongoDB'de yoksa Firebase'den ekle
             const email = fbUser.email || null
-            const displayName = fbUser.displayName || (email ? email.split('@')[0].charAt(0).toUpperCase() + email.split('@')[0].slice(1).toLowerCase() : null)
+            let displayName = fbUser.displayName || null
+            if (!displayName && email) {
+              displayName = email.split('@')[0].charAt(0).toUpperCase() + email.split('@')[0].slice(1).toLowerCase()
+            }
+            // displayName ve email yoksa uid'den oluştur
+            if (!displayName && !email && fbUser.uid) {
+              displayName = 'User_' + fbUser.uid.substring(0, 8)
+            }
 
             return {
               uid: fbUser.uid,
