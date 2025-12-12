@@ -40,6 +40,7 @@ class GlobalDataManager {
 
     // Güncelleme kontrolü
     this.updateTimeout = null
+    this.cacheCleanupInterval = null // Periyodik cache temizleme interval'i
     this.subscribers = new Set()
     this.isUpdating = false
 
@@ -1408,10 +1409,22 @@ class GlobalDataManager {
     scheduleNextUpdate()
 
     // Periyodik cache temizleme (her 1 saatte bir)
-    if (typeof window !== 'undefined') {
-      setInterval(() => {
+    if (typeof window !== 'undefined' && !this.cacheCleanupInterval) {
+      this.cacheCleanupInterval = setInterval(() => {
         this.cleanupOldCache()
       }, 60 * 60 * 1000) // 1 saat
+    }
+  }
+
+  // Otomatik güncellemeyi durdur (cleanup için)
+  stopAutoUpdate() {
+    if (this.updateTimeout !== null) {
+      clearTimeout(this.updateTimeout)
+      this.updateTimeout = null
+    }
+    if (this.cacheCleanupInterval !== null) {
+      clearInterval(this.cacheCleanupInterval)
+      this.cacheCleanupInterval = null
     }
   }
 

@@ -243,9 +243,10 @@ function News() {
     return false
   }, [])
 
-  // Her saniye yeniden render ederek zaman damgalarını canlı güncelle (dinamik zaman gösterimi için)
+  // Her 30 saniye yeniden render ederek zaman damgalarını canlı güncelle (dinamik zaman gösterimi için)
+  // PERFORMANS: 1 saniye yerine 30 saniye - gereksiz re-render'ları önle
   useEffect(() => {
-    const interval = setInterval(() => setNowTick(Date.now()), 1000) // Her 1 saniyede bir güncelle
+    const interval = setInterval(() => setNowTick(Date.now()), 30000) // Her 30 saniyede bir güncelle
     return () => clearInterval(interval)
   }, [])
 
