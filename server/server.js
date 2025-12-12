@@ -884,6 +884,9 @@ app.get('/api/admin/users', async (req, res) => {
         displayName = 'User_' + userId.substring(0, 8)
       }
 
+      // Firebase'de var mı kontrol et
+      const existsInFirebase = firebaseUsersMap.has(userId)
+
       return {
         uid: userId,
         email: email,
@@ -894,9 +897,13 @@ app.get('/api/admin/users', async (req, res) => {
         isActive: userWithoutId.isActive !== false, // Varsayılan true
         createdAt: userWithoutId.createdAt || null,
         updatedAt: userWithoutId.updatedAt || null,
-        source: 'mongodb'
+        source: 'mongodb',
+        existsInFirebase: existsInFirebase // Firebase'de olmayan "yetim" kayıtları işaretle
       }
     })
+
+    // MongoDB'de olup Firebase'de olmayan "yetim" kayıtları filtrele
+    const validMongoUsers = mongoUsersList.filter(user => user.existsInFirebase)
 
     // Firebase'den Google provider'ı olan kullanıcıları çek (MongoDB'de olmayanlar)
     let firebaseGoogleUsers = []
@@ -909,8 +916,8 @@ app.get('/api/admin/users', async (req, res) => {
             return fbUser.providerData && fbUser.providerData.some(provider => provider.providerId === 'google.com')
           })
           .map(fbUser => {
-            // MongoDB'de zaten varsa atla (duplicate kontrolü)
-            const existsInMongo = mongoUsersList.some(mu => mu.uid === fbUser.uid)
+            // MongoDB'de (ve Firebase'de) zaten varsa atla (duplicate kontrolü)
+            const existsInMongo = validMongoUsers.some(mu => mu.uid === fbUser.uid)
             if (existsInMongo) {
               return null
             }
@@ -945,8 +952,8 @@ app.get('/api/admin/users', async (req, res) => {
       }
     }
 
-    // MongoDB ve Firebase kullanıcılarını birleştir
-    const allUsers = [...mongoUsersList, ...firebaseGoogleUsers]
+    // MongoDB (Firebase'de de var olanlar) ve Firebase kullanıcılarını birleştir
+    const allUsers = [...validMongoUsers, ...firebaseGoogleUsers]
 
     return res.json({
       success: true,
