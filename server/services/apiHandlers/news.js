@@ -245,18 +245,82 @@ export async function updateNews() {
 
     // 3 kaynaktan PARALEL çek
     const [kriptofoniResult, cointelegraphResult, bitcoinsistemiResult] = await Promise.allSettled([
-      // Kriptofoni RSS feed'ini çek
+      // Kriptofoni RSS feed'ini çek (rss2json proxy ile - Heroku IP engeli için)
       (async () => {
         try {
-          const response = await fetch(RSS_FEEDS.kriptofoni, {
+          // Önce rss2json API'yi dene (Heroku IP engeli bypass)
+          const rss2jsonUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(RSS_FEEDS.kriptofoni)}`
+          let response = await fetch(rss2jsonUrl, {
             headers: {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
           })
+
+          let news = []
+
+          if (response.ok) {
+            try {
+              const data = await response.json()
+              const items = Array.isArray(data.items) ? data.items : []
+
+              const now = new Date()
+              const cutoff = new Date(now.getTime() - (48 * 60 * 60 * 1000)) // Son 48 saat
+
+              news = items
+                .map(item => {
+                  const title = item.title || ''
+                  const url = item.link || item.url || ''
+                  const descriptionRaw = item.description || ''
+                  const description = descriptionRaw.replace(/<[^>]*>/g, '').substring(0, 500)
+                  let pubDate = item.pubDate ? new Date(item.pubDate) : new Date()
+
+                  // Resim URL'i çıkar
+                  let imageUrl = item.enclosure?.link || item.thumbnail || ''
+                  if (!imageUrl && descriptionRaw) {
+                    const imgMatch = descriptionRaw.match(/<img[^>]+src=["']([^"']+)["']/i)
+                    if (imgMatch) imageUrl = imgMatch[1]
+                  }
+                  if (imageUrl && imageUrl.startsWith('//')) {
+                    imageUrl = 'https:' + imageUrl
+                  }
+                  if (imageUrl && imageUrl.startsWith('/') && !imageUrl.startsWith('//')) {
+                    imageUrl = 'https://www.kriptofoni.com' + imageUrl
+                  }
+
+                  return {
+                    id: url,
+                    url: url,
+                    title: title,
+                    description: description,
+                    publishedAt: pubDate,
+                    source: 'kriptofoni',
+                    category: 'crypto',
+                    image: imageUrl || '/kriptotek.jpg'
+                  }
+                })
+                .filter(item => item.publishedAt >= cutoff)
+                .sort((a, b) => b.publishedAt - a.publishedAt)
+
+              if (news.length > 0) {
+                console.log(`✅ ${news.length} Kriptofoni haberi çekildi (rss2json)`)
+                return news
+              }
+            } catch (jsonError) {
+              console.warn('⚠️ Kriptofoni rss2json parse hatası, direkt RSS deneniyor:', jsonError.message)
+            }
+          }
+
+          // rss2json başarısız olursa direkt RSS feed'i dene (fallback)
+          response = await fetch(RSS_FEEDS.kriptofoni, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            },
+            timeout: 10000 // 10 saniye timeout
+          })
           if (response.ok) {
             const xml = await response.text()
-            const news = parseRSSFeed(xml, 'kriptofoni')
-            console.log(`✅ ${news.length} Kriptofoni haberi çekildi`)
+            news = parseRSSFeed(xml, 'kriptofoni')
+            console.log(`✅ ${news.length} Kriptofoni haberi çekildi (direkt RSS)`)
             return news
           }
           return []
