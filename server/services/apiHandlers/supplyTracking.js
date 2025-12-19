@@ -111,7 +111,7 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
       projection: { _id: 1, timestamp: 1, supplies: 1 } // Sadece gerekli alanları çek
     })
     .sort({ _id: -1 }) // YENİDEN ESKİYE sırala (en yeni snapshot'lar önce gelsin)
-    .limit(1000) // Maksimum 1000 snapshot
+    .limit(10000) // 30 günlük veri için yeterli (~8640 snapshot)
     .toArray()
 
   const allSnapshots = []
