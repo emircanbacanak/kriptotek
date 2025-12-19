@@ -3,6 +3,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
 import useSupplyTrackingData from '../hooks/useSupplyTrackingData';
 import useCryptoData from '../hooks/useCryptoData';
+import useInfiniteScroll from '../hooks/useInfiniteScroll';
 import { formatLargeNumber } from '../utils/currencyConverter';
 import { TrendingUp, TrendingDown, Activity, Minus, Search as SearchIcon } from 'lucide-react';
 import { updatePageSEO } from '../utils/seoMetaTags';
@@ -260,6 +261,20 @@ function SupplyTracking() {
     return sorted;
   }, [supplyData, searchTerm, sortOption]);
 
+  // Infinite scroll hook
+  const {
+    visibleItems: visibleSupplyData,
+    hasMore,
+    loadingMore,
+    sentinelRef,
+    visibleCount,
+    totalCount
+  } = useInfiniteScroll(filteredSupplyData, {
+    initialCount: 18,
+    incrementCount: 12,
+    threshold: 100
+  });
+
   const handleSortChange = (event) => {
     setSortOption(event.target.value);
   };
@@ -279,7 +294,7 @@ function SupplyTracking() {
 
   if (showLoading && loading) {
     return (
-      <div className="min-h-screen bg-white dark:bg-gray-900 max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8">
+      <div className="min-h-screen bg-white dark:bg-gray-900 w-full py-4 sm:py-8">
         <div className="flex items-center justify-center py-20">
           <div className="relative w-16 h-16">
             <div className="absolute inset-0 border-4 border-primary-500 dark:border-primary-400 border-t-transparent rounded-full animate-spin"></div>
@@ -290,7 +305,7 @@ function SupplyTracking() {
   }
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900 max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8">
+    <div className="min-h-screen bg-white dark:bg-gray-900 w-full py-4 sm:py-8">
       {/* Header */}
       <div className="flex items-center gap-3 sm:gap-4 mb-6 sm:mb-8 animate-fade-in">
         <div className={`w-8 h-8 sm:w-12 sm:h-12 lg:w-14 lg:h-14 bg-gradient-to-br ${headerIconGradient} rounded-xl flex items-center justify-center shadow-lg transform transition-all duration-300 hover:scale-110`}>
@@ -350,8 +365,8 @@ function SupplyTracking() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 max-h-[720px] overflow-y-auto overflow-x-hidden px-4 sm:px-6 pt-8 sm:pt-10 pb-6 crypto-list-scrollbar">
-          {filteredSupplyData.map((coin, index) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 overflow-y-auto overflow-x-hidden max-h-[720px] pt-4 sm:pt-6 pb-6 crypto-list-scrollbar">
+          {visibleSupplyData.map((coin, index) => (
             <div key={coin.id} className="group/card relative animate-fade-in" style={{ animationDelay: `${Math.min(index * 10, 250)}ms` }}>
               <div className="absolute inset-0 bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl opacity-0 group-hover/card:opacity-50 blur-lg transition-opacity duration-500"></div>
               <div className="relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700 rounded-2xl p-4 sm:p-5 shadow-lg transform transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.02]">
@@ -431,6 +446,22 @@ function SupplyTracking() {
               </div>
             </div>
           ))}
+
+          {/* Infinite Scroll Sentinel */}
+          {hasMore && (
+            <div id="supply-scroll-sentinel" className="col-span-full flex justify-center py-6">
+              {loadingMore ? (
+                <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                  <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 border-t-green-500 dark:border-t-green-400 rounded-full animate-spin"></div>
+                  <span className="text-sm">Yükleniyor...</span>
+                </div>
+              ) : (
+                <div className="text-sm text-gray-400 dark:text-gray-500">
+                  {visibleCount} / {totalCount} coin
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

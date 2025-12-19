@@ -45,7 +45,7 @@ const Admin = () => {
   // Admin kontrolü
   if (!isAdmin) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/50 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/20 dark:to-indigo-950/20 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-white dark:bg-gray-900 w-full py-4 sm:py-8">
         <div className="max-w-2xl w-full bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl rounded-2xl shadow-2xl border border-red-200/50 dark:border-red-900/50 p-8 text-center">
           <div className="w-20 h-20 mx-auto mb-6 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
             <Shield className="w-10 h-10 text-red-600 dark:text-red-400" />
@@ -341,36 +341,37 @@ const Admin = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 mb-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className={`w-8 h-8 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-xl bg-gradient-to-br ${headerIconGradient} flex items-center justify-center shadow-lg`}>
-                <Shield className="w-4 h-4 sm:w-6 sm:h-6 lg:w-7 lg:h-7 text-white" />
-              </div>
-              <div>
-                <h1 className={`text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-bold bg-gradient-to-r ${headerTextGradient} bg-clip-text text-transparent`}>
-                  {t('adminManagement')}
-                </h1>
-                <p className="text-xs sm:text-sm lg:text-base text-gray-600 dark:text-gray-400 mt-1 sm:mt-2">
-                  {t('adminManagementDescription')}
-                </p>
+      {/* Modern Header - Home sayfası stiliyle uyumlu */}
+      <div className="w-full py-4 sm:py-6 md:py-8 mb-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
+            <div className="relative">
+              <div className={`absolute inset-0 bg-gradient-to-br ${headerIconGradient} rounded-lg sm:rounded-xl md:rounded-2xl blur-xl opacity-50`}></div>
+              <div className={`relative bg-gradient-to-br ${headerIconGradient} w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-lg sm:rounded-xl md:rounded-2xl flex items-center justify-center shadow-lg`}>
+                <Shield className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 text-white" />
               </div>
             </div>
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="flex items-center space-x-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">{t('refresh')}</span>
-            </button>
+            <div className="flex-1 min-w-0">
+              <h1 className={`text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-bold bg-gradient-to-r ${headerTextGradient} bg-clip-text text-transparent`}>
+                {t('adminManagement')}
+              </h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-1 sm:mt-2 text-[11px] sm:text-xs md:text-sm lg:text-base">
+                {t('adminManagementDescription')}
+              </p>
+            </div>
           </div>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-lg sm:rounded-xl shadow-lg hover:shadow-xl hover:from-primary-600 hover:to-primary-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <RefreshCw className={`w-4 h-4 sm:w-5 sm:h-5 ${refreshing ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline text-sm sm:text-base font-medium">{t('refresh')}</span>
+          </button>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="w-full">
         {/* Search and Filter Bar */}
         <div className="mb-6 space-y-4">
           {/* Search */}
@@ -467,7 +468,7 @@ const Admin = () => {
               <Crown className="w-6 h-6 text-yellow-500 mr-2" />
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">{t('premiumUsers')} ({premiumUsers.length})</h2>
             </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 overflow-hidden max-h-[500px] overflow-y-auto crypto-list-scrollbar">
               {premiumUsers.map((user) => (
                 <UserCard
                   key={user.uid}
@@ -488,7 +489,7 @@ const Admin = () => {
               <User className="w-6 h-6 text-blue-500 mr-2" />
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">{t('regularUsers')} ({regularUsers.length})</h2>
             </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 overflow-hidden max-h-[500px] overflow-y-auto crypto-list-scrollbar">
               {regularUsers.map((user) => (
                 <UserCard
                   key={user.uid}

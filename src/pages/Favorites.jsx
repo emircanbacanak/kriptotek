@@ -17,7 +17,7 @@ const calculateCryptoMetrics = (coin, index, t) => {
   const volumeRatio = coin.total_volume && coin.market_cap ? coin.total_volume / coin.market_cap : 0
   const priceChange = coin.price_change_percentage_24h || 0
   const rank = coin.market_cap_rank || index + 1
-  
+
   const momentumFactor = priceChange * 0.6
   let reversionFactor = 0
   if (priceChange > 10) reversionFactor = -2
@@ -41,10 +41,10 @@ const Favorites = () => {
   const { user } = useAuth()
   const { isDark } = useTheme()
   const navigate = useNavigate()
-  
+
   // Merkezi veri yönetim sisteminden crypto verilerini al
   const { coins } = useCryptoData()
-  
+
   const [favoriteCoins, setFavoriteCoins] = useState([])
   const [favoriteIds, setFavoriteIds] = useState([])
   const [loading, setLoading] = useState(false) // Başlangıçta false, user yüklendiğinde true yapılacak
@@ -66,14 +66,14 @@ const Favorites = () => {
   // Favori ID'lerine göre coin'leri filtrele ve işle
   const processFavoriteCoins = useCallback((favoritesIds, allCoins) => {
     if (!isMountedRef.current) return
-    
+
     // Favoriler boşsa veya coin'ler yoksa
     if (!favoritesIds || favoritesIds.length === 0) {
       setFavoriteCoins([])
       setLoading(false)
       return
     }
-    
+
     // Coin'ler henüz yüklenmemişse
     if (!allCoins || allCoins.length === 0) {
       setFavoriteCoins([])
@@ -85,7 +85,7 @@ const Favorites = () => {
     const favorites = allCoins
       .filter(coin => favoritesIds.includes(coin.id))
       .map((coin, index) => calculateCryptoMetrics(coin, index, t))
-    
+
     setFavoriteCoins(favorites)
     setLoading(false)
   }, [t])
@@ -105,15 +105,15 @@ const Favorites = () => {
     const initializeFavorites = async () => {
       try {
         setLoading(true)
-        
+
         // İlk yükleme
         const favoritesResult = await loadUserFavorites(user.uid)
         if (!isMountedRef.current) return
-        
+
         if (favoritesResult.success) {
           const favoritesIds = favoritesResult.favorites || []
           setFavoriteIds(favoritesIds)
-          
+
           // Mevcut coin'lerle işle
           if (coins && coins.length > 0) {
             processFavoriteCoins(favoritesIds, coins)
@@ -135,7 +135,7 @@ const Favorites = () => {
 
           if (result.success) {
             const newFavorites = result.favorites || []
-            
+
             // State'i güncelle
             setFavoriteIds(prevIds => {
               // Sadece değişiklik varsa güncelle
@@ -228,7 +228,7 @@ const Favorites = () => {
   const cancelClearAll = () => {
     setShowClearConfirm(false)
   }
-  
+
   const formatPrice = useCallback((price) => {
     if (!price || isNaN(price)) return 'N/A'
     const convertedPrice = convertCurrency(price, 'USD', currency)
@@ -247,7 +247,7 @@ const Favorites = () => {
 
   // Get gradient classes based on theme
   const emptyStateGradient = useMemo(() => {
-    return isDark 
+    return isDark
       ? 'from-blue-500 via-indigo-600 to-purple-500'
       : 'from-cyan-500 via-blue-500 to-indigo-500'
   }, [isDark])
@@ -270,7 +270,7 @@ const Favorites = () => {
   // Loading durumunda spinner göster (sadece ilk yükleme sırasında)
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-blue-900/30 dark:to-indigo-900/30 flex items-center justify-center">
+      <div className="min-h-screen bg-white dark:bg-gray-900 flex items-center justify-center">
         <div className="relative">
           <div className="w-16 h-16 border-4 border-blue-200 dark:border-blue-900 rounded-full"></div>
           <div className="absolute top-0 left-0 w-16 h-16 border-4 border-transparent border-t-blue-600 dark:border-t-blue-400 rounded-full animate-spin"></div>
@@ -316,7 +316,7 @@ const Favorites = () => {
         </div>
       )}
 
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-blue-900/30 dark:to-indigo-900/30 max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8">
+      <div className="min-h-screen bg-white dark:bg-gray-900 w-full py-4 sm:py-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-6 sm:mb-8 animate-fade-in">
           <div className="flex items-center gap-3 sm:gap-4">
@@ -333,8 +333,8 @@ const Favorites = () => {
             </div>
           </div>
           {favoriteCoins.length > 0 && (
-            <button 
-              onClick={handleClearAll} 
+            <button
+              onClick={handleClearAll}
               className={`group relative overflow-hidden bg-gradient-to-r ${clearButtonGradient} text-white rounded-lg sm:rounded-xl px-3 py-2 sm:px-5 sm:py-3 shadow-lg transform transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 hover:scale-105 flex items-center gap-1.5 sm:gap-2 whitespace-nowrap font-medium text-xs sm:text-sm lg:text-base w-full sm:w-auto justify-center`}
             >
               <Trash2 className="w-3 h-3 sm:w-5 sm:h-5" />

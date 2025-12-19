@@ -1,5 +1,5 @@
-import React, { useState, Suspense, useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import React, { useState, Suspense, useEffect, useRef } from 'react';
+import { Outlet, useLocation } from 'react-router-dom';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import Footer from './Footer';
@@ -11,6 +11,17 @@ import realtimeService from '../services/realtimeService';
 const Layout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { t } = useLanguage();
+  const location = useLocation();
+  const mainRef = useRef(null);
+
+  // Sayfa değiştiğinde scroll pozisyonunu sıfırla
+  useEffect(() => {
+    if (mainRef.current) {
+      mainRef.current.scrollTop = 0;
+    }
+    // Window scroll da sıfırla (fallback)
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
 
   // GlobalDataManager ve RealtimeService'i başlat
   useEffect(() => {
@@ -41,8 +52,8 @@ const Layout = () => {
           <Sidebar />
         </div>
 
-        <main className="flex-1 overflow-y-auto hide-scrollbar" data-scroll-container>
-          <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8 animate-fade-in">
+        <main ref={mainRef} className="flex-1 overflow-y-auto crypto-list-scrollbar" data-scroll-container>
+          <div className="w-full px-3 sm:px-4 lg:px-6 xl:px-8 2xl:px-12 py-4 sm:py-8 animate-fade-in">
             <Suspense fallback={<div className="text-center p-8">{t('loadingPage')}</div>}>
               <Outlet />
             </Suspense>

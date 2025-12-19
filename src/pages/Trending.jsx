@@ -6,6 +6,7 @@ import { useTheme } from '../contexts/ThemeContext'
 import { loadUserFavorites, addFavorite, removeFavorite } from '../services/userFavorites'
 import useTrendingData from '../hooks/useTrendingData'
 import useCryptoData from '../hooks/useCryptoData'
+import useInfiniteScroll from '../hooks/useInfiniteScroll'
 import { convertCurrency, formatCurrency, formatLargeNumber } from '../utils/currencyConverter'
 import { Star, TrendingUp, TrendingDown, Search, Sparkles, Activity, ExternalLink } from 'lucide-react'
 import { updatePageSEO } from '../utils/seoMetaTags'
@@ -15,13 +16,13 @@ const Trending = () => {
   const { currency } = useCurrency()
   const { user } = useAuth()
   const { isDark } = useTheme()
-  
+
   // Merkezi veri yönetim sisteminden trending verilerini al (tahmin verileri için)
   const { trendingCoins, loading, isUpdating } = useTrendingData()
-  
+
   // Anasayfadaki gerçek coin verilerini al (fiyat, market_cap, volume, vs. için)
   const { coins: realCoins } = useCryptoData()
-  
+
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState('trend_score')
   const [sortOrder, setSortOrder] = useState('desc')
@@ -56,9 +57,9 @@ const Trending = () => {
 
   const handleToggleFavorite = async (coinId) => {
     if (!user) return
-    
+
     const isFavorite = favorites.has(coinId)
-    
+
     // Optimistic update
     setFavorites(prev => {
       const newSet = new Set(prev)
@@ -151,35 +152,35 @@ const Trending = () => {
         }
       })
     }
-    
+
     return (trendingCoins || []).map((trendingCoin) => {
       // Anasayfadaki gerçek coin verisini bul
       const realCoin = realCoinsMap.get(trendingCoin.id) || null
-      
+
       const trendScore = trendingCoin.trend_score || 0
       const aiPrediction = parseFloat(trendingCoin.ai_prediction || 0)
-      
+
       // Backend'den gelen verileri kullan, yoksa frontend'de hesapla (fallback)
       const trendInfo = trendingCoin.trend_level ? {
         level: trendingCoin.trend_level,
         emoji: trendingCoin.trend_emoji || '📊',
         color: trendingCoin.trend_color || 'orange'
       } : getTrendLevel(trendScore)
-      
+
       const aiInfo = trendingCoin.ai_direction ? {
         direction: trendingCoin.ai_direction,
         emoji: trendingCoin.ai_emoji || '➖',
         color: trendingCoin.ai_color || 'gray',
         position: trendingCoin.position_type || 'neutral'
       } : getAIDirection(aiPrediction)
-      
+
       // prediction_base_price sadece backend'den gelmeli, fallback kullanma (sürekli güncellenmesin)
       const predictionBasePrice = trendingCoin.prediction_base_price || null
       const predictedPrice = trendingCoin.predicted_price || (predictionBasePrice ? predictionBasePrice * (1 + (aiPrediction / 100)) : null)
 
       // Gerçek rank'ı al (anasayfadan)
       const realRank = realCoin?.market_cap_rank || trendingCoin.market_cap_rank || 0
-      
+
       // Market Cap Score'u gerçek rank'a göre yeniden hesapla (500 coin için)
       // Daha gerçekçi dağılım: Logaritmik ölçek kullan
       // Rank 1 = 100, Rank 10 = 90, Rank 50 = 70, Rank 100 = 50, Rank 200 = 30, Rank 500 = 0
@@ -217,25 +218,25 @@ const Trending = () => {
       } else {
         recalculatedMarketCapScore = Math.round(trendingCoin.market_cap_score || 0)
       }
-      
+
       // Gerçek verilerle skorları yeniden hesapla (backend cache eski olabilir)
       const realVolume = realCoin?.total_volume || realCoin?.volume_24h || trendingCoin.total_volume || trendingCoin.volume_24h || 0
       const realMarketCap = realCoin?.market_cap || trendingCoin.market_cap || 0
       const realPriceChange = realCoin?.price_change_percentage_24h || realCoin?.change_24h || trendingCoin.price_change_percentage_24h || trendingCoin.change_24h || 0
-      
+
       // Likidite Skoru: Volume/Market Cap Ratio
       const realVolumeRatio = realMarketCap > 0 ? realVolume / realMarketCap : 0
       const recalculatedLiquidityScore = Math.round(Math.min(100, Math.max(0, realVolumeRatio * 100)))
-      
+
       // Fiyat Momentumu: 24 saatlik değişim
       const recalculatedMomentumScore = Math.round(Math.min(100, Math.max(0, 50 + (realPriceChange * (50 / 60)))))
-      
+
       // Volatilite Skoru: Mutlak değişim
       const recalculatedVolatilityScore = Math.round(Math.min(100, Math.abs(realPriceChange) * (100 / 60)))
-      
+
       // Hacim Trendi: Logaritmik ölçek (backend'den gelen değeri kullan, yuvarla)
       const recalculatedVolumeTrendScore = Math.round(trendingCoin.volume_trend_score || 0)
-      
+
       // Gerçek verileri anasayfadan al, yoksa trending'den fallback kullan
       return {
         ...trendingCoin,
@@ -253,7 +254,7 @@ const Trending = () => {
         name: realCoin?.name || trendingCoin.name || '',
         symbol: realCoin?.symbol || trendingCoin.symbol || '',
         sparkline_in_7d: realCoin?.sparkline_in_7d || trendingCoin.sparkline_in_7d || null,
-        
+
         // TAHMİN VERİLERİ (trending'den - sadece bunlar tahmin)
         trend_score: trendScore,
         trend_level: trendInfo.level,
@@ -285,7 +286,7 @@ const Trending = () => {
     // Arama filtresi
     if (searchTerm) {
       const term = searchTerm.toLowerCase()
-      filtered = filtered.filter(coin => 
+      filtered = filtered.filter(coin =>
         coin.name?.toLowerCase().includes(term) ||
         coin.symbol?.toLowerCase().includes(term)
       )
@@ -330,6 +331,20 @@ const Trending = () => {
     return filtered
   }, [processedCoins, searchTerm, sortBy, sortOrder])
 
+  // Infinite scroll hook
+  const {
+    visibleItems: visibleTrendingCoins,
+    hasMore,
+    loadingMore,
+    sentinelRef,
+    visibleCount,
+    totalCount
+  } = useInfiniteScroll(filteredAndSortedCoins, {
+    initialCount: 15,
+    incrementCount: 12,
+    threshold: 100
+  })
+
   const formatPrice = useCallback((price) => {
     const convertedPrice = convertCurrency(price, 'USD', currency)
     return formatCurrency(convertedPrice, currency)
@@ -348,7 +363,7 @@ const Trending = () => {
 
     // Baz fiyatın formatlanmış halini al (currency conversion dahil)
     const formattedBasePrice = formatPrice(basePrice)
-    
+
     // Formatlanmış string'den ondalık basamak sayısını bul
     // Önce currency symbol'leri ve boşlukları temizle
     const cleanBasePrice = formattedBasePrice
@@ -356,10 +371,10 @@ const Trending = () => {
       .replace(/\s+/g, '')
       .replace(/,/g, '') // Binlik ayırıcıları da temizle
       .trim()
-    
+
     const decimalIndex = cleanBasePrice.indexOf('.')
     let decimalPlaces = 0
-    
+
     if (decimalIndex !== -1) {
       // Ondalık kısmı al (tüm basamakları say, sondaki sıfırlar dahil)
       const decimalPart = cleanBasePrice.substring(decimalIndex + 1)
@@ -374,7 +389,7 @@ const Trending = () => {
     // Tahmini fiyatı aynı sayıda ondalık basamakla formatla
     const convertedPrice = convertCurrency(predictedPrice, 'USD', currency)
     const formatted = convertedPrice.toFixed(decimalPlaces)
-    
+
     // Currency symbol ekle (formatPrice ile aynı formatı kullan)
     if (currency === 'USD') {
       return `$${formatted}`
@@ -407,7 +422,7 @@ const Trending = () => {
 
   if (loading && trendingCoins.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/50 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/20 dark:to-indigo-950/20 flex items-center justify-center">
+      <div className="min-h-screen bg-white dark:bg-gray-900 flex items-center justify-center">
         <div className="relative">
           <div className="w-20 h-20 border-4 border-blue-200/50 dark:border-blue-900/50 rounded-full"></div>
           <div className="absolute top-0 left-0 w-20 h-20 border-4 border-transparent border-t-blue-600 dark:border-t-blue-400 rounded-full animate-spin"></div>
@@ -421,7 +436,7 @@ const Trending = () => {
 
   if (!loading && filteredAndSortedCoins.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/50 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/20 dark:to-indigo-950/20 max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8">
+      <div className="min-h-screen bg-white dark:bg-gray-900 w-full py-4 sm:py-8">
         <div className="flex items-center gap-3 sm:gap-4 mb-6 sm:mb-8 animate-fade-in">
           <div className={`w-8 h-8 sm:w-12 sm:h-12 lg:w-14 lg:h-14 bg-gradient-to-br ${headerIconGradient} rounded-xl flex items-center justify-center shadow-lg`}>
             <TrendingUp className="w-4 h-4 sm:w-6 sm:h-6 lg:w-7 lg:h-7 text-white" />
@@ -432,7 +447,7 @@ const Trending = () => {
             </h1>
           </div>
         </div>
-        
+
         <div className="relative overflow-hidden rounded-2xl shadow-2xl animate-fade-in">
           <div className={`absolute inset-0 bg-gradient-to-br ${emptyStateGradient}`}></div>
           <div className="relative z-10 p-8 sm:p-12 text-center">
@@ -448,7 +463,7 @@ const Trending = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/50 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/20 dark:to-indigo-950/20 max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8 animate-fade-in">
+    <div className="min-h-screen bg-white dark:bg-gray-900 w-full py-4 sm:py-8 animate-fade-in">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 md:gap-0 mb-4 sm:mb-6 md:mb-8 animate-fade-in">
         <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
@@ -508,8 +523,8 @@ const Trending = () => {
 
       {/* Trending Coins Grid */}
       <div className="space-y-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4 lg:gap-6 max-h-[600px] sm:max-h-[700px] lg:max-h-[800px] overflow-y-auto overflow-x-hidden p-4 sm:p-5 lg:p-6 crypto-list-scrollbar">
-          {filteredAndSortedCoins.map((coin, index) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4 lg:gap-6 overflow-y-auto overflow-x-hidden max-h-[720px] p-4 sm:p-5 lg:p-6 crypto-list-scrollbar">
+          {visibleTrendingCoins.map((coin, index) => (
             <div key={coin.id || index} className="group/card relative animate-fade-in" style={{ animationDelay: `${index * 50}ms` }}>
               <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-2xl opacity-0 group-hover/card:opacity-50 blur-lg transition-opacity duration-300"></div>
               <div className="relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700 rounded-lg sm:rounded-xl lg:rounded-2xl p-2 sm:p-3 md:p-4 lg:p-5 shadow-lg transform transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 flex flex-col">
@@ -540,11 +555,10 @@ const Trending = () => {
                     <div className="text-[10px] sm:text-xs md:text-sm lg:text-lg font-bold text-gray-900 dark:text-white">
                       {formatPrice(coin.price)}
                     </div>
-                    <div className={`flex items-center justify-end text-[9px] sm:text-[10px] md:text-xs lg:text-sm font-medium ${
-                      coin.change_24h >= 0
-                        ? 'text-green-600 dark:text-green-400'
-                        : 'text-red-600 dark:text-red-400'
-                    }`}>
+                    <div className={`flex items-center justify-end text-[9px] sm:text-[10px] md:text-xs lg:text-sm font-medium ${coin.change_24h >= 0
+                      ? 'text-green-600 dark:text-green-400'
+                      : 'text-red-600 dark:text-red-400'
+                      }`}>
                       {coin.change_24h >= 0 ? <TrendingUp className="w-2 h-2 sm:w-2.5 sm:h-2.5 md:w-3 md:h-3 lg:w-4 lg:h-4" /> : <TrendingDown className="w-2 h-2 sm:w-2.5 sm:h-2.5 md:w-3 md:h-3 lg:w-4 lg:h-4" />}
                       <span className="ml-0.5 sm:ml-1">{coin.change_24h.toFixed(2)}%</span>
                     </div>
@@ -553,11 +567,10 @@ const Trending = () => {
                   {/* Right Side: Favorite Button */}
                   <button
                     onClick={() => handleToggleFavorite(coin.id)}
-                    className={`transition-colors p-0.5 sm:p-1 rounded-full flex-shrink-0 ${
-                      favorites.has(coin.id)
-                        ? 'text-yellow-500 hover:text-yellow-600'
-                        : 'text-gray-400 hover:text-yellow-500'
-                    }`}
+                    className={`transition-colors p-0.5 sm:p-1 rounded-full flex-shrink-0 ${favorites.has(coin.id)
+                      ? 'text-yellow-500 hover:text-yellow-600'
+                      : 'text-gray-400 hover:text-yellow-500'
+                      }`}
                     title={favorites.has(coin.id) ? t('removeFavorite') : t('addFavorite')}
                   >
                     <Star className={`w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 lg:w-6 lg:h-6 ${favorites.has(coin.id) ? 'fill-current' : ''}`} />
@@ -599,28 +612,26 @@ const Trending = () => {
                         </div>
                       </div>
                       <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
-                        <div 
-                          className={`h-2.5 rounded-full transition-all duration-300 ${
-                            coin.trend_color === 'green' ? 'bg-gradient-to-r from-green-500 to-green-600' :
+                        <div
+                          className={`h-2.5 rounded-full transition-all duration-300 ${coin.trend_color === 'green' ? 'bg-gradient-to-r from-green-500 to-green-600' :
                             coin.trend_color === 'lime' ? 'bg-gradient-to-r from-lime-500 to-lime-600' :
-                            coin.trend_color === 'yellow' ? 'bg-gradient-to-r from-yellow-500 to-yellow-600' :
-                            coin.trend_color === 'orange' ? 'bg-gradient-to-r from-orange-500 to-orange-600' :
-                            'bg-gradient-to-r from-red-500 to-red-600'
-                          }`}
+                              coin.trend_color === 'yellow' ? 'bg-gradient-to-r from-yellow-500 to-yellow-600' :
+                                coin.trend_color === 'orange' ? 'bg-gradient-to-r from-orange-500 to-orange-600' :
+                                  'bg-gradient-to-r from-red-500 to-red-600'
+                            }`}
                           style={{ width: `${coin.trend_score}%` }}
                         ></div>
                       </div>
-                    <div className="mt-1.5 text-center">
-                      <span className={`text-[9px] sm:text-xs font-semibold px-2 py-0.5 rounded-full ${
-                        coin.trend_color === 'green' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                        coin.trend_color === 'lime' ? 'bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-400' :
-                        coin.trend_color === 'yellow' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                        coin.trend_color === 'orange' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
-                        'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                      }`}>
-                        {translateMetric(coin.trend_level)}
-                      </span>
-                    </div>
+                      <div className="mt-1.5 text-center">
+                        <span className={`text-[9px] sm:text-xs font-semibold px-2 py-0.5 rounded-full ${coin.trend_color === 'green' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                          coin.trend_color === 'lime' ? 'bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-400' :
+                            coin.trend_color === 'yellow' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                              coin.trend_color === 'orange' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
+                                'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                          }`}>
+                          {translateMetric(coin.trend_level)}
+                        </span>
+                      </div>
                     </div>
 
                     {/* AI Prediction Box */}
@@ -653,13 +664,12 @@ const Trending = () => {
                         </div>
                         <div className="flex items-center space-x-1">
                           <span className="text-lg sm:text-xl">{coin.ai_emoji}</span>
-                          <span className={`text-xs sm:text-sm font-bold ${
-                            coin.ai_color === 'green' ? 'text-green-600 dark:text-green-400' :
+                          <span className={`text-xs sm:text-sm font-bold ${coin.ai_color === 'green' ? 'text-green-600 dark:text-green-400' :
                             coin.ai_color === 'lime' ? 'text-lime-600 dark:text-lime-400' :
-                            coin.ai_color === 'red' ? 'text-red-600 dark:text-red-400' :
-                            coin.ai_color === 'orange' ? 'text-orange-600 dark:text-orange-400' :
-                            'text-gray-600 dark:text-gray-400'
-                          }`}>
+                              coin.ai_color === 'red' ? 'text-red-600 dark:text-red-400' :
+                                coin.ai_color === 'orange' ? 'text-orange-600 dark:text-orange-400' :
+                                  'text-gray-600 dark:text-gray-400'
+                            }`}>
                             {coin.ai_prediction >= 0 ? '+' : ''}{coin.ai_prediction.toFixed(2)}%
                           </span>
                         </div>
@@ -678,17 +688,16 @@ const Trending = () => {
                           </span>
                         </div>
                       </div>
-                    <div className="mt-2 text-center">
-                      <span className={`text-[9px] sm:text-xs font-semibold px-2 py-0.5 rounded-full ${
-                        coin.ai_color === 'green' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                        coin.ai_color === 'lime' ? 'bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-400' :
-                        coin.ai_color === 'red' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                        coin.ai_color === 'orange' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
-                        'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
-                      }`}>
-                        {translateMetric(coin.ai_direction)}
-                      </span>
-                    </div>
+                      <div className="mt-2 text-center">
+                        <span className={`text-[9px] sm:text-xs font-semibold px-2 py-0.5 rounded-full ${coin.ai_color === 'green' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                          coin.ai_color === 'lime' ? 'bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-400' :
+                            coin.ai_color === 'red' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                              coin.ai_color === 'orange' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
+                                'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
+                          }`}>
+                          {translateMetric(coin.ai_direction)}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -703,6 +712,22 @@ const Trending = () => {
               </div>
             </div>
           ))}
+
+          {/* Infinite Scroll Sentinel */}
+          {hasMore && (
+            <div id="trending-scroll-sentinel" className="col-span-full flex justify-center py-6">
+              {loadingMore ? (
+                <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                  <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 border-t-blue-500 dark:border-t-blue-400 rounded-full animate-spin"></div>
+                  <span className="text-sm">Yükleniyor...</span>
+                </div>
+              ) : (
+                <div className="text-sm text-gray-400 dark:text-gray-500">
+                  {visibleCount} / {totalCount} coin
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -712,9 +737,9 @@ const Trending = () => {
           <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-md sm:max-w-lg lg:max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-3 sm:p-4 lg:p-6 flex items-center justify-between z-10">
               <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
-                <img 
-                  src={selectedCoin.image} 
-                  alt={selectedCoin.name} 
+                <img
+                  src={selectedCoin.image}
+                  alt={selectedCoin.name}
                   className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full flex-shrink-0"
                   referrerPolicy="no-referrer"
                 />
@@ -723,7 +748,7 @@ const Trending = () => {
                   <p className="text-[9px] sm:text-xs text-gray-500 dark:text-gray-400 truncate">{selectedCoin.symbol?.toUpperCase()}</p>
                 </div>
               </div>
-              <button 
+              <button
                 onClick={closeModal}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 flex-shrink-0"
               >
@@ -741,11 +766,10 @@ const Trending = () => {
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-900 p-2 sm:p-3 rounded-lg">
                   <p className="text-[9px] sm:text-xs text-gray-600 dark:text-gray-400 mb-1 font-semibold">{t('change24h')}</p>
-                  <p className={`text-xs sm:text-sm lg:text-base font-bold ${
-                    selectedCoin.change_24h >= 0 
-                      ? 'text-green-600 dark:text-green-400' 
-                      : 'text-red-600 dark:text-red-400'
-                  }`}>
+                  <p className={`text-xs sm:text-sm lg:text-base font-bold ${selectedCoin.change_24h >= 0
+                    ? 'text-green-600 dark:text-green-400'
+                    : 'text-red-600 dark:text-red-400'
+                    }`}>
                     {selectedCoin.change_24h >= 0 ? '+' : ''}{selectedCoin.change_24h.toFixed(2)}%
                   </p>
                 </div>
@@ -772,7 +796,7 @@ const Trending = () => {
                     </div>
                     <span className="text-base sm:text-lg flex-shrink-0">{selectedCoin.ai_emoji}</span>
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-1.5 sm:gap-2 mb-2">
                     <div className={`bg-white/10 backdrop-blur-sm p-1.5 sm:p-2 rounded ${isDark ? '' : ''}`}>
                       <div className={`text-[8px] sm:text-xs opacity-80 mb-0.5 ${isDark ? 'text-white' : 'text-white'}`}>{t('estimatedChange')}</div>
@@ -808,25 +832,23 @@ const Trending = () => {
                   </div>
                 </div>
                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 sm:h-3">
-                  <div 
-                    className={`h-2 sm:h-3 rounded-full transition-all ${
-                      selectedCoin.trend_color === 'green' ? 'bg-gradient-to-r from-green-500 to-green-600' :
+                  <div
+                    className={`h-2 sm:h-3 rounded-full transition-all ${selectedCoin.trend_color === 'green' ? 'bg-gradient-to-r from-green-500 to-green-600' :
                       selectedCoin.trend_color === 'lime' ? 'bg-gradient-to-r from-lime-500 to-lime-600' :
-                      selectedCoin.trend_color === 'yellow' ? 'bg-gradient-to-r from-yellow-500 to-yellow-600' :
-                      selectedCoin.trend_color === 'orange' ? 'bg-gradient-to-r from-orange-500 to-orange-600' :
-                      'bg-gradient-to-r from-red-500 to-red-600'
-                    }`}
+                        selectedCoin.trend_color === 'yellow' ? 'bg-gradient-to-r from-yellow-500 to-yellow-600' :
+                          selectedCoin.trend_color === 'orange' ? 'bg-gradient-to-r from-orange-500 to-orange-600' :
+                            'bg-gradient-to-r from-red-500 to-red-600'
+                      }`}
                     style={{ width: `${selectedCoin.trend_score}%` }}
                   ></div>
                 </div>
                 <div className="mt-2 text-center">
-                  <span className={`inline-block text-sm font-bold px-3 py-1 rounded-full ${
-                    selectedCoin.trend_color === 'green' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                  <span className={`inline-block text-sm font-bold px-3 py-1 rounded-full ${selectedCoin.trend_color === 'green' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
                     selectedCoin.trend_color === 'lime' ? 'bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-400' :
-                    selectedCoin.trend_color === 'yellow' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                    selectedCoin.trend_color === 'orange' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
-                    'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                  }`}>
+                      selectedCoin.trend_color === 'yellow' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                        selectedCoin.trend_color === 'orange' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
+                          'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                    }`}>
                     {translateMetric(selectedCoin.trend_level)}
                   </span>
                 </div>
@@ -838,7 +860,7 @@ const Trending = () => {
                   <span>📊</span>
                   <span>{t('detailedAnalysisMetrics')}</span>
                 </h4>
-                
+
                 <div className="space-y-2.5">
                   {[
                     { label: t('liquidityScore'), value: selectedCoin.liquidity_score, color: 'blue', icon: '💧', desc: t('volumeMarketCapRatio') },

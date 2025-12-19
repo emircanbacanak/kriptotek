@@ -8,9 +8,9 @@ function FedRate() {
   const { t, language } = useLanguage()
   const { theme } = useTheme()
   const { fedRateData, loading: globalLoading, isUpdating } = useFedRateData()
-  
+
   const [errorMessage, setErrorMessage] = useState('')
-  
+
   // useFedRateData'dan gelen veriyi kullan
   const data = fedRateData || {
     announcedUpper: null,
@@ -20,16 +20,16 @@ function FedRate() {
     lastAnnounceDate: null,
     nextDecisionDate: null,
   }
-  
+
   const isLoading = globalLoading
 
   // Live countdown effect (updates every second)
   const [countdownTrigger, setCountdownTrigger] = useState(Date.now())
-  
+
   useEffect(() => {
     updatePageSEO('fedRate', language)
   }, [language])
-  
+
   useEffect(() => {
     if (!data.nextDecisionDate) return
 
@@ -47,18 +47,18 @@ function FedRate() {
     const target = new Date(data.nextDecisionDate).getTime()
     const now = countdownTrigger // Use countdown trigger to force recalculation
     const diff = target - now
-    
+
     // If expired, show waiting state
     if (diff <= 0) {
       return { weeks: 0, days: 0, hours: 0, minutes: 0, seconds: 0, isExpired: true }
     }
-    
+
     const weeks = Math.floor(diff / (7 * 24 * 60 * 60 * 1000))
     const days = Math.floor((diff % (7 * 24 * 60 * 60 * 1000)) / (24 * 60 * 60 * 1000))
     const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000))
     const minutes = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000))
     const seconds = Math.floor((diff % (60 * 1000)) / 1000)
-    
+
     return { weeks, days, hours, minutes, seconds, isExpired: false }
   }, [data.nextDecisionDate, countdownTrigger])
 
@@ -78,13 +78,13 @@ function FedRate() {
 
   // Get gradient classes based on theme
   const countdownGradient = useMemo(() => {
-    return theme === 'dark' 
+    return theme === 'dark'
       ? 'from-blue-500 via-indigo-600 to-purple-500'
       : 'from-cyan-500 via-blue-500 to-indigo-500'
   }, [theme])
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-blue-900/30 dark:to-indigo-900/30 max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8">
+    <div className="min-h-screen bg-white dark:bg-gray-900 w-full py-4 sm:py-8">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center gap-3 sm:gap-4 mb-6 sm:mb-8 animate-fade-in">
@@ -127,7 +127,7 @@ function FedRate() {
               <section className="relative overflow-hidden rounded-2xl shadow-2xl animate-fade-in">
                 <div className={`absolute inset-0 bg-gradient-to-br ${countdownGradient}`}></div>
                 <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMC41IiBvcGFjaXR5PSIwLjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-30"></div>
-                
+
                 <div className="relative p-6 sm:p-8">
                   <div className="text-center mb-6 sm:mb-8">
                     <h2 className="text-xl sm:text-2xl font-bold text-white mb-2">{t('fedRateDecision')}</h2>

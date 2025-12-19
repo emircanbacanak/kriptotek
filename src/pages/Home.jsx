@@ -4,6 +4,7 @@ import { useTheme } from '../contexts/ThemeContext'
 import { useCurrency } from '../contexts/CurrencyContext'
 import { useAuth } from '../contexts/AuthContext'
 import useCryptoData from '../hooks/useCryptoData'
+import useInfiniteScroll from '../hooks/useInfiniteScroll'
 import { loadUserFavorites, addFavorite, removeFavorite } from '../services/userFavorites'
 import { updatePageSEO } from '../utils/seoMetaTags'
 import { formatCurrency, formatLargeNumber, formatLargeCurrency } from '../utils/currencyConverter'
@@ -150,7 +151,28 @@ const Home = () => {
     setSearchTerm('')
     setSortBy('market_cap')
     setSortOrder('desc')
+    resetScroll()
   }
+
+  // Infinite scroll hook - sadece görünen coinleri render et
+  const {
+    visibleItems: visibleCoins,
+    hasMore,
+    loadingMore,
+    sentinelRef,
+    reset: resetScroll,
+    visibleCount,
+    totalCount
+  } = useInfiniteScroll(sortedCoins, {
+    initialCount: 30,
+    incrementCount: 20,
+    threshold: 100
+  })
+
+  // Arama değiştiğinde scroll'u resetle
+  useEffect(() => {
+    resetScroll()
+  }, [searchTerm, sortBy, sortOrder])
 
   const handleRefresh = async () => {
     await refresh()
@@ -197,7 +219,7 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8 lg:py-12">
+      <div className="w-full py-4 sm:py-6 md:py-8 lg:py-12">
         {/* Modern Header */}
         <div className="mb-4 sm:mb-6 md:mb-8 lg:mb-12">
           <div className="flex items-center gap-2 sm:gap-3 md:gap-4 mb-2 sm:mb-3 md:mb-4">
@@ -510,7 +532,7 @@ const Home = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {sortedCoins.map((coin, index) => {
+                {visibleCoins.map((coin, index) => {
                   const isPositive = coin.price_change_percentage_24h >= 0
                   const isFavorite = favorites.has(coin.id)
                   const isExpanded = expandedRows.has(coin.id)
@@ -628,12 +650,22 @@ const Home = () => {
                 })}
               </tbody>
             </table>
+
+            {/* Desktop Sentinel */}
+            {hasMore && (
+              <div id="desktop-scroll-sentinel" className="flex justify-center py-4">
+                <div className="flex items-center gap-2 text-gray-400">
+                  <div className="w-4 h-4 border-2 border-gray-300 border-t-primary-500 rounded-full animate-spin"></div>
+                  <span className="text-sm">{visibleCount} / {totalCount}</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Mobile Card View */}
-          <div className="md:hidden overflow-y-auto max-h-[720px] crypto-list-scrollbar">
+          <div className="md:hidden overflow-y-auto max-h-[600px] crypto-list-scrollbar">
             <div className="space-y-3">
-              {sortedCoins.map((coin, index) => {
+              {visibleCoins.map((coin, index) => {
                 const isPositive = coin.price_change_percentage_24h >= 0
                 const isFavorite = favorites.has(coin.id)
                 const isExpanded = expandedRows.has(coin.id)
@@ -763,6 +795,16 @@ const Home = () => {
                 )
               })}
             </div>
+
+            {/* Mobile Sentinel */}
+            {hasMore && (
+              <div id="mobile-scroll-sentinel" className="flex justify-center py-4">
+                <div className="flex items-center gap-2 text-gray-400">
+                  <div className="w-4 h-4 border-2 border-gray-300 border-t-primary-500 rounded-full animate-spin"></div>
+                  <span className="text-sm">{visibleCount} / {totalCount}</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

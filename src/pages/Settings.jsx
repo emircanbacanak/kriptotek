@@ -22,7 +22,7 @@ const Settings = () => {
   useEffect(() => {
     updatePageSEO('settings', language)
   }, [language])
-  
+
   const [passwords, setPasswords] = useState({ current: '', new: '', confirm: '' })
   const [showPasswords, setShowPasswords] = useState({ current: false, new: false, confirm: false })
   const [passwordErrors, setPasswordErrors] = useState({})
@@ -35,10 +35,10 @@ const Settings = () => {
   const [showDeletePassword, setShowDeletePassword] = useState(false)
   const [isGoogleUser, setIsGoogleUser] = useState(false)
   const [hasPasswordProvider, setHasPasswordProvider] = useState(false)
-  
+
   const [profileData, setProfileData] = useState({ displayName: '' })
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false)
-  
+
   const defaultSettings = {
     display: {
       currency: 'USD',
@@ -95,23 +95,23 @@ const Settings = () => {
       if (globalData.currencyRates) {
         setCurrentRates(globalData.currencyRates)
       }
-      
+
       if (user) {
         setProfileData({ displayName: user.displayName || '' })
-        
+
         const checkProviders = async () => {
           try {
             const { auth } = await import('../firebase/firebaseConfig')
             const currentUser = auth.currentUser
-            
+
             if (currentUser) {
               await currentUser.reload()
               const refreshedUser = auth.currentUser
-              
+
               const hasGoogleProvider = refreshedUser.providerData?.some(provider => provider.providerId === 'google.com')
               const hasPassword = refreshedUser.providerData?.some(provider => provider.providerId === 'password')
               const isGoogleOnly = hasGoogleProvider && !hasPassword
-              
+
               setIsGoogleUser(isGoogleOnly)
               setHasPasswordProvider(hasPassword)
             }
@@ -124,7 +124,7 @@ const Settings = () => {
             setHasPasswordProvider(hasPassword)
           }
         }
-        
+
         checkProviders()
       }
     }
@@ -279,7 +279,7 @@ const Settings = () => {
         setIsUpdatingProfile(false)
         return
       }
-      
+
       const result = await updateProfile({ displayName: profileData.displayName.trim() })
       if (result.success) {
         const settingsResult = await loadUserSettings(user.uid)
@@ -292,7 +292,7 @@ const Settings = () => {
             photoURL: currentSettings.photoURL || user.photoURL || null
           })
         }
-        
+
         setSaveMessage({ type: 'success', text: t('profileUpdateSuccess') })
         setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000)
         if (refreshUser) {
@@ -333,27 +333,27 @@ const Settings = () => {
 
   const validatePasswords = () => {
     const errors = {}
-    
+
     if (hasPasswordProvider && !passwords.current) {
       errors.current = t('currentPasswordRequired')
     }
-    
+
     if (!passwords.new) {
       errors.new = t('newPasswordRequired')
     }
-    
+
     if (passwords.new && passwordStrength.level === 'weak') {
       errors.new = t('passwordTooWeak')
     }
-    
+
     if (passwords.new && passwords.confirm && passwords.new !== passwords.confirm) {
       errors.confirm = t('passwordsNotMatch')
     }
-    
+
     if (hasPasswordProvider && passwords.current && passwords.new && passwords.current === passwords.new) {
       errors.new = t('newPasswordMustBeDifferent')
     }
-    
+
     setPasswordErrors(errors)
     return Object.keys(errors).length === 0
   }
@@ -377,28 +377,28 @@ const Settings = () => {
       }
       return
     }
-    
+
     if (hasPasswordProvider && passwords.current && passwords.new && passwords.current === passwords.new) {
       setSaveMessage({ type: 'error', text: t('newPasswordMustBeDifferent') })
       return
     }
-    
+
     setIsChangingPassword(true)
     setSaveMessage({ type: '', text: '' })
-    
+
     try {
       if (hasPasswordProvider && (!passwords.current || passwords.current.trim() === '')) {
         setSaveMessage({ type: 'error', text: t('currentPasswordRequired') })
         setIsChangingPassword(false)
         return
       }
-      
+
       const translations = {
         wrongCurrentPassword: t('wrongCurrentPassword'),
         passwordChanged: t('passwordChanged')
       }
       const result = await changePassword(passwords.current || null, passwords.new, translations)
-      
+
       if (!result.success) {
         let errorMessage = result.error
         if (!errorMessage || errorMessage === undefined || errorMessage === '') {
@@ -435,11 +435,10 @@ const Settings = () => {
   const showSaveMessage = () => {
     if (!saveMessage.text) return null
     return (
-      <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg flex items-center space-x-2 ${
-        saveMessage.type === 'success' 
-          ? 'bg-green-100 text-green-800 border border-green-200 dark:bg-green-900 dark:text-green-200' 
-          : 'bg-red-100 text-red-800 border border-red-200 dark:bg-red-900 dark:text-red-200'
-      }`}>
+      <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg flex items-center space-x-2 ${saveMessage.type === 'success'
+        ? 'bg-green-100 text-green-800 border border-green-200 dark:bg-green-900 dark:text-green-200'
+        : 'bg-red-100 text-red-800 border border-red-200 dark:bg-red-900 dark:text-red-200'
+        }`}>
         {saveMessage.type === 'success' ? <Check className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
         <span className="font-medium">{saveMessage.text}</span>
       </div>
@@ -466,18 +465,18 @@ const Settings = () => {
     }
   }
 
-  const headerIconGradient = isDark 
+  const headerIconGradient = isDark
     ? 'from-blue-600 to-indigo-600'
     : 'from-blue-500 to-indigo-500'
-  
+
   const headerTextGradient = isDark
     ? 'from-blue-400 to-indigo-400'
     : 'from-blue-600 to-indigo-600'
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-blue-900/30 dark:to-indigo-900/30 space-y-6 animate-fade-in p-4 sm:p-6">
+    <div className="min-h-screen bg-white dark:bg-gray-900 space-y-6 animate-fade-in p-4 sm:p-6">
       {showSaveMessage()}
-      
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
         <div className="flex items-center gap-3 sm:gap-4">
@@ -535,39 +534,39 @@ const Settings = () => {
             </h2>
           </div>
           <form onSubmit={handleProfileUpdate} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {t('fullName')}
-            </label>
-            <div className="relative">
-              <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                value={profileData.displayName}
-                onChange={(e) => handleProfileChange('displayName', e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder={t('fullNamePlaceholder')}
-                required
-                disabled={isUpdatingProfile}
-              />
-            </div>
-          </div>
-          
-          <button
-            type="submit"
-            disabled={isUpdatingProfile || !profileData.displayName.trim()}
-            className="group relative overflow-hidden bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-500 dark:to-indigo-500 text-white rounded-xl px-4 py-2.5 shadow-lg transform transition-all duration-300 hover:shadow-xl hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 w-full font-medium"
-          >
-            {isUpdatingProfile ? (
-              <div className="flex items-center justify-center space-x-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                <span>{t('updatingProfile')}</span>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                {t('fullName')}
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input
+                  type="text"
+                  value={profileData.displayName}
+                  onChange={(e) => handleProfileChange('displayName', e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder={t('fullNamePlaceholder')}
+                  required
+                  disabled={isUpdatingProfile}
+                />
               </div>
-            ) : (
-              t('updateProfile')
-            )}
-          </button>
-        </form>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isUpdatingProfile || !profileData.displayName.trim()}
+              className="group relative overflow-hidden bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-500 dark:to-indigo-500 text-white rounded-xl px-4 py-2.5 shadow-lg transform transition-all duration-300 hover:shadow-xl hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 w-full font-medium"
+            >
+              {isUpdatingProfile ? (
+                <div className="flex items-center justify-center space-x-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span>{t('updatingProfile')}</span>
+                </div>
+              ) : (
+                t('updateProfile')
+              )}
+            </button>
+          </form>
         </div>
       </div>
 
@@ -577,81 +576,81 @@ const Settings = () => {
         <div className="group relative">
           <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-300"></div>
           <div className="relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl p-6 border border-gray-200 dark:border-gray-700 shadow-lg transform transition-all duration-300 hover:shadow-2xl hover:-translate-y-1">
-          <div className="flex items-center space-x-3 mb-6">
-            {isDark ? <Moon className="w-5 h-5 text-primary-600" /> : <Sun className="w-5 h-5 text-primary-600" />}
-            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">
-              {t('display')}
-            </h2>
-          </div>
-          
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-gray-900 dark:text-white">{t('theme')}</p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">{t('themeDescription')}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  const newTheme = isDark ? 'light' : 'dark'
-                  handleSettingChange('display', 'theme', newTheme)
-                  toggleTheme()
-                }}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center space-x-2"
-              >
-                {isDark ? ( <> <Sun className="w-4 h-4" /> <span>{t('light')}</span> </> ) : ( <> <Moon className="w-4 h-4" /> <span>{t('dark')}</span> </> )}
-              </button>
+            <div className="flex items-center space-x-3 mb-6">
+              {isDark ? <Moon className="w-5 h-5 text-primary-600" /> : <Sun className="w-5 h-5 text-primary-600" />}
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">
+                {t('display')}
+              </h2>
             </div>
 
-            <div>
-              <div className="mb-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('currency')}</label>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900 dark:text-white">{t('theme')}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{t('themeDescription')}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newTheme = isDark ? 'light' : 'dark'
+                    handleSettingChange('display', 'theme', newTheme)
+                    toggleTheme()
+                  }}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center space-x-2"
+                >
+                  {isDark ? (<> <Sun className="w-4 h-4" /> <span>{t('light')}</span> </>) : (<> <Moon className="w-4 h-4" /> <span>{t('dark')}</span> </>)}
+                </button>
               </div>
-              <select
-                value={settings.display.currency}
-                onChange={(e) => handleSettingChange('display', 'currency', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="USD">{t('usd')}</option>
-                <option value="EUR">{t('eur')}</option>
-                <option value="TRY">{t('try')}</option>
-              </select>
-              
-              <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                <h4 className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">{t('currentRates')}:</h4>
-                <div className="flex gap-6 sm:gap-36 text-xs">
-                  <div className="flex items-center gap-1">
-                    <span className="text-gray-600 dark:text-gray-400">EUR:</span>
-                    <span className="font-medium text-gray-900 dark:text-white">
-                      {currentRates.EUR && currentRates.TRY 
-                        ? `₺${(currentRates.TRY / currentRates.EUR).toFixed(2)}` 
-                        : t('loading')}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-gray-600 dark:text-gray-400">USD:</span>
-                    <span className="font-medium text-gray-900 dark:text-white">
-                      {currentRates.TRY 
-                        ? `₺${currentRates.TRY.toFixed(2)}` 
-                        : t('loading')}
-                    </span>
+
+              <div>
+                <div className="mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('currency')}</label>
+                </div>
+                <select
+                  value={settings.display.currency}
+                  onChange={(e) => handleSettingChange('display', 'currency', e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="USD">{t('usd')}</option>
+                  <option value="EUR">{t('eur')}</option>
+                  <option value="TRY">{t('try')}</option>
+                </select>
+
+                <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  <h4 className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">{t('currentRates')}:</h4>
+                  <div className="flex gap-6 sm:gap-36 text-xs">
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-600 dark:text-gray-400">EUR:</span>
+                      <span className="font-medium text-gray-900 dark:text-white">
+                        {currentRates.EUR && currentRates.TRY
+                          ? `₺${(currentRates.TRY / currentRates.EUR).toFixed(2)}`
+                          : t('loading')}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-600 dark:text-gray-400">USD:</span>
+                      <span className="font-medium text-gray-900 dark:text-white">
+                        {currentRates.TRY
+                          ? `₺${currentRates.TRY.toFixed(2)}`
+                          : t('loading')}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('language')}</label>
-              <select
-                value={settings.display.language}
-                onChange={(e) => handleSettingChange('display', 'language', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="tr">{t('turkish')}</option>
-                <option value="en">{t('english')}</option>
-              </select>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('language')}</label>
+                <select
+                  value={settings.display.language}
+                  onChange={(e) => handleSettingChange('display', 'language', e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="tr">{t('turkish')}</option>
+                  <option value="en">{t('english')}</option>
+                </select>
+              </div>
             </div>
-          </div>
           </div>
         </div>
 
@@ -659,146 +658,144 @@ const Settings = () => {
         <div className="group relative">
           <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-300"></div>
           <div className="relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl p-6 border border-gray-200 dark:border-gray-700 shadow-lg transform transition-all duration-300 hover:shadow-2xl hover:-translate-y-1">
-          <div className="flex items-center space-x-3 mb-6">
-            <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900 rounded-lg flex items-center justify-center">
-              <Shield className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+            <div className="flex items-center space-x-3 mb-6">
+              <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900 rounded-lg flex items-center justify-center">
+                <Shield className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+              </div>
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">{t('passwordChange')}</h2>
             </div>
-            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">{t('passwordChange')}</h2>
-          </div>
-          
-          <form onSubmit={(e) => { e.preventDefault(); handleChangePassword(); }} className="space-y-4">
-            <input 
-              type="text" 
-              name="username" 
-              autoComplete="username" 
-              value={user?.email || ''}
-              readOnly
-              style={{ display: 'none' }} 
-              tabIndex={-1}
-              aria-hidden="true"
-            />
-            
-            {hasPasswordProvider && (
+
+            <form onSubmit={(e) => { e.preventDefault(); handleChangePassword(); }} className="space-y-4">
+              <input
+                type="text"
+                name="username"
+                autoComplete="username"
+                value={user?.email || ''}
+                readOnly
+                style={{ display: 'none' }}
+                tabIndex={-1}
+                aria-hidden="true"
+              />
+
+              {hasPasswordProvider && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('currentPassword')}</label>
+                  <div className="relative">
+                    <input
+                      type={showPasswords.current ? 'text' : 'password'}
+                      value={passwords.current}
+                      onChange={(e) => handlePasswordChange('current', e.target.value)}
+                      className={`w-full px-4 py-2 pr-10 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent ${passwordErrors.current ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}
+                      placeholder={t('enterCurrentPassword')}
+                      autoComplete="current-password"
+                    />
+                    <button type="button" onClick={() => togglePasswordVisibility('current')} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                      {showPasswords.current ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {passwordErrors.current && <p className="text-red-500 text-sm mt-1">{passwordErrors.current}</p>}
+                </div>
+              )}
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('currentPassword')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('newPassword')}</label>
                 <div className="relative">
                   <input
-                    type={showPasswords.current ? 'text' : 'password'}
-                    value={passwords.current}
-                    onChange={(e) => handlePasswordChange('current', e.target.value)}
-                    className={`w-full px-4 py-2 pr-10 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent ${passwordErrors.current ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}
-                    placeholder={t('enterCurrentPassword')}
-                    autoComplete="current-password"
+                    type={showPasswords.new ? 'text' : 'password'}
+                    value={passwords.new}
+                    onChange={(e) => handlePasswordChange('new', e.target.value)}
+                    className={`w-full px-4 py-2 pr-10 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent ${passwordErrors.new ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}
+                    placeholder={t('enterNewPassword')}
+                    autoComplete="new-password"
                   />
-                  <button type="button" onClick={() => togglePasswordVisibility('current')} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                    {showPasswords.current ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  <button type="button" onClick={() => togglePasswordVisibility('new')} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    {showPasswords.new ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
-                {passwordErrors.current && <p className="text-red-500 text-sm mt-1">{passwordErrors.current}</p>}
+                {passwordErrors.new && <p className="text-red-500 text-sm mt-1">{passwordErrors.new}</p>}
               </div>
-            )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('newPassword')}</label>
-              <div className="relative">
-                <input
-                  type={showPasswords.new ? 'text' : 'password'}
-                  value={passwords.new}
-                  onChange={(e) => handlePasswordChange('new', e.target.value)}
-                  className={`w-full px-4 py-2 pr-10 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent ${passwordErrors.new ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}
-                  placeholder={t('enterNewPassword')}
-                  autoComplete="new-password"
-                />
-                <button type="button" onClick={() => togglePasswordVisibility('new')} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                  {showPasswords.new ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('confirmNewPassword')}</label>
+                <div className="relative">
+                  <input
+                    type={showPasswords.confirm ? 'text' : 'password'}
+                    value={passwords.confirm}
+                    onChange={(e) => handlePasswordChange('confirm', e.target.value)}
+                    className={`w-full px-4 py-2 pr-10 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent ${passwordErrors.confirm ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}
+                    placeholder={t('confirmNewPassword')}
+                    autoComplete="new-password"
+                  />
+                  <button type="button" onClick={() => togglePasswordVisibility('confirm')} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    {showPasswords.confirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {passwordErrors.confirm && <p className="text-red-500 text-sm mt-1">{passwordErrors.confirm}</p>}
               </div>
-              {passwordErrors.new && <p className="text-red-500 text-sm mt-1">{passwordErrors.new}</p>}
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('confirmNewPassword')}</label>
-              <div className="relative">
-                <input
-                  type={showPasswords.confirm ? 'text' : 'password'}
-                  value={passwords.confirm}
-                  onChange={(e) => handlePasswordChange('confirm', e.target.value)}
-                  className={`w-full px-4 py-2 pr-10 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent ${passwordErrors.confirm ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}
-                  placeholder={t('confirmNewPassword')}
-                  autoComplete="new-password"
-                />
-                <button type="button" onClick={() => togglePasswordVisibility('confirm')} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                  {showPasswords.confirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              {passwordErrors.confirm && <p className="text-red-500 text-sm mt-1">{passwordErrors.confirm}</p>}
-            </div>
-
-            {/* Password Change Message */}
-            {passwordChangeMessage.text && (
-              <div className={`p-3 rounded-lg flex items-center space-x-2 ${
-                passwordChangeMessage.type === 'success' 
-                  ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-700' 
+              {/* Password Change Message */}
+              {passwordChangeMessage.text && (
+                <div className={`p-3 rounded-lg flex items-center space-x-2 ${passwordChangeMessage.type === 'success'
+                  ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-700'
                   : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-700'
-              }`}>
-                {passwordChangeMessage.type === 'success' ? (
-                  <Check className="w-5 h-5 flex-shrink-0" />
-                ) : (
-                  <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                )}
-                <span className="font-medium text-sm">{passwordChangeMessage.text}</span>
-              </div>
-            )}
+                  }`}>
+                  {passwordChangeMessage.type === 'success' ? (
+                    <Check className="w-5 h-5 flex-shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                  )}
+                  <span className="font-medium text-sm">{passwordChangeMessage.text}</span>
+                </div>
+              )}
 
-            {passwords.new && (
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">{t('passwordStrength')}</span>
-                  <span className={`font-medium ${
-                    passwordStrength.level === 'weak' ? 'text-red-600' :
-                    passwordStrength.level === 'medium' ? 'text-yellow-600' :
-                    passwordStrength.level === 'strong' ? 'text-blue-600' : 'text-green-600'
-                  }`}>{getStrengthText(passwordStrength.level)}</span>
+              {passwords.new && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600 dark:text-gray-400">{t('passwordStrength')}</span>
+                    <span className={`font-medium ${passwordStrength.level === 'weak' ? 'text-red-600' :
+                      passwordStrength.level === 'medium' ? 'text-yellow-600' :
+                        passwordStrength.level === 'strong' ? 'text-blue-600' : 'text-green-600'
+                      }`}>{getStrengthText(passwordStrength.level)}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full transition-all duration-300 ${getStrengthColor(passwordStrength.level)}`}
+                      style={{ width: `${(passwordStrength.score / 5) * 100}%` }}
+                    ></div>
+                  </div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                    <div className={`flex items-center ${passwordStrength.checks.length ? 'text-green-600' : ''}`}>
+                      <span className="mr-1">{passwordStrength.checks.length ? '✓' : '○'}</span>{t('minLength')}
+                    </div>
+                    <div className={`flex items-center ${passwordStrength.checks.uppercase ? 'text-green-600' : ''}`}>
+                      <span className="mr-1">{passwordStrength.checks.uppercase ? '✓' : '○'}</span>{t('hasUppercase')}
+                    </div>
+                    <div className={`flex items-center ${passwordStrength.checks.lowercase ? 'text-green-600' : ''}`}>
+                      <span className="mr-1">{passwordStrength.checks.lowercase ? '✓' : '○'}</span>{t('hasLowercase')}
+                    </div>
+                    <div className={`flex items-center ${passwordStrength.checks.number ? 'text-green-600' : ''}`}>
+                      <span className="mr-1">{passwordStrength.checks.number ? '✓' : '○'}</span>{t('hasNumber')}
+                    </div>
+                    <div className={`flex items-center ${passwordStrength.checks.special ? 'text-green-600' : ''}`}>
+                      <span className="mr-1">{passwordStrength.checks.special ? '✓' : '○'}</span>{t('hasSpecialChar')}
+                    </div>
+                  </div>
                 </div>
-                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                  <div 
-                    className={`h-2 rounded-full transition-all duration-300 ${getStrengthColor(passwordStrength.level)}`}
-                    style={{ width: `${(passwordStrength.score / 5) * 100}%` }}
-                  ></div>
-                </div>
-                <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                  <div className={`flex items-center ${passwordStrength.checks.length ? 'text-green-600' : ''}`}>
-                    <span className="mr-1">{passwordStrength.checks.length ? '✓' : '○'}</span>{t('minLength')}
-                  </div>
-                  <div className={`flex items-center ${passwordStrength.checks.uppercase ? 'text-green-600' : ''}`}>
-                    <span className="mr-1">{passwordStrength.checks.uppercase ? '✓' : '○'}</span>{t('hasUppercase')}
-                  </div>
-                  <div className={`flex items-center ${passwordStrength.checks.lowercase ? 'text-green-600' : ''}`}>
-                    <span className="mr-1">{passwordStrength.checks.lowercase ? '✓' : '○'}</span>{t('hasLowercase')}
-                  </div>
-                  <div className={`flex items-center ${passwordStrength.checks.number ? 'text-green-600' : ''}`}>
-                    <span className="mr-1">{passwordStrength.checks.number ? '✓' : '○'}</span>{t('hasNumber')}
-                  </div>
-                  <div className={`flex items-center ${passwordStrength.checks.special ? 'text-green-600' : ''}`}>
-                    <span className="mr-1">{passwordStrength.checks.special ? '✓' : '○'}</span>{t('hasSpecialChar')}
-                  </div>
-                </div>
-              </div>
-            )}
+              )}
 
-            <button
-              type="submit"
-              disabled={isChangingPassword || passwordStrength.level === 'weak' || (hasPasswordProvider && !passwords.current) || !passwords.new || !passwords.confirm}
-              className="group relative overflow-hidden bg-gradient-to-r from-indigo-600 to-purple-600 dark:from-indigo-500 dark:to-purple-500 text-white rounded-xl px-4 py-2.5 shadow-lg transform transition-all duration-300 hover:shadow-xl hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 w-full font-medium"
-            >
-              {isChangingPassword ? (
-                <div className="flex items-center justify-center space-x-2">
-                  <Save className="w-4 h-4 animate-pulse" />
-                  <span>{t('changingPassword')}</span>
-                </div>
-              ) : (isGoogleUser ? t('setPassword') : t('changePassword'))}
-            </button>
-          </form>
+              <button
+                type="submit"
+                disabled={isChangingPassword || passwordStrength.level === 'weak' || (hasPasswordProvider && !passwords.current) || !passwords.new || !passwords.confirm}
+                className="group relative overflow-hidden bg-gradient-to-r from-indigo-600 to-purple-600 dark:from-indigo-500 dark:to-purple-500 text-white rounded-xl px-4 py-2.5 shadow-lg transform transition-all duration-300 hover:shadow-xl hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 w-full font-medium"
+              >
+                {isChangingPassword ? (
+                  <div className="flex items-center justify-center space-x-2">
+                    <Save className="w-4 h-4 animate-pulse" />
+                    <span>{t('changingPassword')}</span>
+                  </div>
+                ) : (isGoogleUser ? t('setPassword') : t('changePassword'))}
+              </button>
+            </form>
           </div>
         </div>
       </div>
@@ -864,7 +861,7 @@ const Settings = () => {
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{t('confirmAccountDeletion')}</h3>
               </div>
-              
+
               <div className="mb-6">
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">{t('accountDeletionWarning')}</p>
                 <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
@@ -877,19 +874,19 @@ const Settings = () => {
                   </ul>
                 </div>
               </div>
-              
+
               <form onSubmit={(e) => { e.preventDefault(); confirmDeleteAccount(); }} className="space-y-4">
-                <input 
-                  type="text" 
-                  name="username" 
-                  autoComplete="username" 
+                <input
+                  type="text"
+                  name="username"
+                  autoComplete="username"
                   value={user?.email || ''}
                   readOnly
-                  style={{ display: 'none' }} 
+                  style={{ display: 'none' }}
                   tabIndex={-1}
                   aria-hidden="true"
                 />
-                
+
                 {user?.providerData?.some(p => p.providerId === 'password') && (
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('enterCurrentPassword')}</label>
@@ -903,26 +900,26 @@ const Settings = () => {
                         disabled={isDeletingAccount}
                         autoComplete="current-password"
                       />
-                    <button
-                      type="button"
-                      onClick={() => setShowDeletePassword(!showDeletePassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                      disabled={isDeletingAccount}
-                    >
-                      {showDeletePassword ? <EyeOff className="w-4 h-4 text-gray-400" /> : <Eye className="w-4 h-4 text-gray-400" />}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowDeletePassword(!showDeletePassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                        disabled={isDeletingAccount}
+                      >
+                        {showDeletePassword ? <EyeOff className="w-4 h-4 text-gray-400" /> : <Eye className="w-4 h-4 text-gray-400" />}
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('accountDeletionPasswordNote')}</p>
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('accountDeletionPasswordNote')}</p>
-                </div>
-              )}
-              
+                )}
+
                 <div className="flex space-x-3">
                   <button
                     type="button"
                     onClick={cancelDeleteAccount}
                     disabled={isDeletingAccount}
                     className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
-                    >
+                  >
                     {t('cancel')}
                   </button>
                   <button
@@ -930,16 +927,16 @@ const Settings = () => {
                     disabled={isDeletingAccount || (!user?.photoURL?.includes('googleusercontent.com') && !deletePassword.trim())}
                     className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50"
                   >
-                  {isDeletingAccount ? (
-                    <div className="flex items-center justify-center">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      {t('deleting')}...
-                    </div>
-                  ) : (
-                    t('yesDeleteAccount')
-                  )}
-                </button>
-              </div>
+                    {isDeletingAccount ? (
+                      <div className="flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        {t('deleting')}...
+                      </div>
+                    ) : (
+                      t('yesDeleteAccount')
+                    )}
+                  </button>
+                </div>
               </form>
             </div>
           </div>

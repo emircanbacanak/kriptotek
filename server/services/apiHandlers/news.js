@@ -187,11 +187,9 @@ function parseRSSFeed(xml, source) {
           publishedAt = new Date()
         }
 
-        if (source === 'cointelegraph' && !isNaN(publishedAt.getTime())) {
-          const originalTime = publishedAt.toISOString()
-          const now = new Date()
-          const diff = now.getTime() - publishedAt.getTime()
-          const diffMinutes = Math.floor(diff / 60000)
+        // Kriptofoni ve Cointelegraph UTC saati veriyor, +3 saat ekle (Türkiye saati)
+        if ((source === 'cointelegraph' || source === 'kriptofoni') && !isNaN(publishedAt.getTime())) {
+          publishedAt = new Date(publishedAt.getTime() + (3 * 60 * 60 * 1000))
         }
 
         // Son 48 saat içindeki haberleri filtrele
@@ -273,6 +271,10 @@ export async function updateNews() {
                   const descriptionRaw = item.description || ''
                   const description = descriptionRaw.replace(/<[^>]*>/g, '').substring(0, 500)
                   let pubDate = item.pubDate ? new Date(item.pubDate) : new Date()
+                  // Kriptofoni UTC saati veriyor, +3 saat ekle (Türkiye saati)
+                  if (!isNaN(pubDate.getTime())) {
+                    pubDate = new Date(pubDate.getTime() + (3 * 60 * 60 * 1000))
+                  }
 
                   // Resim URL'i çıkar
                   let imageUrl = item.enclosure?.link || item.thumbnail || ''
@@ -359,12 +361,9 @@ export async function updateNews() {
                   const description = descriptionRaw.replace(/<[^>]*>/g, '').substring(0, 500)
                   const pubDateRaw = item.pubDate || item.pubdate || ''
                   let pubDate = pubDateRaw ? new Date(pubDateRaw) : new Date()
-
+                  // CoinTelegraph UTC saati veriyor, +3 saat ekle (Türkiye saati)
                   if (!isNaN(pubDate.getTime())) {
-                    const originalTime = pubDate.toISOString()
-                    const now = new Date()
-                    const diff = now.getTime() - pubDate.getTime()
-                    const diffMinutes = Math.floor(diff / 60000)
+                    pubDate = new Date(pubDate.getTime() + (3 * 60 * 60 * 1000))
                   }
 
                   // Resim URL'i çıkar

@@ -410,7 +410,7 @@ const WhaleTracking = () => {
 
   if (loading && whaleTrades.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/50 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/20 dark:to-indigo-950/20 flex items-center justify-center">
+      <div className="min-h-screen bg-white dark:bg-gray-900 w-full py-4 sm:py-8 flex items-center justify-center">
         <div className="relative">
           <div className="w-20 h-20 border-4 border-blue-200/50 dark:border-blue-900/50 rounded-full"></div>
           <div className="absolute top-0 left-0 w-20 h-20 border-4 border-transparent border-t-blue-600 dark:border-t-blue-400 rounded-full animate-spin"></div>
@@ -423,8 +423,8 @@ const WhaleTracking = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/50 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/20 dark:to-indigo-950/20 animate-fade-in">
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8 lg:py-12">
+    <div className="min-h-screen bg-white dark:bg-gray-900 animate-fade-in">
+      <div className="w-full py-4 sm:py-6 md:py-8 lg:py-12">
         {/* Header */}
         <div className="mb-4 sm:mb-6 md:mb-8 animate-fade-in">
           <div className="flex flex-col gap-3 sm:gap-4">

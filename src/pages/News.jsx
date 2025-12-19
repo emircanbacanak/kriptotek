@@ -4,6 +4,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { subscribeToNews } from '../firebase/newsData'
 import { useTheme } from '../contexts/ThemeContext'
 import { updatePageSEO } from '../utils/seoMetaTags'
+import useInfiniteScroll from '../hooks/useInfiniteScroll'
 
 // CSS Animasyonları için style tag
 const styles = `
@@ -131,6 +132,21 @@ function News() {
   const previousNewsIdsRef = useRef(new Set())
   const [nowTick, setNowTick] = useState(Date.now())
   const [filterType, setFilterType] = useState('all') // 'all', 'important', 'positive', 'negative', 'neutral'
+
+  // Infinite scroll hook
+  const {
+    visibleItems: visibleNews,
+    hasMore,
+    loadingMore,
+    sentinelRef,
+    reset: resetScroll,
+    visibleCount,
+    totalCount
+  } = useInfiniteScroll(filteredNews, {
+    initialCount: 12,
+    incrementCount: 9,
+    threshold: 100
+  })
 
   // localStorage cache keys
   const NEWS_CACHE_KEY = 'news_cache'
@@ -577,7 +593,7 @@ function News() {
   return (
     <>
       <style>{styles}</style>
-      <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto animate-fade-in">
+      <div className="p-4 sm:p-6 lg:p-8 w-full animate-fade-in">
         {/* Header */}
         <div className="mb-8 animate-fade-in">
           <div className="flex items-center justify-between mb-4">
@@ -684,8 +700,8 @@ function News() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-5 max-h-[calc(100vh-10px)] sm:max-h-[calc(100vh+100px)] overflow-y-auto overflow-x-hidden px-2 sm:px-4 pt-4 sm:pt-6 pb-4 crypto-list-scrollbar">
-            {filteredNews.map((item, index) => {
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-5 overflow-y-auto overflow-x-hidden max-h-[720px] px-2 sm:px-4 pt-4 sm:pt-6 pb-4 crypto-list-scrollbar">
+            {visibleNews.map((item, index) => {
               const ts = new Date(item.publishedAt || item.published_at || item.pubDate || item.date || 0).getTime() || index
               const k = `${item.id || item.url || item.link || item.title}-${ts}`
               const isImportant = isImportantNews(item)
@@ -989,6 +1005,22 @@ function News() {
                   </article>
                 </div>)
             })}
+
+            {/* Infinite Scroll Sentinel */}
+            {hasMore && (
+              <div id="news-scroll-sentinel" className="col-span-full flex justify-center py-6">
+                {loadingMore ? (
+                  <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                    <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 border-t-primary-500 dark:border-t-primary-400 rounded-full animate-spin"></div>
+                    <span className="text-sm">{t('loading') || 'Yükleniyor...'}</span>
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-400 dark:text-gray-500">
+                    {visibleCount} / {totalCount} haber
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
