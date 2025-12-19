@@ -293,14 +293,28 @@ export const saveUserSettings = async (userId, settings) => {
  * @returns {Promise<Object>} Sonuç
  */
 export const resetUserSettings = async (userId) => {
+  // ✅ Önce mevcut premium ve admin durumunu al (korunacak)
+  let currentIsPremium = false
+  let currentAdminEncrypted = null
+
+  try {
+    const currentSettings = await loadUserSettings(userId)
+    if (currentSettings.success && currentSettings.settings) {
+      currentIsPremium = currentSettings.settings.isPremium === true || currentSettings.settings.isPremium === 'true'
+      currentAdminEncrypted = currentSettings.settings.adminEncrypted || null
+    }
+  } catch (error) {
+    // Hata durumunda varsayılanları kullan
+  }
+
   const defaultSettings = {
     display: {
       currency: 'USD',
       language: 'tr',
       theme: 'light'
     },
-    isPremium: false, // Premium durumu korunur, sadece ayarlar sıfırlanır
-    adminEncrypted: null, // Admin durumu korunur (client-side'da kontrol edilir)
+    isPremium: currentIsPremium, // ✅ Mevcut premium durumunu koru
+    adminEncrypted: currentAdminEncrypted, // ✅ Mevcut admin durumunu koru
     updatedAt: Date.now()
   }
 

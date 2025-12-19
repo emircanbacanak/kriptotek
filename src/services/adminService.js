@@ -3,6 +3,8 @@
  * Tüm admin işlemleri backend API üzerinden MongoDB'ye yapılır
  */
 
+import { clearSettingsCache } from './mongoUserSettings'
+
 const API_URL = import.meta.env.VITE_MONGO_API_URL || import.meta.env.VITE_API_ENDPOINT || 'http://localhost:3000'
 
 /**
@@ -10,16 +12,16 @@ const API_URL = import.meta.env.VITE_MONGO_API_URL || import.meta.env.VITE_API_E
  */
 const decryptAdmin = async (adminEncrypted) => {
   if (!adminEncrypted) return false
-  
+
   try {
     const { decryptAES } = await import('../utils/advancedSecurity')
     const adminData = decryptAES(adminEncrypted)
-    
+
     // decryptAES null dönerse false döndür
     if (adminData === null || adminData === undefined) {
       return false
     }
-    
+
     return adminData === true
   } catch (error) {
     // Hata durumunda false döndür (sessizce)
@@ -45,7 +47,7 @@ export const getAllUsers = async () => {
     }
 
     const result = await response.json()
-    
+
     if (result.success && result.users) {
       // Admin bilgisini deşifre et
       const usersWithDecryptedAdmin = await Promise.all(
@@ -57,13 +59,13 @@ export const getAllUsers = async () => {
           }
         })
       )
-      
+
       return {
         success: true,
         users: usersWithDecryptedAdmin
       }
     }
-    
+
     return {
       success: false,
       error: 'Kullanıcılar getirilemedi',
@@ -99,7 +101,7 @@ export const deactivateUser = async (userId) => {
     }
 
     const result = await response.json()
-    
+
     return {
       success: result.success,
       message: result.message || 'Kullanıcı başarıyla pasif edildi',
@@ -134,7 +136,7 @@ export const activateUser = async (userId) => {
     }
 
     const result = await response.json()
-    
+
     return {
       success: result.success,
       message: result.message || 'Kullanıcı başarıyla aktif edildi',
@@ -169,7 +171,12 @@ export const toggleUserPremium = async (userId, isPremium) => {
     }
 
     const result = await response.json()
-    
+
+    // ✅ Cache'i temizle - stale verinin premium durumunu ezmesini önle
+    if (result.success) {
+      clearSettingsCache(userId)
+    }
+
     return {
       success: result.success,
       message: result.message || `Kullanıcı ${isPremium ? 'premium' : 'ücretsiz'} olarak güncellendi`,
@@ -195,16 +202,16 @@ export const setUserAsAdmin = async (userId, isAdmin) => {
       const { encryptAES } = await import('../utils/advancedSecurity')
       adminEncrypted = encryptAES(true)
     }
-    
+
     const response = await fetch(`${API_URL}/api/admin/users/${userId}/admin`, {
       method: 'PATCH',
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         isAdmin,
-        adminEncrypted 
+        adminEncrypted
       })
     })
 
@@ -214,7 +221,7 @@ export const setUserAsAdmin = async (userId, isAdmin) => {
     }
 
     const result = await response.json()
-    
+
     return {
       success: result.success,
       message: result.message || `Kullanıcı ${isAdmin ? 'admin' : 'normal'} olarak güncellendi`,
@@ -252,7 +259,7 @@ export const updateUserInfo = async (userId, userData) => {
     }
 
     const result = await response.json()
-    
+
     return {
       success: result.success,
       message: result.message || 'Kullanıcı bilgileri güncellendi',
@@ -273,18 +280,18 @@ export const updateUserInfo = async (userId, userData) => {
 export const searchUsers = async (searchTerm) => {
   try {
     const result = await getAllUsers()
-    
+
     if (!result.success) {
       return result
     }
-    
+
     const searchLower = searchTerm.toLowerCase()
-    const filteredUsers = result.users.filter(user => 
+    const filteredUsers = result.users.filter(user =>
       user.email.toLowerCase().includes(searchLower) ||
       user.displayName.toLowerCase().includes(searchLower) ||
       user.uid.toLowerCase().includes(searchLower)
     )
-    
+
     return {
       success: true,
       users: filteredUsers

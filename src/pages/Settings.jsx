@@ -12,7 +12,7 @@ import { updatePageSEO } from '../utils/seoMetaTags'
 const Settings = () => {
   const { toggleTheme, isDark } = useTheme()
   const { language, changeLanguage, t } = useLanguage()
-  const { user, deleteAccount: firebaseDeleteAccount, updateProfile, refreshUser, refreshUserSettings } = useAuth()
+  const { user, deleteAccount: firebaseDeleteAccount, updateProfile, refreshUser, refreshUserSettings, isPremium: authIsPremium } = useAuth()
   const { setCurrency } = useCurrency()
   const [isSaving, setIsSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState({ type: '', text: '' })
@@ -72,9 +72,10 @@ const Settings = () => {
           setOriginalSettings(loadedSettings)
           setProfileData({ displayName: result.settings.displayName || user.displayName || '' })
         } else {
+          // ✅ AuthContext'teki premium durumunu kullan (backend'den gelen güncel değer)
           const newDefaultSettings = {
             display: { currency: 'USD', language: 'tr', theme: 'light' },
-            isPremium: false,
+            isPremium: authIsPremium || false, // ✅ AuthContext'ten al
             adminEncrypted: null,
             createdAt: Date.now(),
             updatedAt: Date.now()

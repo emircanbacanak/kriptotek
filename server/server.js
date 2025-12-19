@@ -1009,9 +1009,19 @@ app.patch('/api/admin/users/:userId/premium', async (req, res) => {
               updatedAt: Date.now()
             }
 
-            await collection.insertOne(defaultSettings)
-            existingUser = defaultSettings
-            console.log(`✅ [Premium Toggle] Firebase kullanıcısı MongoDB'ye eklendi: ${userId}`)
+            const insertResult = await collection.insertOne(defaultSettings)
+            if (insertResult.acknowledged && insertResult.insertedId) {
+              existingUser = defaultSettings
+              console.log(`✅ [Premium Toggle] Firebase kullanıcısı MongoDB'ye eklendi: ${userId}`)
+
+              // Yeni eklenen kullanıcı için updateOne yapma, direkt dön
+              return res.json({
+                success: true,
+                message: `Kullanıcı ${isPremium ? 'premium' : 'ücretsiz'} olarak oluşturuldu ve kaydedildi`
+              })
+            } else {
+              console.error(`❌ [Premium Toggle] MongoDB insertOne başarısız: ${userId}`, insertResult)
+            }
           }
         } catch (fbError) {
           console.error(`❌ [Premium Toggle] Firebase kullanıcısı bulunamadı: ${userId}`, fbError.message)
@@ -1041,6 +1051,22 @@ app.patch('/api/admin/users/:userId/premium', async (req, res) => {
         }
       }
     )
+
+    // ✅ updateOne sonucunu kontrol et
+    if (result.matchedCount === 0) {
+      console.error(`❌ [Premium Toggle] updateOne matchedCount=0, kullanıcı bulunamadı: ${userId}`)
+      return res.status(404).json({
+        success: false,
+        error: `Kullanıcı veritabanında bulunamadı: ${userId}`
+      })
+    }
+
+    if (result.modifiedCount === 0 && result.matchedCount > 0) {
+      // Kullanıcı zaten bu durumda (premium zaten true/false)
+      console.log(`ℹ️ [Premium Toggle] Kullanıcı zaten bu durumda: ${userId}, isPremium: ${isPremium}`)
+    } else {
+      console.log(`✅ [Premium Toggle] Kullanıcı güncellendi: ${userId}, isPremium: ${isPremium}`)
+    }
 
     return res.json({
       success: true,
