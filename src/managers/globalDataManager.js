@@ -889,27 +889,18 @@ class GlobalDataManager {
               // Backend'den gelen veri formatı: { _id: 'crypto_list', coins: [...], ... }
               const coins = mongoResult.data.coins || mongoResult.data.data?.coins || []
               if (Array.isArray(coins) && coins.length > 0) {
-                // KRİTİK: Timestamp kontrolü - MongoDB'den gelen veri mevcut veriden daha yeni ise yükle
-                const mongoTimestamp = mongoResult.data.lastUpdate ? new Date(mongoResult.data.lastUpdate).getTime() : Date.now()
-                const currentTimestamp = this.lastCryptoUpdate ? new Date(this.lastCryptoUpdate).getTime() : 0
+                // KRİTİK BUG FIX: Her zaman MongoDB'den gelen veriyi yükle!
+                // Önceki timestamp kontrolü veriyi atlıyordu ve fiyatlar güncellenemiyordu
 
-                // KRİTİK: WebSocket'ten gelen veri her zaman öncelikli
-                // Eğer mevcut veri varsa ve MongoDB'den gelen veri mevcut veriden daha yeni DEĞİLSE yükleme
-                // Sadece mevcut veri YOKSA veya MongoDB'den gelen veri kesinlikle daha yeni ise yükle
-                if (this.coins.length === 0 || (mongoTimestamp > currentTimestamp + 1000)) {
-                  // Debug: total_supply ve max_supply kontrolü
-                  const sampleCoin = coins[0]
-                  const coinsWithTotalSupply = coins.filter(c => c.total_supply !== null && c.total_supply !== undefined).length
-                  const coinsWithMaxSupply = coins.filter(c => c.max_supply !== null && c.max_supply !== undefined).length
+                // Debug: total_supply ve max_supply kontrolü
+                const sampleCoin = coins[0]
+                const coinsWithTotalSupply = coins.filter(c => c.total_supply !== null && c.total_supply !== undefined).length
+                const coinsWithMaxSupply = coins.filter(c => c.max_supply !== null && c.max_supply !== undefined).length
 
-                  cryptoList = coins
-                  cryptoApiStatuses.push({ name: 'MongoDB Cache', success: true })
-                  fromMongoDB = true
-                  logger.log(`✅ [${timeStr}] Crypto verisi MongoDB'den yüklendi (${cryptoList.length} coin)`)
-                } else {
-                  // MongoDB'den gelen veri daha eski veya aynı, mevcut veriyi koru (WebSocket öncelikli)
-                  logger.log(`⏭️ [${timeStr}] Crypto verisi atlandı (MongoDB'deki veri daha eski veya aynı, WebSocket öncelikli)`)
-                }
+                cryptoList = coins
+                cryptoApiStatuses.push({ name: 'MongoDB Cache', success: true })
+                fromMongoDB = true
+                logger.log(`✅ [${timeStr}] Crypto verisi MongoDB'den yüklendi (${cryptoList.length} coin)`)
               }
             }
           } else if (mongoResponse.status === 404) {
@@ -1427,11 +1418,8 @@ class GlobalDataManager {
   async loadFromMongoDBOnly() {
     const timeStr = new Date().toLocaleTimeString('tr-TR')
 
-    // KRİTİK: Eğer mevcut veri varsa, MongoDB'den yükleme (yeni veri zaten yüklenmiş, eski veriye dönme)
-    if (this.coins.length > 0) {
-      logger.log(`⏭️ [${timeStr}] loadFromMongoDBOnly atlandı (mevcut veri var, eski veriye dönme)`)
-      return // Mevcut veri varsa MongoDB'den yükleme
-    }
+    // NOT: loadFromMongoDBOnly sadece ilk yüklemede çağrılır, bu yüzden kontrol gerekli değil
+    // Eski kontrol kaldırıldı - her zaman yeni veriyi yükle
 
     logger.log(`📥 [${timeStr}] MongoDB'den mevcut veriler yükleniyor...`)
 
@@ -1488,25 +1476,18 @@ class GlobalDataManager {
           if (mongoResult.success && mongoResult.data) {
             const coins = mongoResult.data.coins || mongoResult.data.data?.coins || mongoResult.data || []
             if (Array.isArray(coins) && coins.length > 0) {
-              // KRİTİK: Sadece mevcut veri YOKSA yükle (yeni veri geldikten sonra eski veriye dönme)
-              // Eğer mevcut veri varsa, MongoDB'den yükleme (yeni veri zaten yüklenmiş)
-              if (this.coins.length === 0) {
-                // Mevcut veri yoksa MongoDB'den yükle
-                // YENİ VERİ GELDİĞİNDE: Eski localStorage cache'i sil
-                localStorage.removeItem(this.CACHE_KEYS.crypto)
+              // KRİTİK BUG FIX: Her zaman yeni veriyi yükle!
+              // YENİ VERİ GELDİĞİNDE: Eski localStorage cache'i sil
+              localStorage.removeItem(this.CACHE_KEYS.crypto)
 
-                this.coins = coins.length > 500 ? coins.slice(0, 500) : coins
-                this.topMovers = this.calculateTopMovers(this.coins)
-                this.lastCryptoUpdate = new Date(mongoResult.data.lastUpdate || Date.now())
-                // localStorage'a kaydet (yeni veriler)
-                this.saveToLocalStorage()
-                // Abonelere bildir (yeni veriler)
-                this.notifySubscribers()
-                logger.log(`✅ [${timeStr}] Crypto verisi MongoDB'den yüklendi (${this.coins.length} coin)`)
-              } else {
-                // Mevcut veri varsa MongoDB'den yükleme (yeni veri zaten yüklenmiş, eski veriye dönme)
-                logger.log(`⏭️ [${timeStr}] Crypto verisi atlandı (mevcut veri var, eski veriye dönme)`)
-              }
+              this.coins = coins.length > 500 ? coins.slice(0, 500) : coins
+              this.topMovers = this.calculateTopMovers(this.coins)
+              this.lastCryptoUpdate = new Date(mongoResult.data.lastUpdate || Date.now())
+              // localStorage'a kaydet (yeni veriler)
+              this.saveToLocalStorage()
+              // Abonelere bildir (yeni veriler)
+              this.notifySubscribers()
+              logger.log(`✅ [${timeStr}] Crypto verisi MongoDB'den yüklendi (${this.coins.length} coin)`)
             }
           }
         } catch (e) {
