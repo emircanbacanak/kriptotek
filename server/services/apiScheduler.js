@@ -29,29 +29,29 @@ function setDbInstance(db) {
 function getNextUpdateTime(intervalMinutes = 5) {
   const now = new Date()
   const currentMinutes = now.getMinutes()
-  
+
   const currentSlot = Math.floor(currentMinutes / intervalMinutes)
   const nextSlot = currentSlot + 1
-  
+
   const nextUpdate = new Date(now)
-  
+
   if (nextSlot * intervalMinutes >= 60) {
     nextUpdate.setHours(now.getHours() + 1)
     nextUpdate.setMinutes(0)
   } else {
     nextUpdate.setMinutes(nextSlot * intervalMinutes)
   }
-  
+
   nextUpdate.setSeconds(0)
   nextUpdate.setMilliseconds(0)
-  
+
   let delay = nextUpdate.getTime() - now.getTime()
-  
+
   if (delay < 1000) {
     nextUpdate.setMinutes(nextUpdate.getMinutes() + intervalMinutes)
     delay = nextUpdate.getTime() - now.getTime()
   }
-  
+
   return delay
 }
 
@@ -64,7 +64,7 @@ async function updateDominance() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     })
-    
+
     if (response.ok) {
       const result = await response.json()
       const timeStr = new Date().toLocaleTimeString('tr-TR')
@@ -98,7 +98,7 @@ async function updateDominanceScheduled() {
   dominanceIsRunning = true
   const timeStr = new Date().toLocaleTimeString('tr-TR')
   const nextUpdateTime = new Date(Date.now() + getNextUpdateTime(10)).toLocaleTimeString('tr-TR')
-  
+
   console.log(`\n📊 [${timeStr}] ========== Dominance Güncelleme Başladı ==========`)
   console.log(`⏰ [${timeStr}] Bir sonraki güncelleme: ${nextUpdateTime}`)
 
@@ -148,7 +148,7 @@ async function updateFearGreed() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     })
-    
+
     if (response.ok) {
       const result = await response.json()
       const timeStr = new Date().toLocaleTimeString('tr-TR')
@@ -194,7 +194,7 @@ async function updateFearGreedScheduled() {
   fearGreedIsRunning = true
   const timeStr = new Date().toLocaleTimeString('tr-TR')
   const nextUpdateTime = new Date(Date.now() + getNextUpdateTime(10)).toLocaleTimeString('tr-TR')
-  
+
   console.log(`\n😱 [${timeStr}] ========== Fear & Greed Güncelleme Başladı ==========`)
   console.log(`⏰ [${timeStr}] Bir sonraki güncelleme: ${nextUpdateTime}`)
 
@@ -245,7 +245,7 @@ async function updateNewsScheduled() {
   newsIsRunning = true
   const timeStr = new Date().toLocaleTimeString('tr-TR')
   const nextUpdateTime = new Date(Date.now() + getNextUpdateTime(10)).toLocaleTimeString('tr-TR')
-  
+
   console.log(`\n📰 [${timeStr}] ========== News Güncelleme Başladı ==========`)
   console.log(`⏰ [${timeStr}] Bir sonraki güncelleme: ${nextUpdateTime}`)
 
@@ -283,7 +283,7 @@ function scheduleNewsNext() {
   const delay = getNextUpdateTime(10) // 10 dakika
   const nextUpdateTime = new Date(Date.now() + delay).toLocaleTimeString('tr-TR')
   console.log(`📰 News scheduler: Bir sonraki güncelleme ${nextUpdateTime} (${Math.round(delay / 1000 / 60)} dakika sonra)`)
-  
+
   newsSchedulerInterval = setTimeout(() => {
     updateNewsScheduled()
   }, delay)
@@ -300,7 +300,7 @@ async function updateTrendingModelScheduled() {
   trendingModelIsRunning = true
   const timeStr = new Date().toLocaleTimeString('tr-TR')
   const nextUpdateTime = new Date(Date.now() + getNextUpdateTime(30)).toLocaleTimeString('tr-TR')
-  
+
   console.log(`\n🤖 [${timeStr}] ========== Trending Model Tahmin Güncelleme Başladı ==========`)
   console.log(`⏰ [${timeStr}] Bir sonraki güncelleme: ${nextUpdateTime}`)
 
@@ -337,10 +337,10 @@ function scheduleTrendingModelNext() {
   const now = new Date()
   const currentMinutes = now.getMinutes()
   const currentSeconds = now.getSeconds()
-  
+
   // Bir sonraki sabit saati hesapla (00:00, 00:30, 01:00, 01:30, ...)
   const nextUpdate = new Date(now)
-  
+
   if (currentMinutes < 30) {
     // 00:00-00:29 arasındaysa, 00:30'a git
     nextUpdate.setMinutes(30)
@@ -353,16 +353,16 @@ function scheduleTrendingModelNext() {
     nextUpdate.setSeconds(0)
     nextUpdate.setMilliseconds(0)
   }
-  
+
   // Eğer şu anda tam 00:00 veya 00:30 ise ve henüz 10 saniye geçmediyse, hemen çalıştır
   // Aksi halde bir sonraki sabit saate kadar bekle
   let delay = nextUpdate.getTime() - now.getTime()
-  
+
   // Delay çok kısa ise (0-10 saniye arası) ve henüz geçmediyse hemen çalıştır
   if (delay > 0 && delay < 10000 && (currentMinutes === 0 || currentMinutes === 30) && currentSeconds < 10) {
     delay = 1000 // 1 saniye sonra çalıştır
   }
-  
+
   // Delay negatif veya çok küçükse, bir sonraki 30 dakikalık slot'a geç
   if (delay < 1000) {
     if (currentMinutes < 30) {
@@ -375,10 +375,10 @@ function scheduleTrendingModelNext() {
     nextUpdate.setMilliseconds(0)
     delay = nextUpdate.getTime() - now.getTime()
   }
-  
+
   const nextTimeStr = nextUpdate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
   console.log(`⏰ Trending Model: Bir sonraki güncelleme ${nextTimeStr} (${Math.round(delay / 1000 / 60)} dakika sonra)`)
-  
+
   trendingModelSchedulerInterval = setTimeout(() => {
     updateTrendingModelScheduled()
   }, delay)
@@ -393,7 +393,7 @@ async function updateCrypto() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     })
-    
+
     if (response.ok) {
       const result = await response.json()
       const timeStr = new Date().toLocaleTimeString('tr-TR')
@@ -421,7 +421,7 @@ async function updateCurrencyRates() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     })
-    
+
     if (response.ok) {
       const result = await response.json()
       const timeStr = new Date().toLocaleTimeString('tr-TR')
@@ -449,7 +449,7 @@ async function updateFedRate() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     })
-    
+
     if (response.ok) {
       const result = await response.json()
       const timeStr = new Date().toLocaleTimeString('tr-TR')
@@ -477,7 +477,7 @@ async function updateNews() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     })
-    
+
     if (response.ok) {
       const result = await response.json()
       const timeStr = new Date().toLocaleTimeString('tr-TR')
@@ -511,32 +511,32 @@ async function updateTrending() {
     // MongoDB'den direkt crypto listesini çek (home ekranında zaten çekilip kaydedilmiş)
     const collection = dbInstance.collection('api_cache')
     const cryptoDoc = await collection.findOne({ _id: 'crypto_list' })
-    
+
     if (!cryptoDoc || !cryptoDoc.data || !Array.isArray(cryptoDoc.data) || cryptoDoc.data.length === 0) {
       const timeStr = new Date().toLocaleTimeString('tr-TR')
       console.error(`❌ [${timeStr}] Trending güncelleme hatası: Crypto listesi MongoDB'de bulunamadı`)
       return false
     }
-    
+
     const coins = cryptoDoc.data
-    
+
     // calculateTrendingScores fonksiyonunu import et (server.js'den dinamik import)
     const serverModule = await import('../server.js')
     const calculateTrendingScores = serverModule.calculateTrendingScores
-    
+
     if (!calculateTrendingScores) {
       const timeStr = new Date().toLocaleTimeString('tr-TR')
       console.error(`❌ [${timeStr}] Trending güncelleme hatası: calculateTrendingScores fonksiyonu bulunamadı`)
       return false
     }
-    
+
     // Trending'i güncelle (crypto listesi ile) - SADECE AI TAHMİNLEME YAP
     const trendingCoins = calculateTrendingScores(coins)
-    
+
     // Mevcut trending verilerini al (fiyat verilerini korumak için)
     const trendingCollection = dbInstance.collection('trending_data')
     const existingTrending = await trendingCollection.findOne({ _id: 'trending_coins' })
-    
+
     // Yeni AI tahminleme verilerini mevcut verilerle birleştir
     // ÖNEMLİ: prediction_base_price her zaman güncel fiyattan alınmalı (tahmin yapılırkenki fiyat)
     const mergedCoins = trendingCoins.map(newCoin => {
@@ -569,11 +569,11 @@ async function updateTrending() {
       }
       return newCoin
     })
-    
+
     // MongoDB'ye kaydet
     await trendingCollection.updateOne(
       { _id: 'trending_coins' },
-      { 
+      {
         $set: {
           coins: mergedCoins,
           updatedAt: Date.now(),
@@ -582,10 +582,10 @@ async function updateTrending() {
       },
       { upsert: true }
     )
-    
-      const timeStr = new Date().toLocaleTimeString('tr-TR')
+
+    const timeStr = new Date().toLocaleTimeString('tr-TR')
     console.log(`✅ [${timeStr}] Trending AI tahminleme güncellendi (${mergedCoins.length} coin) - MongoDB'den direkt çekildi`)
-      return true
+    return true
   } catch (error) {
     const timeStr = new Date().toLocaleTimeString('tr-TR')
     console.error(`❌ [${timeStr}] Trending güncelleme hatası:`, error.message)
@@ -604,25 +604,23 @@ async function updateAll() {
   isRunning = true
   const timeStr = new Date().toLocaleTimeString('tr-TR')
   const nextUpdateTime = new Date(Date.now() + getNextUpdateTime(5)).toLocaleTimeString('tr-TR')
-  
+
   console.log(`\n🔄 [${timeStr}] ========== API Scheduler Güncelleme Başladı ==========`)
   console.log(`⏰ [${timeStr}] Bir sonraki güncelleme: ${nextUpdateTime}`)
 
   const startTime = Date.now()
 
   try {
-    // Crypto, Currency Rates ve Fed Rate güncelle (PARALEL - farklı endpoint'ler)
+    // Crypto, Currency Rates ve Fed Rate güncelle (SIRALI - memory spike'ları azaltmak için)
     // Dominance, Fear & Greed ve News ayrı scheduler'larda (10 dakikada bir)
-    const [cryptoSuccess, currencySuccess, fedRateSuccess] = await Promise.all([
-      updateCrypto(),
-      updateCurrencyRates(),
-      updateFedRate()
-    ])
-    
+    const cryptoSuccess = await updateCrypto()
+    const currencySuccess = await updateCurrencyRates()
+    const fedRateSuccess = await updateFedRate()
+
     // Trending model tahminleri artık ayrı scheduler'da yapılıyor (30 dakikada bir)
     // updateAll içinde trending güncellemesi yapılmıyor
     // Not: Trending model tahminleri ayrı scheduler'da yapılıyor (updateTrendingModelScheduled)
-    
+
     // Supply Tracking güncelle (Crypto listesi güncellendiğinde)
     let supplyTrackingSuccess = false
     if (cryptoSuccess) {
@@ -679,42 +677,52 @@ function start() {
   }
 
   console.log('🚀 API Scheduler başlatıldı')
-  
+
   // Server başladığında HEMEN ilk güncellemeyi yap (Heroku restart sonrası anında snapshot oluşsun)
   console.log('🚀 İlk güncelleme hemen yapılıyor...')
   updateAll().catch(err => {
     console.error('❌ İlk updateAll hatası:', err.message)
   })
-  
+
   // Sonraki güncellemeleri planla (sabit zamanlarda)
   scheduleNext()
-  
-  // Fear & Greed scheduler'ı başlat (10 dakikada bir) - SADECE PLANLA, HEMEN ÇALIŞTIRMA
-  if (!fearGreedSchedulerInterval) {
-    console.log('🚀 Fear & Greed Scheduler başlatıldı (10 dakikada bir)')
-    scheduleFearGreedNext() // Sadece zamanlayıcı kur, hemen çalıştırma
-  }
-  
-  // News scheduler'ı başlat (10 dakikada bir)
-  if (!newsSchedulerInterval) {
-    console.log('🚀 News Scheduler başlatıldı (10 dakikada bir)')
-    // İlk güncellemeyi hemen yap (async, await etmeden - kendi içinde hata yönetimi var)
-    updateNewsScheduled().catch(err => {
-      console.error('❌ News scheduler ilk güncelleme hatası:', err.message)
-    })
-  }
-  
-  // Dominance scheduler'ı başlat (10 dakikada bir) - SADECE PLANLA, HEMEN ÇALIŞTIRMA
-  if (!dominanceSchedulerInterval) {
-    console.log('🚀 Dominance Scheduler başlatıldı (10 dakikada bir)')
-    scheduleDominanceNext() // Sadece zamanlayıcı kur, hemen çalıştırma
-  }
-  
-  // Trending model tahminleri scheduler'ı başlat (30 dakikada bir) - SADECE PLANLA, HEMEN ÇALIŞTIRMA
-  if (!trendingModelSchedulerInterval) {
-    console.log('🚀 Trending Model Tahmin Scheduler başlatıldı (30 dakikada bir)')
-    scheduleTrendingModelNext() // Sadece zamanlayıcı kur, hemen çalıştırma
-  }
+
+  // === STAGGERED SCHEDULER BAŞLATMA (Memory spike'ları önlemek için) ===
+  // Her scheduler 10 saniye arayla başlatılır
+
+  // Fear & Greed scheduler'ı başlat (10 saniye sonra)
+  setTimeout(() => {
+    if (!fearGreedSchedulerInterval) {
+      console.log('🚀 Fear & Greed Scheduler başlatıldı (10 dakikada bir)')
+      scheduleFearGreedNext()
+    }
+  }, 10000)
+
+  // News scheduler'ı başlat (20 saniye sonra)
+  setTimeout(() => {
+    if (!newsSchedulerInterval) {
+      console.log('🚀 News Scheduler başlatıldı (10 dakikada bir)')
+      updateNewsScheduled().catch(err => {
+        console.error('❌ News scheduler ilk güncelleme hatası:', err.message)
+      })
+    }
+  }, 20000)
+
+  // Dominance scheduler'ı başlat (30 saniye sonra)
+  setTimeout(() => {
+    if (!dominanceSchedulerInterval) {
+      console.log('🚀 Dominance Scheduler başlatıldı (10 dakikada bir)')
+      scheduleDominanceNext()
+    }
+  }, 30000)
+
+  // Trending model tahminleri scheduler'ı başlat (40 saniye sonra)
+  setTimeout(() => {
+    if (!trendingModelSchedulerInterval) {
+      console.log('🚀 Trending Model Tahmin Scheduler başlatıldı (30 dakikada bir)')
+      scheduleTrendingModelNext()
+    }
+  }, 40000)
 }
 
 /**
@@ -726,25 +734,25 @@ function stop() {
     schedulerInterval = null
     console.log('🛑 API Scheduler durduruldu')
   }
-  
+
   if (fearGreedSchedulerInterval) {
     clearTimeout(fearGreedSchedulerInterval)
     fearGreedSchedulerInterval = null
     console.log('🛑 Fear & Greed Scheduler durduruldu')
   }
-  
+
   if (newsSchedulerInterval) {
     clearTimeout(newsSchedulerInterval)
     newsSchedulerInterval = null
     console.log('🛑 News Scheduler durduruldu')
   }
-  
+
   if (dominanceSchedulerInterval) {
     clearTimeout(dominanceSchedulerInterval)
     dominanceSchedulerInterval = null
     console.log('🛑 Dominance Scheduler durduruldu')
   }
-  
+
   if (trendingModelSchedulerInterval) {
     clearTimeout(trendingModelSchedulerInterval)
     trendingModelSchedulerInterval = null
@@ -766,14 +774,14 @@ async function updateSupplyTracking() {
 
     // Supply tracking handler'ı import et
     const { updateSupplyTracking: updateSupplyTrackingHandler } = await import('./apiHandlers/supplyTracking.js')
-    
+
     // MongoDB'den direkt çek (ayrı API isteği yapmadan)
     const success = await updateSupplyTrackingHandler(dbInstance)
-    
-      const timeStr = new Date().toLocaleTimeString('tr-TR')
+
+    const timeStr = new Date().toLocaleTimeString('tr-TR')
     if (success) {
       console.log(`✅ [${timeStr}] Supply tracking verisi güncellendi - MongoDB'den direkt çekildi`)
-        return true
+      return true
     } else {
       console.error(`❌ [${timeStr}] Supply tracking güncelleme hatası`)
       return false
