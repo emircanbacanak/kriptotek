@@ -27,6 +27,16 @@ export default defineConfig({
     assetsDir: 'assets',
     sourcemap: true,
     minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true
+      },
+      mangle: true,
+      format: {
+        comments: false
+      }
+    },
     chunkSizeWarningLimit: 1200, // 1.2MB limit (react-vendor + chart kütüphaneleri büyük olduğu için)
     rollupOptions: {
       output: {
