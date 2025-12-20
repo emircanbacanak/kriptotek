@@ -1,16 +1,31 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+// CSS Preload Plugin - Render-blocking CSS'i azaltır
+function cssPreloadPlugin() {
+  return {
+    name: 'css-preload',
+    transformIndexHtml(html: string) {
+      // CSS link'lerini preload olarak değiştir ve onload ile stylesheet yap
+      return html.replace(
+        /<link rel="stylesheet" crossorigin href="([^"]+)">/g,
+        `<link rel="preload" href="$1" as="style" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="$1"></noscript>`
+      )
+    }
+  }
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), cssPreloadPlugin()],
   server: {
     port: 5173
   },
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
-    sourcemap: false,
+    sourcemap: true,
     minify: 'terser',
     chunkSizeWarningLimit: 1200, // 1.2MB limit (react-vendor + chart kütüphaneleri büyük olduğu için)
     rollupOptions: {
@@ -31,5 +46,6 @@ export default defineConfig({
     }
   }
 })
+
 
 

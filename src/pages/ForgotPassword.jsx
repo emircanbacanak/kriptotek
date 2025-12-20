@@ -297,9 +297,10 @@ const ForgotPassword = () => {
 
   if (isSubmitted) {
     return (
-      <div
+      <main
         ref={containerRef}
         className="min-h-screen animated-login-bg flex items-start sm:items-center justify-center py-16 sm:py-4 px-4 sm:px-6 lg:px-8 relative select-none"
+        role="main"
       >
         <div id="coin-1" className="crypto-coin draggable-element" style={{ top: '10%', left: '8%', color: '#ffa726', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'coin-1')} onDoubleClick={handleDoubleClick}>₿</div>
         <div id="coin-2" className="crypto-coin draggable-element" style={{ top: '25%', right: '12%', color: '#7c8eff', animationDelay: '-3s', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'coin-2')} onDoubleClick={handleDoubleClick}>Ξ</div>
@@ -412,14 +413,15 @@ const ForgotPassword = () => {
             </div>
           </div>
         </div>
-      </div>
+      </main>
     )
   }
 
   return (
-    <div
+    <main
       ref={containerRef}
       className="min-h-screen animated-login-bg flex items-start sm:items-center justify-center py-16 sm:py-4 px-4 sm:px-6 lg:px-8 relative select-none"
+      role="main"
     >
       <div id="coin-1" className="crypto-coin draggable-element" style={{ top: '10%', left: '8%', color: '#ffa726', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'coin-1')} onDoubleClick={handleDoubleClick}>₿</div>
       <div id="coin-2" className="crypto-coin draggable-element" style={{ top: '25%', right: '12%', color: '#7c8eff', animationDelay: '-3s', zIndex: 2, cursor: 'grab' }} onMouseDown={(e) => handleDragStart(e, 'coin-2')} onDoubleClick={handleDoubleClick}>Ξ</div>
@@ -576,7 +578,7 @@ const ForgotPassword = () => {
           </p>
         </div>
       </div>
-    </div>
+    </main>
   )
 }
 
