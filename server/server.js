@@ -182,26 +182,6 @@ app.use((req, res, next) => {
   next()
 })
 
-// API Cache Control Middleware - Browser caching'i devre dışı bırak
-// Bu middleware API endpoint'leri için 304 (Not Modified) sorununu çözer
-app.use('/api', (req, res, next) => {
-  // API response'larını cache'leme - her zaman taze veri al
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
-  res.setHeader('Pragma', 'no-cache')
-  res.setHeader('Expires', '0')
-  res.setHeader('Surrogate-Control', 'no-store')
-  next()
-})
-
-// /cache endpoint'leri için de aynı header'ları ekle
-app.use('/cache', (req, res, next) => {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
-  res.setHeader('Pragma', 'no-cache')
-  res.setHeader('Expires', '0')
-  res.setHeader('Surrogate-Control', 'no-store')
-  next()
-})
-
 // Middleware
 // CORS: Development ve Production domain'lerini destekle
 const allowedOrigins = [
@@ -231,6 +211,22 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }))
+
+// API Cache Control Middleware - Browser caching'i devre dışı bırak
+// KRİTİK: Bu middleware CORS'tan SONRA olmalı, aksi halde CORS header'ları kaybolur
+app.use('/api', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+  res.setHeader('Pragma', 'no-cache')
+  res.setHeader('Expires', '0')
+  next()
+})
+
+app.use('/cache', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+  res.setHeader('Pragma', 'no-cache')
+  res.setHeader('Expires', '0')
+  next()
+})
 
 // PERFORMANS: Gzip compression - response boyutunu %70 azaltır
 app.use(compression({
