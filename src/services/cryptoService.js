@@ -8,8 +8,8 @@ const KUCOIN_API = 'https://api.kucoin.com/api/v1'
 
 // Stablecoin'leri filtrele - Kapsamlı liste
 const STABLECOIN_IDS = [
-  'tether', 'usd-coin', 'dai', 'binance-usd', 'true-usd', 'frax', 
-  'tether-gold', 'paxos-standard', 'gemini-dollar', 'usdd', 
+  'tether', 'usd-coin', 'dai', 'binance-usd', 'true-usd', 'frax',
+  'tether-gold', 'paxos-standard', 'gemini-dollar', 'usdd',
   'liquity-usd', 'fei-usd', 'terrausd', 'magic-internet-money',
   'stasis-eurs', 'usd-coin-wormhole', 'tether-eurt', 'usd-coin-avalanche-bridged-usdc.e',
   'usd-coin-polygon', 'usd-coin-arbitrum', 'usd-coin-optimism', 'usd-coin-base',
@@ -35,13 +35,13 @@ const isStablecoin = (coin) => {
   const id = coin.id?.toLowerCase() || ''
   const symbol = coin.symbol?.toLowerCase() || ''
   const name = coin.name?.toLowerCase() || ''
-  
+
   // ID kontrolü
   if (STABLECOIN_IDS.includes(id)) return true
-  
+
   // Sembol kontrolü
   if (STABLECOIN_SYMBOLS.includes(symbol)) return true
-  
+
   // İsim kontrolü - stablecoin göstergeleri
   const stablecoinKeywords = [
     'usd', 'usdt', 'usdc', 'dai', 'busd', 'tusd', 'frax', 'usdd', 'lusd', 'fei', 'ust', 'mim',
@@ -51,7 +51,7 @@ const isStablecoin = (coin) => {
     'stablecoin', 'stable', 'peg', 'pegged', 'wrapped usd', 'wrapped usdt', 'wrapped usdc',
     'bridged usdt', 'bridged usdc', 'bridged usd', 'staked usd', 'staked usdt', 'staked usdc'
   ]
-  
+
   // İsim veya sembol stablecoin keyword içeriyor mu?
   for (const keyword of stablecoinKeywords) {
     if (name.includes(keyword) || symbol.includes(keyword)) {
@@ -61,27 +61,27 @@ const isStablecoin = (coin) => {
         return true
       }
       // Veya isim/sembol direkt stablecoin göstergesi içeriyorsa (USD, USDT, USDC, DAI, vb.)
-      if (name.includes('usd') || name.includes('usdt') || name.includes('usdc') || 
-          name.includes('dai') || name.includes('busd') || name.includes('tusd') ||
-          symbol.includes('usd') || symbol.includes('usdt') || symbol.includes('usdc') ||
-          symbol.includes('dai') || symbol.includes('busd') || symbol.includes('tusd')) {
+      if (name.includes('usd') || name.includes('usdt') || name.includes('usdc') ||
+        name.includes('dai') || name.includes('busd') || name.includes('tusd') ||
+        symbol.includes('usd') || symbol.includes('usdt') || symbol.includes('usdc') ||
+        symbol.includes('dai') || symbol.includes('busd') || symbol.includes('tusd')) {
         return true
       }
     }
   }
-  
+
   // Özel durumlar - isim veya sembol direkt stablecoin formatında
-  if (symbol.match(/^usd[0-9]*$/i) || symbol.match(/^usdt[0-9]*$/i) || 
-      symbol.match(/^usdc[0-9]*$/i) || symbol.match(/^usd[a-z]*$/i)) {
+  if (symbol.match(/^usd[0-9]*$/i) || symbol.match(/^usdt[0-9]*$/i) ||
+    symbol.match(/^usdc[0-9]*$/i) || symbol.match(/^usd[a-z]*$/i)) {
     return true
   }
-  
-  if (name.match(/usd[0-9]/i) || name.match(/usdt[0-9]/i) || 
-      name.match(/usdc[0-9]/i) || name.match(/bridged.*usd/i) ||
-      name.match(/wrapped.*usd/i) || name.match(/staked.*usd/i)) {
+
+  if (name.match(/usd[0-9]/i) || name.match(/usdt[0-9]/i) ||
+    name.match(/usdc[0-9]/i) || name.match(/bridged.*usd/i) ||
+    name.match(/wrapped.*usd/i) || name.match(/staked.*usd/i)) {
     return true
   }
-  
+
   return false
 }
 
@@ -123,7 +123,7 @@ const fetchWithRetry = async (url, retries = 3, delay = 2000) => {
       // Timeout için AbortController
       const controller = new AbortController()
       timeoutId = setTimeout(() => controller.abort(), 30000) // 30 saniye timeout
-      
+
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -134,29 +134,29 @@ const fetchWithRetry = async (url, retries = 3, delay = 2000) => {
         cache: 'no-cache',
         signal: controller.signal
       })
-      
+
       clearTimeout(timeoutId)
       timeoutId = null
-      
+
       if (response.ok) {
         const data = await response.json()
         return { ok: true, data }
       }
-      
+
       // Rate limit kontrolü
       if (response.status === 429) {
         const retryAfter = response.headers.get('Retry-After') || delay
         await new Promise(resolve => setTimeout(resolve, parseInt(retryAfter) * 1000))
         continue
       }
-      
+
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     } catch (error) {
       // Timeout'u temizle (eğer hala aktifse)
       if (timeoutId) {
         clearTimeout(timeoutId)
       }
-      
+
       if (i === retries - 1) {
         throw error
       }
@@ -174,42 +174,57 @@ const fetchFromCoinGecko = async (useCache = true) => {
       const cachedData = getCachedData()
       if (cachedData && cachedData.length > 0) {
         // Cache kullanıldığında bile API durumlarını göster (cache'den geldiğini belirt)
-        return { 
-          data: cachedData, 
-          apiStatus: { 
-            source: 'cache', 
+        return {
+          data: cachedData,
+          apiStatus: {
+            source: 'cache',
             success: true,
             apiStatuses: [
               { name: 'Cache', success: true }
             ]
-          } 
+          }
         }
       }
     }
-    
-    // Backend API'den çek (CORS sorunu yok)
-    const response = await fetch(`${BACKEND_API_URL}/api/crypto/list`, {
+
+    // Backend cache'den çek (API fallback yapmaz, sadece MongoDB cache döndürür)
+    // ÖNEMLİ: /api/crypto/list yerine /cache/crypto_list kullanıyoruz çünkü:
+    // - /api/crypto/list cache eski olduğunda CoinGecko API'yi çağırır ve 30s timeout alabilir
+    // - /cache/crypto_list sadece MongoDB cache'den veri döndürür, her zaman hızlı
+    const response = await fetch(`${BACKEND_API_URL}/cache/crypto_list`, {
       headers: {
         'Accept': 'application/json'
       },
-      signal: AbortSignal.timeout(30000) // 30 saniye timeout
+      signal: AbortSignal.timeout(15000) // 15 saniye timeout (cache hızlı olmalı)
     })
-    
+
     if (!response.ok) {
       throw new Error(`Backend API error: ${response.status} ${response.statusText}`)
     }
-    
-    const result = await response.json()
-    
-    if (!result.success || !result.data || !Array.isArray(result.data)) {
-      throw new Error('Backend API: Invalid response format')
-    }
-    
-    // Backend'den gelen veri zaten filtrelenmiş ve normalize edilmiş (500 coin, stablecoin'ler hariç)
-    const normalizedData = result.data || []
-    const apiStatuses = result.apiStatuses || [{ name: 'Backend API', success: true }]
 
-    
+    const result = await response.json()
+
+    // /cache/crypto_list endpoint'i { data: { coins: [...] } } formatında döndürür
+    // /api/crypto/list endpoint'i { data: [...] } formatında döndürür
+    // Her iki formatı da destekle
+    let normalizedData = []
+    if (result.data) {
+      if (Array.isArray(result.data)) {
+        // Eski format: { data: [...] }
+        normalizedData = result.data
+      } else if (result.data.coins && Array.isArray(result.data.coins)) {
+        // Yeni format: { data: { coins: [...] } }
+        normalizedData = result.data.coins
+      }
+    }
+
+    if (!result.success || normalizedData.length === 0) {
+      throw new Error('Backend API: Invalid response format or empty data')
+    }
+
+    const apiStatuses = result.apiStatuses || [{ name: 'Backend Cache', success: true }]
+
+
     if (normalizedData.length === 0) {
       // Cache'den tekrar dene
       const cachedData = getCachedData()
@@ -219,42 +234,42 @@ const fetchFromCoinGecko = async (useCache = true) => {
       }
       throw new Error('No data received from Backend API')
     }
-    
+
     // Son kontrol: Kesinlikle 500 coin döndür
     const limitedData = normalizedData.length > 500 ? normalizedData.slice(0, 500) : normalizedData
-    
+
     // Başarılı veriyi cache'e kaydet
     setCachedData(limitedData)
-    
+
     return { data: limitedData, apiStatus: { source: result.source || 'api', success: true, apiStatuses } }
   } catch (error) {
     // Son çare: Cache'den dene (stale data bile olsa)
     const cachedData = getCachedData()
     if (cachedData && cachedData.length > 0) {
-      return { 
-        data: cachedData, 
-        apiStatus: { 
-          source: 'stale_cache_fallback', 
-          success: true, 
+      return {
+        data: cachedData,
+        apiStatus: {
+          source: 'stale_cache_fallback',
+          success: true,
           error: error.message,
           apiStatuses: [
             { name: 'Stale Cache Fallback', success: true },
             { name: 'API Error', success: false, error: error.message }
           ]
-        } 
+        }
       }
     }
-    
-    throw { 
-      error, 
-      apiStatus: { 
-        source: 'api', 
-        success: false, 
+
+    throw {
+      error,
+      apiStatus: {
+        source: 'api',
+        success: false,
         error: error.message,
         apiStatuses: [
           { name: 'API Error', success: false, error: error.message }
         ]
-      } 
+      }
     }
   }
 }
@@ -264,17 +279,17 @@ const fetchOHLCFromBinance = async (symbol, interval = '1d', limit = 30) => {
   try {
     // CoinGecko symbol'ü Binance formatına çevir (BTC -> BTCUSDT)
     const binanceSymbol = `${symbol.toUpperCase()}USDT`
-    
+
     const response = await fetch(
       `${BINANCE_API}/klines?symbol=${binanceSymbol}&interval=${interval}&limit=${limit}`
     )
-    
+
     if (!response.ok) {
       throw new Error(`Binance API error: ${response.status}`)
     }
-    
+
     const data = await response.json()
-    
+
     // OHLC formatına çevir
     return data.map(candle => ({
       time: candle[0],
@@ -302,19 +317,19 @@ const fetchOHLCFromCoinGecko = async (coinId, days = 30) => {
         signal: AbortSignal.timeout(30000) // 30 saniye timeout
       }
     )
-    
+
     if (!response.ok) {
       throw new Error(`Backend OHLC API error: ${response.status}`)
     }
-    
+
     const result = await response.json()
-    
+
     if (!result.success || !result.data || !Array.isArray(result.data)) {
       throw new Error('Backend OHLC API: Invalid response format')
     }
-    
+
     const data = result.data
-    
+
     return data.map(candle => ({
       time: candle[0],
       open: candle[1],
@@ -363,7 +378,7 @@ const cryptoService = {
     try {
       const coins = await this.fetchCryptoList()
       const sorted = [...coins].sort((a, b) => b.price_change_percentage_24h - a.price_change_percentage_24h)
-      
+
       return {
         topGainers: sorted
           .filter((c) => c.price_change_percentage_24h > 0)
@@ -401,7 +416,7 @@ const cryptoService = {
       if (binanceData && binanceData.length > 0) {
         return binanceData
       }
-      
+
       // Binance başarısız olursa CoinGecko'dan çek
       // CoinGecko sadece günlük veri veriyor, o yüzden 30 gün çekiyoruz
       return await fetchOHLCFromCoinGecko(coinId, 30)
