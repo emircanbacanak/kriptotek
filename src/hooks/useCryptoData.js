@@ -30,33 +30,18 @@ const useCryptoData = () => {
 
     // Abone ol - veri geldiğinde ANINDA göster (cache veya MongoDB'den)
     const unsubscribe = globalDataManager.subscribe((data) => {
-      // KRİTİK: Yeni veri geldiğinde her zaman güncelle (eski veriye dönme)
-      // React state'i her zaman güncelle, timestamp kontrolü yapma (globalDataManager zaten yapıyor)
+      // KRİTİK BUG FIX: dataChanged kontrolü kaldırıldı!
+      // Önceki kod bazen gerçek değişiklikleri algılayamıyordu
+      // globalDataManager zaten timestamp kontrolü yapıyor, burada tekrar kontrol etmeye gerek yok
       if (data.coins && data.coins.length > 0) {
-        // KRİTİK: Veri gerçekten değişti mi kontrol et (gereksiz güncellemeleri önle)
-        // İlk coin'in ID'si ve fiyatını karşılaştır - useRef kullan (closure sorununu önle)
-        const newFirstCoin = data.coins[0]
-        const currentFirstCoin = coinsRef.current[0] // Ref'ten al (güncel değer)
-
-        // Eğer veri gerçekten değiştiyse güncelle
-        const dataChanged = !currentFirstCoin ||
-          currentFirstCoin.id !== newFirstCoin.id ||
-          currentFirstCoin.current_price !== newFirstCoin.current_price ||
-          coinsRef.current.length !== data.coins.length
-
-        if (dataChanged) {
-          // KRİTİK: React state'i her zaman güncelle (yeni referans ile)
-          // Array referansı değişmeli ki React güncellemeyi algılasın
-          setCoins([...data.coins]) // Yeni array referansı oluştur
-          coinsRef.current = [...data.coins] // Ref'i güncelle
-          setTopMovers({
-            topGainers: [...(data.topMovers?.topGainers || [])],
-            topLosers: [...(data.topMovers?.topLosers || [])]
-          }) // Yeni object referansı oluştur
-          setLoading(false) // Veri geldiğinde ANINDA loading'i kapat
-        } else {
-          // Veri değişmedi, gereksiz güncelleme yapma
-        }
+        // Her zaman yeni veriyi göster
+        setCoins([...data.coins])
+        coinsRef.current = [...data.coins]
+        setTopMovers({
+          topGainers: [...(data.topMovers?.topGainers || [])],
+          topLosers: [...(data.topMovers?.topLosers || [])]
+        })
+        setLoading(false)
       }
       setIsUpdating(data.isUpdating || false)
       setLastUpdate(data.lastCryptoUpdate)
