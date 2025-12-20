@@ -2021,6 +2021,27 @@ app.post('/api/dominance/update', async (req, res) => {
       { upsert: true }
     )
 
+    // WebSocket ile tüm client'lara ANINDA bildirim gönder
+    if (wss && wss.clients) {
+      const wsMessage = JSON.stringify({
+        type: 'change',
+        collection: 'api_cache',
+        operationType: 'update',
+        documentId: 'dominance_data',
+        fullDocument: {
+          _id: 'dominance_data',
+          data: mergedData,
+          updatedAt: new Date(),
+          lastUpdate: Date.now()
+        }
+      })
+      wss.clients.forEach((client) => {
+        if (client.readyState === 1) {
+          try { client.send(wsMessage) } catch (e) { }
+        }
+      })
+    }
+
     return res.json({
       success: true,
       data: mergedData,
@@ -2070,6 +2091,27 @@ app.post('/api/fear-greed/update', async (req, res) => {
       },
       { upsert: true }
     )
+
+    // WebSocket ile tüm client'lara ANINDA bildirim gönder
+    if (wss && wss.clients) {
+      const wsMessage = JSON.stringify({
+        type: 'change',
+        collection: 'api_cache',
+        operationType: 'update',
+        documentId: 'fear_greed',
+        fullDocument: {
+          _id: 'fear_greed',
+          data: fearGreedData,
+          updatedAt: new Date(),
+          lastUpdate: Date.now()
+        }
+      })
+      wss.clients.forEach((client) => {
+        if (client.readyState === 1) {
+          try { client.send(wsMessage) } catch (e) { }
+        }
+      })
+    }
 
     return res.json({
       success: true,
@@ -2453,6 +2495,34 @@ app.post('/api/crypto/update', async (req, res) => {
       console.log(`✅ [${timeStr}] Trending verisi otomatik güncellendi (${trendingCoins.length} coin)`)
     } catch (trendingError) {
       console.warn(`⚠️ [${timeStr}] Trending güncelleme hatası (devam ediliyor):`, trendingError.message)
+    }
+
+    // WebSocket ile tüm client'lara ANINDA bildirim gönder (Change Streams'e bağımlı olmadan)
+    if (wss && wss.clients) {
+      const wsMessage = JSON.stringify({
+        type: 'change',
+        collection: 'api_cache',
+        operationType: 'update',
+        documentId: 'crypto_list',
+        fullDocument: {
+          _id: 'crypto_list',
+          data: result.data,
+          updatedAt: now,
+          lastUpdate: now
+        }
+      })
+      let broadcastCount = 0
+      wss.clients.forEach((client) => {
+        if (client.readyState === 1) { // WebSocket.OPEN
+          try {
+            client.send(wsMessage)
+            broadcastCount++
+          } catch (err) {
+            // Sessizce geç
+          }
+        }
+      })
+      console.log(`📡 [${timeStr}] WebSocket broadcast: crypto_list güncellendi (${broadcastCount} client)`)
     }
 
     return res.json({
