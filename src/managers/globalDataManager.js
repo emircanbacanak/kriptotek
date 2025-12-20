@@ -1716,8 +1716,26 @@ class GlobalDataManager {
 
         // Crypto list güncellemesi
         if (documentId === 'crypto_list') {
-          // KRİTİK: WebSocket'ten gelen veri formatı: fullDocument.data.coins veya fullDocument.coins
-          const coins = data?.data?.coins || data?.coins || data || []
+          // WebSocket'ten gelen veri formatı:
+          // Backend: { fullDocument: { _id: 'crypto_list', data: [...coins], updatedAt, lastUpdate } }
+          // data değişkeni = fullDocument.data veya fullDocument (array olabilir)
+          let coins = []
+          if (Array.isArray(data)) {
+            // Direkt array geldiyse
+            coins = data
+          } else if (data?.data && Array.isArray(data.data)) {
+            // { data: [...coins] } formatında geldiyse
+            coins = data.data
+          } else if (data?.coins && Array.isArray(data.coins)) {
+            // { coins: [...] } formatında geldiyse
+            coins = data.coins
+          } else if (message.fullDocument?.data && Array.isArray(message.fullDocument.data)) {
+            // fullDocument.data array olarak geldiyse (yeni format)
+            coins = message.fullDocument.data
+          }
+
+          console.log('📡 WebSocket crypto_list alındı:', coins.length, 'coin')
+
           if (Array.isArray(coins) && coins.length > 0) {
             // KRİTİK: Veri gerçekten değişti mi kontrol et (gereksiz güncellemeleri önle)
             // İlk coin'in ID'si ve fiyatını karşılaştır
@@ -1754,11 +1772,15 @@ class GlobalDataManager {
 
         // Dominance data güncellemesi
         if (documentId === 'dominance_data') {
-          if (data) {
+          // Backend format: { fullDocument: { data: {...dominanceData} } }
+          const dominanceData = message.fullDocument?.data || data?.data || data
+          console.log('📡 WebSocket dominance_data alındı')
+
+          if (dominanceData) {
             // YENİ VERİ GELDİĞİNDE: Eski localStorage cache'i sil
             localStorage.removeItem(this.CACHE_KEYS.dominance)
 
-            this.dominanceData = data
+            this.dominanceData = dominanceData
             this.lastDominanceUpdate = Date.now()
             // localStorage'a kaydet
             this.saveToLocalStorage()
@@ -1768,11 +1790,15 @@ class GlobalDataManager {
 
         // Fear & Greed güncellemesi
         if (documentId === 'fear_greed') {
-          if (data) {
+          // Backend format: { fullDocument: { data: {...fearGreedData} } }
+          const fearGreedData = message.fullDocument?.data || data?.data || data
+          console.log('📡 WebSocket fear_greed alındı')
+
+          if (fearGreedData) {
             // YENİ VERİ GELDİĞİNDE: Eski localStorage cache'i sil
             localStorage.removeItem(this.CACHE_KEYS.fearGreed)
 
-            this.fearGreedIndex = data
+            this.fearGreedIndex = fearGreedData
             // localStorage'a kaydet
             this.saveToLocalStorage()
             this.notifySubscribers()
