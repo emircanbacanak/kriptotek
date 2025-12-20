@@ -298,12 +298,17 @@ async function fetchCryptoList() {
       // Başarılı sonuçları topla
       allCoins = []
       apiStatuses = []
+      let page1Success = false
 
       results.forEach((result, index) => {
         if (result.status === 'fulfilled') {
           if (Array.isArray(result.value)) {
             allCoins.push(...result.value)
             apiStatuses.push({ name: pages[index].name, success: true })
+            // Page 1 (index 0) başarılı mı kontrol et - BU KRİTİK!
+            if (index === 0) {
+              page1Success = true
+            }
           } else {
             apiStatuses.push({ name: pages[index].name, success: false, error: 'Invalid response format' })
           }
@@ -314,9 +319,20 @@ async function fetchCryptoList() {
         }
       })
 
-      // Eğer en az bir sayfa başarılı olduysa, devam et
-      if (allCoins.length > 0) {
-        break
+      // KRİTİK: Page 1 (Bitcoin, Ethereum, top coinler) MUTLAKA başarılı olmalı!
+      // Sadece Page 2-3 başarılı olursa, Bitcoin olmadan eksik veri kaydedilir - BU KABUL EDİLEMEZ!
+      if (page1Success && allCoins.length > 0) {
+        // Bitcoin'in gerçekten geldiğini doğrula
+        const hasBitcoin = allCoins.some(coin => coin.id === 'bitcoin')
+        if (hasBitcoin) {
+          console.log(`✅ Page 1 başarılı ve Bitcoin bulundu - devam ediliyor`)
+          break
+        } else {
+          console.warn(`⚠️ Page 1 başarılı ama Bitcoin bulunamadı - yeniden deneniyor`)
+        }
+      } else if (allCoins.length > 0 && !page1Success) {
+        console.warn(`⚠️ Page 1 başarısız oldu (${apiStatuses[0]?.error || 'unknown'}) - eksik veri kaydedilmeyecek, yeniden deneniyor`)
+        allCoins = [] // Eksik veriyi temizle
       }
 
       retryCount++
@@ -324,7 +340,14 @@ async function fetchCryptoList() {
 
     if (allCoins.length === 0) {
       const errorDetails = apiStatuses.map(s => `${s.name}: ${s.error || 'OK'}`).join(', ')
-      throw new Error(`No data received from CoinGecko API after ${maxRetries + 1} attempts. Details: ${errorDetails}`)
+      throw new Error(`CoinGecko API: Page 1 (Bitcoin, Ethereum, top coinler) zorunludur. ${maxRetries + 1} deneme sonrası başarısız. Detaylar: ${errorDetails}`)
+    }
+
+    // Son kontrol: Bitcoin kesinlikle olmalı
+    const hasBitcoin = allCoins.some(coin => coin.id === 'bitcoin')
+    if (!hasBitcoin) {
+      console.error(`❌ KRİTİK HATA: ${allCoins.length} coin çekildi ama Bitcoin yok! İlk coin: ${allCoins[0]?.id || 'yok'}`)
+      throw new Error(`CoinGecko API: Bitcoin bulunamadı (${allCoins.length} coin çekildi). Eksik veri kaydedilmeyecek.`)
     }
 
     // Duplicate coin'leri filtrele

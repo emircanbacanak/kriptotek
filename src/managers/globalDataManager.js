@@ -1866,14 +1866,6 @@ class GlobalDataManager {
     }
   }
 
-  // Otomatik güncellemeyi durdur
-  stopAutoUpdate() {
-    if (this.updateTimeout !== null) {
-      clearTimeout(this.updateTimeout)
-      this.updateTimeout = null
-    }
-  }
-
   // Manuel yenileme
   async refresh() {
     await this.updateAllData()
