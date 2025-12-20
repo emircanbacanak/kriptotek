@@ -425,10 +425,10 @@ let wss = null // WebSocket server
 const memoryCache = {
   crypto_list: null,
   crypto_list_timestamp: null,
-  crypto_list_ttl: 5 * 60 * 1000, // 5 dakika TTL
+  crypto_list_ttl: 10 * 60 * 1000, // 10 dakika TTL (scheduler 5 dakikada günceller, expire olmaz)
   dominance_data: null,
   dominance_data_timestamp: null,
-  dominance_data_ttl: 5 * 60 * 1000
+  dominance_data_ttl: 15 * 60 * 1000 // 15 dakika TTL (scheduler 10 dakikada günceller)
 }
 
 // MongoDB bağlantısı
