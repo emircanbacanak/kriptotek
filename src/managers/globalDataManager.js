@@ -934,31 +934,25 @@ class GlobalDataManager {
 
         // Veriyi kaydet
         if (cryptoList && cryptoList.length > 0) {
-          // KRİTİK: WebSocket'ten gelen veri her zaman öncelikli olmalı
-          // Eğer mevcut veri varsa ve updateAllData() çalışıyorsa, WebSocket'ten gelen veri daha yeni olabilir
-          // Bu yüzden sadece mevcut veri YOKSA veya updateAllData() başlamadan ÖNCE mevcut veri yoksa yükle
-          // Ama WebSocket'ten gelen veri her zaman güncellenmeli
+          // KRİTİK BUG FIX: Her zaman yeni veriyi yükle!
+          // Önceki kod mevcut veri varsa yeni veriyi atlıyordu - bu yüzden fiyatlar güncellenmiyordu
 
-          // Eğer mevcut veri varsa, updateAllData() içinde yükleme yapma (WebSocket'ten gelen veri daha yeni olabilir)
-          // Sadece mevcut veri YOKSA yükle
-          if (this.coins.length === 0) {
-            // Mevcut veri yoksa yükle
-            // YENİ VERİ GELDİĞİNDE: Eski localStorage cache'i sil (eski cache geri dönmesin)
-            localStorage.removeItem(this.CACHE_KEYS.crypto)
+          // YENİ VERİ GELDİĞİNDE: Eski localStorage cache'i sil (eski cache geri dönmesin)
+          localStorage.removeItem(this.CACHE_KEYS.crypto)
 
-            const limitedList = cryptoList.length > 500 ? cryptoList.slice(0, 500) : cryptoList
-            this.coins = limitedList
-            this.topMovers = this.calculateTopMovers(limitedList)
-            this.lastCryptoUpdate = new Date()
-            results.crypto.success = true
-            // localStorage'a hemen kaydet (yeni veriler geldiğinde)
-            this.saveToLocalStorage()
-            // Abonelere bildir (yeni veriler)
-            this.notifySubscribers()
-          } else {
-            // Mevcut veri var, updateAllData() içinde yükleme yapma (WebSocket'ten gelen veri daha yeni olabilir)
-            results.crypto.success = true // Başarılı say (veri zaten var)
-          }
+          const limitedList = cryptoList.length > 500 ? cryptoList.slice(0, 500) : cryptoList
+          this.coins = limitedList
+          this.topMovers = this.calculateTopMovers(limitedList)
+          this.lastCryptoUpdate = new Date()
+          results.crypto.success = true
+
+          // localStorage'a hemen kaydet (yeni veriler geldiğinde)
+          this.saveToLocalStorage()
+
+          // Abonelere bildir (yeni veriler)
+          this.notifySubscribers()
+
+          logger.log(`✅ [${new Date().toLocaleTimeString('tr-TR')}] Crypto verisi güncellendi (${limitedList.length} coin)`)
         }
 
         results.crypto.apiStatuses = cryptoApiStatuses
