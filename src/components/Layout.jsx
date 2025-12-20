@@ -34,10 +34,12 @@ const Layout = () => {
       realtimeService.connect();
     }
 
-    // Cleanup: Component unmount olduğunda durdur
-    // NOT: disconnect() çağrılmasın, diğer sayfalar da kullanıyor olabilir
+    // KRİTİK: stopAutoUpdate() ÇAĞRILMAMALI!
+    // Önceki kod Layout unmount olunca polling'i durduruyordu
+    // Bu yüzden fiyatlar sadece 1 kere güncellenip sonra duruyordu
+    // Polling sayfa açık olduğu sürece çalışmalı
     return () => {
-      globalDataManager.stopAutoUpdate();
+      // globalDataManager.stopAutoUpdate(); // KALDIRILDI - polling'i durdurmayın!
       // realtimeService.disconnect(); // Kaldırıldı - diğer sayfalar da kullanıyor
     };
   }, []);

@@ -39,7 +39,7 @@ class GlobalDataManager {
     this.lastSupplyTrackingUpdate = null
 
     // Güncelleme kontrolü
-    this.updateTimeout = null
+    this.updateInterval = null // setInterval ID - polling için
     this.cacheCleanupInterval = null // Periyodik cache temizleme interval'i
     this.subscribers = new Set()
     this.isUpdating = false
@@ -1324,41 +1324,16 @@ class GlobalDataManager {
     }
   }
 
-  // Sonraki güncelleme zamanını hesapla (5 dakikalık sabit aralıklar: 00:05, 00:10, 00:15, ...)
-  getNextUpdateTime() {
-    const now = new Date()
-    const currentMinutes = now.getMinutes()
-
-    const currentSlot = Math.floor(currentMinutes / 5)
-    const nextSlot = currentSlot + 1
-
-    const nextUpdate = new Date(now)
-
-    if (nextSlot * 5 >= 60) {
-      nextUpdate.setHours(now.getHours() + 1)
-      nextUpdate.setMinutes(0)
-    } else {
-      nextUpdate.setMinutes(nextSlot * 5)
-    }
-
-    nextUpdate.setSeconds(0)
-    nextUpdate.setMilliseconds(0)
-
-    let delay = nextUpdate.getTime() - now.getTime()
-
-    if (delay < 1000) {
-      nextUpdate.setMinutes(nextUpdate.getMinutes() + 5)
-      delay = nextUpdate.getTime() - now.getTime()
-    }
-
-    return delay
-  }
-
   // Otomatik güncelleme başlat
+  // KRİTİK: Basit ve güvenilir setInterval kullan - karmaşık setTimeout zincirleme yerine
   startAutoUpdate() {
-    if (this.updateTimeout !== null) {
+    // Zaten çalışıyorsa tekrar başlatma
+    if (this.updateInterval !== null) {
+      console.log('⏭️ startAutoUpdate zaten çalışıyor')
       return
     }
+
+    console.log('🚀 startAutoUpdate başlatılıyor...')
 
     // İlk başlatmada eski cache'leri temizle
     this.cleanupOldCache()
@@ -1366,32 +1341,32 @@ class GlobalDataManager {
     // WebSocket ile real-time güncellemeleri dinle
     this.setupRealtimeListeners()
 
-    // İlk başlatmada sadece MongoDB'den mevcut veriyi yükle (API çağrısı yapma)
-    // Retry mekanizması ile backend hazır olana kadar dene - ANINDA YÜKLE
-    // KRİTİK: Sadece mevcut veri YOKSA yükle (yeni veri geldikten sonra eski veriye dönme)
+    // İlk başlatmada sadece MongoDB'den mevcut veriyi yükle
     if (this.coins.length === 0) {
       this.loadFromMongoDBOnlyWithRetry().catch(() => {
-        // Hata olsa bile abonelere bildir
         this.notifySubscribers()
       })
-    } else {
-      // Mevcut veri varsa MongoDB'den yükleme (yeni veri zaten yüklenmiş)
-      logger.log('⏭️ loadFromMongoDBOnlyWithRetry atlandı (mevcut veri var)')
     }
 
-    // Recursive setTimeout kullanarak 5 dakikalık sabit zaman dilimlerinde güncelle
-    const scheduleNextUpdate = () => {
-      const delay = this.getNextUpdateTime()
+    // KRİTİK: Basit setInterval kullan - her 60 saniyede bir güncelle
+    // Bu ASLA durmaz (clearInterval çağrılmadığı sürce)
+    const POLLING_INTERVAL = 60 * 1000 // 60 saniye
 
-      this.updateTimeout = setTimeout(() => {
-        // Her güncellemede eski cache'leri temizle
-        this.cleanupOldCache()
-        this.updateAllData().catch(() => { })
-        scheduleNextUpdate()
-      }, delay)
-    }
+    this.updateInterval = setInterval(() => {
+      console.log(`🔄 [${new Date().toLocaleTimeString('tr-TR')}] Otomatik güncelleme çalışıyor...`)
+      this.cleanupOldCache()
+      this.updateAllData().catch((err) => {
+        console.error('❌ updateAllData hatası:', err)
+      })
+    }, POLLING_INTERVAL)
 
-    scheduleNextUpdate()
+    console.log(`✅ Polling başlatıldı - her ${POLLING_INTERVAL / 1000} saniyede bir güncelleme`)
+
+    // İlk güncellemeyi hemen yap (10 saniye sonra - sayfa tamamen yüklensin)
+    setTimeout(() => {
+      console.log('🔄 İlk güncelleme yapılıyor...')
+      this.updateAllData().catch(() => { })
+    }, 10000)
 
     // Periyodik cache temizleme (her 1 saatte bir)
     if (typeof window !== 'undefined' && !this.cacheCleanupInterval) {
@@ -1403,9 +1378,9 @@ class GlobalDataManager {
 
   // Otomatik güncellemeyi durdur (cleanup için)
   stopAutoUpdate() {
-    if (this.updateTimeout !== null) {
-      clearTimeout(this.updateTimeout)
-      this.updateTimeout = null
+    if (this.updateInterval !== null) {
+      clearInterval(this.updateInterval)
+      this.updateInterval = null
     }
     if (this.cacheCleanupInterval !== null) {
       clearInterval(this.cacheCleanupInterval)
