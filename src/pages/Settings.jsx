@@ -576,7 +576,7 @@ const Settings = () => {
         {/* Display Card */}
         <div className="group relative">
           <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-300"></div>
-          <div className="relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl p-6 border border-gray-200 dark:border-gray-700 shadow-lg transform transition-all duration-300 hover:shadow-2xl hover:-translate-y-1">
+          <div className="relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl p-6 border border-gray-200 dark:border-gray-700 shadow-lg transform transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 h-full">
             <div className="flex items-center space-x-3 mb-6">
               {isDark ? <Moon className="w-5 h-5 text-primary-600" /> : <Sun className="w-5 h-5 text-primary-600" />}
               <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">
@@ -658,7 +658,7 @@ const Settings = () => {
         {/* Password Card */}
         <div className="group relative">
           <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-300"></div>
-          <div className="relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl p-6 border border-gray-200 dark:border-gray-700 shadow-lg transform transition-all duration-300 hover:shadow-2xl hover:-translate-y-1">
+          <div className="relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl p-6 border border-gray-200 dark:border-gray-700 shadow-lg transform transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 h-full">
             <div className="flex items-center space-x-3 mb-6">
               <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900 rounded-lg flex items-center justify-center">
                 <Shield className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />

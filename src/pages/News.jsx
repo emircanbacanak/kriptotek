@@ -700,7 +700,7 @@ function News() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-5 overflow-y-auto overflow-x-hidden max-h-[720px] px-2 sm:px-4 pt-4 sm:pt-6 pb-4 crypto-list-scrollbar">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 min-[1921px]:grid-cols-4 gap-3 sm:gap-4 lg:gap-5 overflow-y-auto overflow-x-hidden max-h-[1015px] min-[1921px]:max-h-[1400px] px-2 sm:px-4 pt-4 sm:pt-6 pb-4 crypto-list-scrollbar">
             {visibleNews.map((item, index) => {
               const ts = new Date(item.publishedAt || item.published_at || item.pubDate || item.date || 0).getTime() || index
               const k = `${item.id || item.url || item.link || item.title}-${ts}`

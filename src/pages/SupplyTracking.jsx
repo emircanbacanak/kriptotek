@@ -365,7 +365,7 @@ function SupplyTracking() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 overflow-y-auto overflow-x-hidden max-h-[720px] pt-4 sm:pt-6 pb-6 crypto-list-scrollbar">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 min-[1921px]:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 overflow-y-auto overflow-x-hidden max-h-[750px] min-[1921px]:max-h-[1100px] pt-4 sm:pt-6 pb-6 crypto-list-scrollbar">
           {visibleSupplyData.map((coin, index) => (
             <div key={coin.id} className="group/card relative animate-fade-in" style={{ animationDelay: `${Math.min(index * 10, 250)}ms` }}>
               <div className="absolute inset-0 bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl opacity-0 group-hover/card:opacity-50 blur-lg transition-opacity duration-500"></div>

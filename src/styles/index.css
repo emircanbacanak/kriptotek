@@ -182,6 +182,31 @@ body::-webkit-scrollbar {
 /* ============================================
    GRADIENTS & TEXT EFFECTS
    ============================================ */
+
+/* Global fix for gradient text - ensures visibility in all browsers */
+/* This fixes Tailwind's bg-clip-text not working in some browsers */
+.bg-clip-text {
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+/* Fallback color for browsers that don't support gradient text */
+@supports not (-webkit-background-clip: text) {
+  .bg-clip-text.from-yellow-400,
+  .bg-clip-text.from-yellow-600 {
+    color: #facc15 !important;
+    -webkit-text-fill-color: #facc15 !important;
+  }
+  .bg-clip-text.from-blue-400,
+  .bg-clip-text.from-blue-500,
+  .bg-clip-text.from-blue-600 {
+    color: #3b82f6 !important;
+    -webkit-text-fill-color: #3b82f6 !important;
+  }
+}
+
+
 .login-link-gradient {
   background: linear-gradient(135deg, #a855f7 0%, #c084fc 100%);
   -webkit-background-clip: text;
