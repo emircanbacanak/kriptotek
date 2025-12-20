@@ -202,10 +202,10 @@ export const updatePageSEO = (page, language) => {
   const lang = language || 'tr'
   const config = pageConfigs[page] || pageConfigs.home
   const pageData = config[lang] || config.tr
-  
+
   const baseUrl = getBaseUrl()
   const pageUrl = getPageUrl(page)
-  const imageUrl = `${baseUrl}/kriptotek.jpg`
+  const imageUrl = `${baseUrl}/kriptotek.webp`
 
   // Title
   document.title = pageData.title

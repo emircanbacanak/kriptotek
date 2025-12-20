@@ -63,7 +63,7 @@ const Register = () => {
     e.preventDefault()
     e.stopPropagation()
     e.stopImmediatePropagation()
-    
+
     // Drag'ı iptal et
     if (draggedElement) {
       setDraggedElement(null)
@@ -73,7 +73,7 @@ const Register = () => {
         element.style.zIndex = '2'
       }
     }
-    
+
     // Tıklama zamanını sıfırla
     lastClickTimeRef.current = 0
     lastClickElementRef.current = null
@@ -82,12 +82,12 @@ const Register = () => {
   const handleDragStart = (e, elementId) => {
     e.preventDefault()
     e.stopPropagation()
-    
+
     // Çift tıklamayı engelle - son tıklama zamanını kontrol et
     const now = Date.now()
     const timeSinceLastClick = now - lastClickTimeRef.current
     const isSameElement = lastClickElementRef.current === elementId
-    
+
     if (isSameElement && timeSinceLastClick < 500) {
       // Çift tıklama algılandı, engelle
       lastClickTimeRef.current = 0
@@ -95,11 +95,11 @@ const Register = () => {
       e.stopImmediatePropagation()
       return false
     }
-    
+
     // Tıklama zamanını kaydet
     lastClickTimeRef.current = now
     lastClickElementRef.current = elementId
-    
+
     const element = document.getElementById(elementId)
     if (!element) return
 
@@ -319,7 +319,7 @@ const Register = () => {
 
     if (!result.success) {
       // Firebase auth.js'den gelen Türkçe hata mesajını göster
-        setError(result.error || t('registerError') || 'Kayıt olurken bir hata oluştu.')
+      setError(result.error || t('registerError') || 'Kayıt olurken bir hata oluştu.')
     } else {
       navigate('/login')
     }
@@ -391,9 +391,11 @@ const Register = () => {
       <div className="candlestick green" style={{ right: '16%', top: '20%', zIndex: 2 }} />
 
       <div className="absolute top-4 right-4 sm:top-6 sm:right-6" style={{ zIndex: 101 }}>
+        <label htmlFor="language-selector" className="sr-only">Dil Seçimi</label>
         <select
           id="language-selector"
           name="language"
+          aria-label="Dil Seçimi"
           value={language}
           onChange={(e) => changeLanguage(e.target.value)}
           className="bg-slate-800/60 backdrop-blur-sm border border-blue-500/30 rounded-lg px-1 py-1 text-sm text-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
@@ -406,7 +408,10 @@ const Register = () => {
       <div className="max-w-[320px] sm:max-w-sm md:max-w-md w-full space-y-2 sm:space-y-4 relative select-text sm:px-0 sm:mt-2" style={{ zIndex: 100 }}>
         <div className="text-center">
           <div className="mx-auto h-12 w-12 sm:h-16 sm:w-16 bg-gradient-to-br from-blue-500 via-green-500 to-yellow-500 rounded-xl flex items-center justify-center shadow-2xl shadow-blue-500/20 animate-pulse transition-opacity duration-300 cursor-pointer">
-            <img src="/kriptotek.jpg" alt="Kriptotek" className="h-12 w-12 sm:h-16 sm:w-16 rounded-xl object-cover" />
+            <picture>
+              <source srcSet="/kriptotek-64.webp 1x, /kriptotek-128.webp 2x" type="image/webp" />
+              <img src="/kriptotek.webp" alt="Kriptotek" className="h-12 w-12 sm:h-16 sm:w-16 rounded-xl object-cover" width="64" height="64" />
+            </picture>
           </div>
           <h2 className="mt-1 sm:mt-2 text-xl sm:text-3xl font-bold text-white">
             {t('joinKriptotek')} <span className="kriptotek-gradient">Kriptotek</span>
@@ -484,7 +489,9 @@ const Register = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-200"
+                  className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-200 p-1"
+                  aria-label={showPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
+                  title={showPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
                 >
                   {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
                 </button>
@@ -511,7 +518,9 @@ const Register = () => {
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-200"
+                  className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-200 p-1"
+                  aria-label={showConfirmPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
+                  title={showConfirmPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
                 >
                   {showConfirmPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
                 </button>

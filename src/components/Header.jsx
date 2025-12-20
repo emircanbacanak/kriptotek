@@ -122,7 +122,10 @@ const Header = ({ onMenuClick, className }) => {
               </button>
               <Link to="/" className="flex items-center space-x-2 sm:space-x-3">
                 <div className="w-6 h-6 sm:w-8 sm:h-8 bg-primary-500 rounded-md flex items-center justify-center flex-shrink-0">
-                  <img src="/kriptotek.jpg" alt="Kriptotek" className="w-7 h-7 rounded object-cover" />
+                  <picture>
+                    <source srcSet="/kriptotek-64.webp 1x, /kriptotek-128.webp 2x" type="image/webp" />
+                    <img src="/kriptotek.webp" alt="Kriptotek" className="w-7 h-7 rounded object-cover" width="28" height="28" />
+                  </picture>
                 </div>
                 <div className="flex flex-col">
                   <span className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white leading-tight">

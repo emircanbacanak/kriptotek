@@ -700,7 +700,7 @@ function News() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 min-[1921px]:grid-cols-4 gap-3 sm:gap-4 lg:gap-5 overflow-y-auto overflow-x-hidden max-h-[1015px] min-[1921px]:max-h-[1400px] px-2 sm:px-4 pt-4 sm:pt-6 pb-4 crypto-list-scrollbar">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 min-[1921px]:grid-cols-4 gap-3 sm:gap-4 lg:gap-5 overflow-y-auto overflow-x-hidden max-h-[850px] min-[1921px]:max-h-[1350px] px-2 sm:px-4 pt-4 sm:pt-6 pb-4 crypto-list-scrollbar">
             {visibleNews.map((item, index) => {
               const ts = new Date(item.publishedAt || item.published_at || item.pubDate || item.date || 0).getTime() || index
               const k = `${item.id || item.url || item.link || item.title}-${ts}`
@@ -711,7 +711,7 @@ function News() {
                   <article className={`relative bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-lg shadow-sm border border-gray-200/50 dark:border-gray-700/50 overflow-hidden transform transition-all duration-300 hover:shadow-lg hover:-translate-y-1 hover:scale-[1.01] flex flex-col h-full min-h-[480px] sm:min-h-[400px] group/article ${isImportant ? 'important-news-card' : ''}`}>
                     {/* Image */}
                     <div className="relative bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 overflow-hidden group-hover/article:scale-105 transition-transform duration-100 aspect-[16/10]">
-                      {item.image?.includes('kriptotek.jpg') || item.image === '/kriptotek.jpg' ? (
+                      {item.image?.includes('kriptotek.webp') || item.image === '/kriptotek.webp' ? (
                         <div className="w-full h-full flex items-center justify-center">
                           <img
                             src={item.image}
@@ -720,7 +720,7 @@ function News() {
                             loading="lazy"
                             onError={(e) => {
                               console.warn(`⚠️ Resim yüklenemedi: ${item.image}`)
-                              e.target.src = '/kriptotek.jpg'
+                              e.target.src = '/kriptotek.webp'
                             }}
                           />
                         </div>
@@ -733,11 +733,11 @@ function News() {
                             loading="lazy"
                             onError={(e) => {
                               console.warn(`⚠️ Resim yüklenemedi: ${item.image}`)
-                              e.target.src = '/kriptotek.jpg'
+                              e.target.src = '/kriptotek.webp'
                               e.target.className = 'w-full h-full object-cover object-center'
                             }}
                             onLoad={(e) => {
-                              if (item.image !== '/kriptotek.jpg' && !item.image?.includes('kriptotek.jpg')) {
+                              if (item.image !== '/kriptotek.webp' && !item.image?.includes('kriptotek.webp')) {
 
                               }
                             }}
