@@ -169,23 +169,10 @@ const fetchWithRetry = async (url, retries = 3, delay = 2000) => {
 // Backend API'den crypto listesi çek - 500 coin, stablecoin'ler hariç
 const fetchFromCoinGecko = async (useCache = true) => {
   try {
-    // Önce cache'den kontrol et
-    if (useCache) {
-      const cachedData = getCachedData()
-      if (cachedData && cachedData.length > 0) {
-        // Cache kullanıldığında bile API durumlarını göster (cache'den geldiğini belirt)
-        return {
-          data: cachedData,
-          apiStatus: {
-            source: 'cache',
-            success: true,
-            apiStatuses: [
-              { name: 'Cache', success: true }
-            ]
-          }
-        }
-      }
-    }
+    // NOT: cryptoService'in yerel cache'i DEVRE DIŞI BIRAKILDI
+    // globalDataManager zaten cache yönetimi yapıyor
+    // İki farklı cache çakışıyordu ve eski veri gösterilmesine neden oluyordu (flickering)
+    // useCache parametresi artık kullanılmıyor ama API uyumluluğu için bırakıldı
 
     // Backend cache'den çek (API fallback yapmaz, sadece MongoDB cache döndürür)
     // ÖNEMLİ: /api/crypto/list yerine /cache/crypto_list kullanıyoruz çünkü:
@@ -238,28 +225,12 @@ const fetchFromCoinGecko = async (useCache = true) => {
     // Son kontrol: Kesinlikle 500 coin döndür
     const limitedData = normalizedData.length > 500 ? normalizedData.slice(0, 500) : normalizedData
 
-    // Başarılı veriyi cache'e kaydet
-    setCachedData(limitedData)
+    // NOT: setCachedData kaldırıldı - globalDataManager zaten cache yönetiyor
 
-    return { data: limitedData, apiStatus: { source: result.source || 'api', success: true, apiStatuses } }
+    return { data: limitedData, apiStatus: { source: result.source || 'cache', success: true, apiStatuses } }
   } catch (error) {
-    // Son çare: Cache'den dene (stale data bile olsa)
-    const cachedData = getCachedData()
-    if (cachedData && cachedData.length > 0) {
-      return {
-        data: cachedData,
-        apiStatus: {
-          source: 'stale_cache_fallback',
-          success: true,
-          error: error.message,
-          apiStatuses: [
-            { name: 'Stale Cache Fallback', success: true },
-            { name: 'API Error', success: false, error: error.message }
-          ]
-        }
-      }
-    }
-
+    // NOT: getCachedData fallback kaldırıldı - globalDataManager zaten cache yönetiyor
+    // Hata durumunda boş array döndür, globalDataManager kendi cache'inden kullanacak
     throw {
       error,
       apiStatus: {
