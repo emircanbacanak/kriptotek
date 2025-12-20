@@ -361,10 +361,11 @@ async function fetchCryptoList() {
 
     let supplyDataMap = new Map()
 
-    // Önce mevcut API response'undan gelen verileri kontrol et
+    // Önce mevcut API response'undan gelen verileri kontrol et (SADECE filtrelenmiş coin'ler için)
     // CoinGecko /coins/markets endpoint'i total_supply ve max_supply döndürebilir
     let foundInMarkets = 0
-    allCoins.forEach(coin => {
+    // ÖNEMLİ: allCoins yerine limitedData kullan (sadece filtrelenmiş coin'ler için supply bilgisi gerekli)
+    limitedData.forEach(coin => {
       // total_supply veya max_supply varsa kullan
       if ((coin.total_supply !== null && coin.total_supply !== undefined) ||
         (coin.max_supply !== null && coin.max_supply !== undefined)) {
@@ -376,7 +377,7 @@ async function fetchCryptoList() {
       }
     })
 
-    console.log(`📊 Mevcut API response'undan ${foundInMarkets} coin için supply bilgisi bulundu (toplam ${allCoins.length} coin)`)
+    console.log(`📊 Mevcut API response'undan ${foundInMarkets} coin için supply bilgisi bulundu (toplam ${limitedData.length} filtrelenmiş coin)`)
 
 
     // Eğer hiç supply bilgisi yoksa, tüm coin'ler için detaylı bilgi çek
