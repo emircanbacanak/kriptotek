@@ -192,13 +192,13 @@ function isStablecoin(coin) {
  */
 async function fetchCryptoList() {
   try {
-    // İlk 3 batch çek (615 coin için - her batch 195 coin)
-    // CoinGecko API maksimum per_page=250 destekliyor, biz 195 kullanıyoruz
-    // 3 batch x 195 coin = 615 coin
+    // İlk 3 batch çek (540 coin için - her batch 180 coin) - MEMORY OPTIMIZED
+    // CoinGecko API maksimum per_page=250 destekliyor, biz 180 kullanıyoruz
+    // 3 batch x 180 coin = 540 coin (memory azaltma için 615'ten düşürüldü)
     let pages = [
-      { url: `${COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=195&page=1&sparkline=true&price_change_percentage=24h`, name: 'CoinGecko Batch 1 (195 coin)' },
-      { url: `${COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=195&page=2&sparkline=true&price_change_percentage=24h`, name: 'CoinGecko Batch 2 (195 coin)' },
-      { url: `${COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=195&page=3&sparkline=true&price_change_percentage=24h`, name: 'CoinGecko Batch 3 (195 coin)' }
+      { url: `${COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=180&page=1&sparkline=true&price_change_percentage=24h`, name: 'CoinGecko Batch 1 (180 coin)' },
+      { url: `${COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=180&page=2&sparkline=true&price_change_percentage=24h`, name: 'CoinGecko Batch 2 (180 coin)' },
+      { url: `${COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=180&page=3&sparkline=true&price_change_percentage=24h`, name: 'CoinGecko Batch 3 (180 coin)' }
     ]
 
     // Sıralı fetch (rate limit'i önlemek için) - Her batch için farklı proxy ile
