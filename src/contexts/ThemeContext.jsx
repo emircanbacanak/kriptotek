@@ -8,7 +8,7 @@ export const ThemeProvider = ({ children }) => {
   // useAuth() null döndürebilir (AuthProvider henüz yüklenmemiş olabilir)
   const authContext = useAuth()
   const user = authContext?.user || null
-  
+
   // localStorage'dan tema yükle - ANINDA (F5 sonrası hemen uygula)
   const getInitialTheme = () => {
     if (typeof window === 'undefined') return 'light'
@@ -16,7 +16,7 @@ export const ThemeProvider = ({ children }) => {
     return saved || 'light'
   }
 
-  const [theme, setTheme] = useState(getInitialTheme)
+  const [theme, setTheme] = useState(() => getInitialTheme())
   const [isDark, setIsDark] = useState(() => getInitialTheme() === 'dark')
   const [isInitialized, setIsInitialized] = useState(false)
 
@@ -66,20 +66,20 @@ export const ThemeProvider = ({ children }) => {
   // Tema değişikliklerini DOM'a uygula ve localStorage + MongoDB'ye kaydet
   useEffect(() => {
     if (!isInitialized) return
-    
+
     const root = window.document.documentElement
     root.classList.remove('light', 'dark')
     root.classList.add(theme)
     setIsDark(theme === 'dark')
     localStorage.setItem('theme', theme) // Her zaman localStorage'a kaydet
-    
+
     // MongoDB'ye kaydet (kullanıcı giriş yapmışsa) - ARKA PLANDA
     if (user) {
       const saveTheme = async () => {
         try {
           const result = await loadUserSettings(user.uid)
           const currentSettings = result.success && result.settings ? result.settings : {}
-          
+
           await saveUserSettings(user.uid, {
             ...currentSettings,
             display: {
@@ -103,7 +103,7 @@ export const ThemeProvider = ({ children }) => {
       setTheme(newTheme)
       setIsDark(newTheme === 'dark')
     }
-    
+
     window.addEventListener('themeChanged', handleThemeChange)
     return () => window.removeEventListener('themeChanged', handleThemeChange)
   }, [])

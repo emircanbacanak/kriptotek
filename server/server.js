@@ -51,7 +51,6 @@ try {
         credential: admin.credential.cert(serviceAccountJson)
       })
       firebaseAdmin = admin
-      console.log('✅ Firebase Admin SDK başlatıldı (FIREBASE_SERVICE_ACCOUNT kullanıldı)')
     } catch (parseError) {
       console.warn('⚠️ Firebase Service Account JSON parse hatası:', parseError.message)
     }
@@ -70,7 +69,6 @@ try {
           credential: admin.credential.cert(serviceAccountJson)
         })
         firebaseAdmin = admin
-        console.log('✅ Firebase Admin SDK başlatıldı (FIREBASE_SERVICE_ACCOUNT_PATH kullanıldı)')
       } catch (fileError) {
         console.warn('⚠️ Firebase Service Account dosyası okunamadı:', fileError.message)
       }
@@ -102,7 +100,6 @@ try {
           credential: admin.credential.cert(serviceAccountJson)
         })
         firebaseAdmin = admin
-        console.log('✅ Firebase Admin SDK başlatıldı (otomatik dosya bulundu)')
       } catch (fileError) {
         console.warn('⚠️ Firebase Service Account dosyası okunamadı:', fileError.message)
       }
