@@ -187,10 +187,8 @@ function parseRSSFeed(xml, source) {
           publishedAt = new Date()
         }
 
-        // CoinTelegraph ve Kriptofoni için +3 saat EKLE
-        if ((source === 'cointelegraph' || source === 'kriptofoni') && !isNaN(publishedAt.getTime())) {
-          publishedAt = new Date(publishedAt.getTime() + (3 * 60 * 60 * 1000))
-        }
+        // Heroku UTC timezone'da çalışıyor, adjustment yapma
+        // RSS tarihleri olduğu gibi kullanılacak
 
         // Gelecek tarih toleransı (12 saat) - timezone farkları için
         const futureBuffer = 12 * 60 * 60 * 1000 // 12 saat
@@ -275,10 +273,7 @@ export async function updateNews() {
                   const descriptionRaw = item.description || ''
                   const description = descriptionRaw.replace(/<[^>]*>/g, '').substring(0, 500)
                   let pubDate = item.pubDate ? new Date(item.pubDate) : new Date()
-                  // Kriptofoni için +3 saat EKLE
-                  if (!isNaN(pubDate.getTime())) {
-                    pubDate = new Date(pubDate.getTime() + (3 * 60 * 60 * 1000))
-                  }
+                  // Heroku UTC timezone'da çalışıyor, adjustment yapma
 
                   // Resim URL'i çıkar - farklı formatlarda olabilir
                   let imageUrl = ''
@@ -401,10 +396,7 @@ export async function updateNews() {
                   const description = descriptionRaw.replace(/<[^>]*>/g, '').substring(0, 500)
                   const pubDateRaw = item.pubDate || item.pubdate || ''
                   let pubDate = pubDateRaw ? new Date(pubDateRaw) : new Date()
-                  // CoinTelegraph farklı timezone kullanıyor, +3 saat EKLE
-                  if (!isNaN(pubDate.getTime())) {
-                    pubDate = new Date(pubDate.getTime() + (3 * 60 * 60 * 1000))
-                  }
+                  // Heroku UTC timezone'da çalışıyor, adjustment yapma
 
                   // Resim URL'i çıkar
                   let imageUrl = item.enclosure?.link || item.thumbnail || ''
