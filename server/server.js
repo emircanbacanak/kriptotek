@@ -846,6 +846,68 @@ app.delete('/api/portfolio/:userId/positions/:positionId', async (req, res) => {
   }
 })
 
+// PUT /api/portfolio/:userId/positions/:positionId/trigger - Pozisyonu hedef/stop olarak işaretle
+app.put('/api/portfolio/:userId/positions/:positionId/trigger', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'MongoDB bağlantısı yok'
+      })
+    }
+
+    const { userId, positionId } = req.params
+    const { triggeredType, frozenProfitLoss, frozenProfitLossPercent } = req.body
+
+    if (!triggeredType || !['takeProfit', 'stopLoss'].includes(triggeredType)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Geçersiz triggeredType (takeProfit veya stopLoss olmalı)'
+      })
+    }
+
+    const collection = db.collection('user_portfolio')
+
+    // Pozisyonu güncelle - dondurulmuş değerleri kaydet
+    const result = await collection.updateOne(
+      { userId, 'positions.id': positionId },
+      {
+        $set: {
+          'positions.$.triggeredAt': Date.now(),
+          'positions.$.triggeredType': triggeredType,
+          'positions.$.frozenProfitLoss': frozenProfitLoss || 0,
+          'positions.$.frozenProfitLossPercent': frozenProfitLossPercent || 0,
+          updatedAt: Date.now()
+        }
+      }
+    )
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Pozisyon bulunamadı'
+      })
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        positionId,
+        triggeredType,
+        triggeredAt: Date.now(),
+        frozenProfitLoss,
+        frozenProfitLossPercent
+      }
+    })
+  } catch (error) {
+    console.error('❌ PUT /api/portfolio/:userId/positions/:positionId/trigger error:', error)
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    })
+  }
+})
+
 // Admin - Get All Users (MongoDB + Firebase Google users)
 app.get('/api/admin/users', async (req, res) => {
   try {
