@@ -851,7 +851,7 @@ class GlobalDataManager {
 
     const updateStartTime = Date.now()
     const timeStr = new Date().toLocaleTimeString('tr-TR')
-    const nextUpdateTime = new Date(Date.now() + this.getNextUpdateTime()).toLocaleTimeString('tr-TR')
+    const nextUpdateTime = new Date(Date.now() + 60000).toLocaleTimeString('tr-TR') // 60 saniye sonra
 
     this.isUpdating = true
     this.notifySubscribers()

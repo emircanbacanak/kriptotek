@@ -187,10 +187,14 @@ function parseRSSFeed(xml, source) {
           publishedAt = new Date()
         }
 
-        // Kriptofoni ve Cointelegraph UTC saati veriyor, +3 saat ekle (Türkiye saati)
+        // CoinTelegraph ve Kriptofoni için +3 saat EKLE
         if ((source === 'cointelegraph' || source === 'kriptofoni') && !isNaN(publishedAt.getTime())) {
           publishedAt = new Date(publishedAt.getTime() + (3 * 60 * 60 * 1000))
         }
+
+        // Gelecek tarih toleransı (12 saat) - timezone farkları için
+        const futureBuffer = 12 * 60 * 60 * 1000 // 12 saat
+        if (publishedAt > new Date(Date.now() + futureBuffer)) continue
 
         // Son 48 saat içindeki haberleri filtrele
         if (publishedAt < cutoff) continue
@@ -271,17 +275,27 @@ export async function updateNews() {
                   const descriptionRaw = item.description || ''
                   const description = descriptionRaw.replace(/<[^>]*>/g, '').substring(0, 500)
                   let pubDate = item.pubDate ? new Date(item.pubDate) : new Date()
-                  // Kriptofoni UTC saati veriyor, +3 saat ekle (Türkiye saati)
+                  // Kriptofoni için +3 saat EKLE
                   if (!isNaN(pubDate.getTime())) {
                     pubDate = new Date(pubDate.getTime() + (3 * 60 * 60 * 1000))
                   }
 
-                  // Resim URL'i çıkar
-                  let imageUrl = item.enclosure?.link || item.thumbnail || ''
+                  // Resim URL'i çıkar - farklı formatlarda olabilir
+                  let imageUrl = ''
+                  // Önce thumbnail'ı kontrol et (string olarak gelir)
+                  if (typeof item.thumbnail === 'string' && item.thumbnail) {
+                    imageUrl = item.thumbnail
+                  }
+                  // Enclosure'ı kontrol et (object olabilir)
+                  if (!imageUrl && item.enclosure?.link) {
+                    imageUrl = item.enclosure.link
+                  }
+                  // Description içinde img tag'i ara
                   if (!imageUrl && descriptionRaw) {
                     const imgMatch = descriptionRaw.match(/<img[^>]+src=["']([^"']+)["']/i)
                     if (imgMatch) imageUrl = imgMatch[1]
                   }
+                  // URL düzeltmeleri
                   if (imageUrl && imageUrl.startsWith('//')) {
                     imageUrl = 'https:' + imageUrl
                   }
@@ -297,11 +311,37 @@ export async function updateNews() {
                     publishedAt: pubDate,
                     source: 'kriptofoni',
                     category: 'crypto',
-                    image: imageUrl || '/kriptotek.jpg'
+                    image: imageUrl || null // null olarak işaretle, sonra doldurulacak
                   }
                 })
                 .filter(item => item.publishedAt >= cutoff)
                 .sort((a, b) => b.publishedAt - a.publishedAt)
+
+              // Resmi olmayan haberler için makale sayfasından og:image çek
+              const newsWithMissingImages = news.filter(n => !n.image)
+              if (newsWithMissingImages.length > 0) {
+                await Promise.all(newsWithMissingImages.map(async (item) => {
+                  try {
+                    const pageResponse = await fetch(item.url, {
+                      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+                      signal: AbortSignal.timeout(5000)
+                    })
+                    if (pageResponse.ok) {
+                      const html = await pageResponse.text()
+                      const ogMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
+                        html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
+                      if (ogMatch && ogMatch[1]) {
+                        item.image = ogMatch[1]
+                      }
+                    }
+                  } catch (err) {
+                    // Sessizce geç
+                  }
+                }))
+              }
+
+              // Hala resmi olmayanlar için varsayılan kullan
+              news.forEach(n => { if (!n.image) n.image = '/kriptotek.jpg' })
 
               if (news.length > 0) {
                 console.log(`✅ ${news.length} Kriptofoni haberi çekildi (rss2json)`)
@@ -361,7 +401,7 @@ export async function updateNews() {
                   const description = descriptionRaw.replace(/<[^>]*>/g, '').substring(0, 500)
                   const pubDateRaw = item.pubDate || item.pubdate || ''
                   let pubDate = pubDateRaw ? new Date(pubDateRaw) : new Date()
-                  // CoinTelegraph UTC saati veriyor, +3 saat ekle (Türkiye saati)
+                  // CoinTelegraph farklı timezone kullanıyor, +3 saat EKLE
                   if (!isNaN(pubDate.getTime())) {
                     pubDate = new Date(pubDate.getTime() + (3 * 60 * 60 * 1000))
                   }
