@@ -3845,8 +3845,6 @@ app.post('/api/fed-rate/update', async (req, res) => {
     )
 
     const timeStr = new Date().toLocaleTimeString('tr-TR')
-    console.log(`✅ [${timeStr}] Fed rate verisi güncellendi`)
-
     return res.json({
       success: true,
       data: fedRateData,

@@ -1580,7 +1580,6 @@ class GlobalDataManager {
                 this.saveToLocalStorage()
                 // Abonelere bildir (yeni veriler)
                 this.notifySubscribers()
-                logger.log(`✅ [${timeStr}] Fed Rate verisi MongoDB'den yüklendi`)
               }
             }
           } catch (e) {

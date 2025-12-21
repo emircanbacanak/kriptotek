@@ -170,9 +170,6 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
         ordered: false, // Paralel çalışsın
         maxTimeMS: 60000 // 60 saniye timeout
       })
-      if (updatesToApply.length > 0) {
-        console.log(`✅ Supply tracking: ${updatesToApply.length} snapshot için timestamp güncellendi (batch)`)
-      }
     } catch (error) {
       console.warn(`⚠️ Supply tracking: Batch timestamp güncelleme hatası:`, error.message)
       // Hata olsa bile devam et
@@ -186,7 +183,6 @@ async function calculateSupplyChanges(supplyHistoryCollection, now) {
     return timeA - timeB
   })
 
-  console.log(`📊 Supply tracking: ${allSnapshots.length} snapshot bulundu (değişim hesaplaması için)`)
 
   if (allSnapshots.length === 0) {
     console.warn('⚠️ Supply tracking: Hiç snapshot yok, değişim hesaplanamıyor')

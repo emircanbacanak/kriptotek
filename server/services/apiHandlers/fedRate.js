@@ -321,7 +321,6 @@ export async function fetchFedRateData(dbInstance = null) {
   }
 
   try {
-    console.log('📅 FOMC Calendar\'dan veri çekiliyor...')
     const calendarUrl = 'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm'
 
     // Proxy URL'leri dene
@@ -354,7 +353,6 @@ export async function fetchFedRateData(dbInstance = null) {
             // HTML'in geçerli olup olmadığını kontrol et
             if (text.length > 50000 && text.includes('fomc-meeting__date')) {
               html = text
-              console.log('✅ FOMC Calendar HTML alındı, boyut:', text.length)
               break
             }
           }
@@ -424,7 +422,6 @@ export async function fetchFedRateData(dbInstance = null) {
         // (6-8 hafta arayla toplantılar yapılıyor)
         if (daysDiff >= 7 && daysDiff <= 120) {
           nextDecisionDate = candidateDate.toISOString()
-          console.log('✅ FOMC Calendar\'dan sonraki karar tarihi bulundu:', nextDecisionDate)
         } else {
           console.warn(`⚠️ FOMC Calendar: Bulunan tarih makul aralıkta değil (${Math.round(daysDiff)} gün), atlanıyor`)
         }

@@ -154,15 +154,41 @@ function SupplyTracking() {
 
   // Global veri yönetim sisteminden gelen veriyi kullan
   useEffect(() => {
-    if (supplyTrackingData && coins && coins.length > 0) {
-      latestSupplyRef.current = supplyTrackingData;
+    // Coins varsa her zaman göster
+    if (coins && coins.length > 0) {
       cachedCoinsRef.current = coins;
-      mergeAndSetData(supplyTrackingData, coins);
+
+      let trackingData = supplyTrackingData;
+
+      // Yeni veri varsa kullan ve cache'le
+      if (trackingData && Object.keys(trackingData).length > 0) {
+        latestSupplyRef.current = trackingData;
+        // Başarılı veriyi localStorage'a cache'le
+        persistSupplyCache(trackingData);
+        mergeAndSetData(trackingData, coins);
+      } else {
+        // Yeni veri yoksa, ÖNCEKİ cache'i kullan (localStorage'dan)
+        try {
+          const cachedData = localStorage.getItem(SUPPLY_CACHE_KEY);
+          if (cachedData) {
+            const parsed = JSON.parse(cachedData);
+            if (parsed && Object.keys(parsed).length > 0) {
+              console.log('📦 Supply tracking: LocalStorage cache kullanılıyor (yeni veri yok)');
+              trackingData = parsed;
+              latestSupplyRef.current = trackingData;
+            }
+          }
+        } catch (error) {
+          console.warn('Supply cache okuma hatası:', error?.message || error);
+        }
+        mergeAndSetData(trackingData || {}, coins);
+      }
       setLoading(false);
-    } else if (!globalSupplyLoading && !globalCoinsLoading && (!supplyTrackingData || !coins || coins.length === 0)) {
+    } else if (!globalSupplyLoading && !globalCoinsLoading) {
+      // Coins bile yoksa loading'i kapat
       setLoading(false);
     }
-  }, [supplyTrackingData, coins, globalSupplyLoading, globalCoinsLoading, mergeAndSetData]);
+  }, [supplyTrackingData, coins, globalSupplyLoading, globalCoinsLoading, mergeAndSetData, persistSupplyCache]);
 
   // Header gradients (Light: blue→indigo, Dark: yellow→orange) - same as Home page
   const headerIconGradient = useMemo(() => {

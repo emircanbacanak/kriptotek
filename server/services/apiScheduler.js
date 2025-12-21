@@ -453,7 +453,6 @@ async function updateFedRate() {
     if (response.ok) {
       const result = await response.json()
       const timeStr = new Date().toLocaleTimeString('tr-TR')
-      console.log(`✅ [${timeStr}] Fed rate verisi güncellendi`)
       return true
     } else {
       const error = await response.text()
@@ -780,7 +779,6 @@ async function updateSupplyTracking() {
 
     const timeStr = new Date().toLocaleTimeString('tr-TR')
     if (success) {
-      console.log(`✅ [${timeStr}] Supply tracking verisi güncellendi - MongoDB'den direkt çekildi`)
       return true
     } else {
       console.error(`❌ [${timeStr}] Supply tracking güncelleme hatası`)
