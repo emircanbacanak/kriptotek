@@ -1623,7 +1623,7 @@ class GlobalDataManager {
       // Sadece son durumu bildir (isUpdating durumu için)
       this.notifySubscribers()
 
-      const nextUpdateTime = new Date(Date.now() + this.getNextUpdateTime()).toLocaleTimeString('tr-TR')
+      // Güncelleme tamamlandı
     } catch (error) {
       console.error(`❌ [${timeStr}] MongoDB yükleme hatası:`, error.message || error)
       // Hata olsa bile abonelere bildir (boş veri ile) - ANINDA

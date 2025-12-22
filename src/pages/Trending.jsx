@@ -525,7 +525,7 @@ const Trending = () => {
       <div className="space-y-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 min-[1921px]:grid-cols-4 gap-2 sm:gap-4 lg:gap-6 overflow-y-auto overflow-x-hidden max-h-[870px] min-[1921px]:max-h-[1300px] p-4 sm:p-5 lg:p-6 crypto-list-scrollbar">
           {visibleTrendingCoins.map((coin, index) => (
-            <div key={coin.id || index} className="group/card relative animate-fade-in" style={{ animationDelay: `${index * 50}ms` }}>
+            <div key={coin.id || index} className="group/card relative">
               <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-2xl opacity-0 group-hover/card:opacity-50 blur-lg transition-opacity duration-300"></div>
               <div className="relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700 rounded-lg sm:rounded-xl lg:rounded-2xl p-2 sm:p-3 md:p-4 lg:p-5 shadow-lg transform transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 flex flex-col">
                 <div className="flex items-center justify-between mb-1.5 sm:mb-2 md:mb-3 lg:mb-4">

@@ -65,15 +65,6 @@ const Footer = () => {
         {/* Borsa Kayıt Butonları */}
         <div className="flex items-center justify-center gap-2 sm:gap-3 mb-6">
           <a
-            href="https://tinyurl.com/54bf5wes"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/90 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 items-center justify-center transition-transform hover:scale-105 p-0 m-0 overflow-hidden"
-            title="MEXC - Kayıt Ol"
-          >
-            <img src="/icons/mexc.png" alt="MEXC" className="w-9 h-9 sm:w-10 sm:h-10 object-contain" />
-          </a>
-          <a
             href="https://tinyurl.com/meusxwb"
             target="_blank"
             rel="noopener noreferrer"

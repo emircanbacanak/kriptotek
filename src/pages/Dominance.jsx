@@ -409,7 +409,7 @@ const Dominance = () => {
       {/* Key Metrics Grid - Modern Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
         {/* Bitcoin Dominance Card */}
-        <div className="group relative overflow-hidden bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-800/50 p-6 hover:shadow-2xl transition-all duration-300 hover:scale-[1.02]">
+        <div className="group relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-800/50 p-6 hover:shadow-2xl transition-all duration-300 hover:scale-[1.02]">
           <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-yellow-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
           <div className="relative">
             <div className="flex items-center justify-between mb-4">
@@ -447,7 +447,7 @@ const Dominance = () => {
         </div>
 
         {/* BTC Volume Card */}
-        <div className="group relative overflow-hidden bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-800/50 p-6 hover:shadow-2xl transition-all duration-300 hover:scale-[1.02]">
+        <div className="group relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-800/50 p-6 hover:shadow-2xl transition-all duration-300 hover:scale-[1.02]">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
           <div className="relative">
             <div className="flex items-center justify-between mb-4">
@@ -474,7 +474,7 @@ const Dominance = () => {
         </div>
 
         {/* Market Cap Card */}
-        <div className="group relative overflow-hidden bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-800/50 p-6 hover:shadow-2xl transition-all duration-300 hover:scale-[1.02]">
+        <div className="group relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-800/50 p-6 hover:shadow-2xl transition-all duration-300 hover:scale-[1.02]">
           <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-pink-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
           <div className="relative">
             <div className="flex items-center justify-between mb-4">
@@ -537,7 +537,7 @@ const Dominance = () => {
       </div>
 
       {/* Dominance Table - Modern Design */}
-      <div className="bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-800/50 p-6 overflow-hidden mb-8">
+      <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-800/50 p-6 overflow-hidden mb-8">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
@@ -648,7 +648,7 @@ const Dominance = () => {
       {/* Charts Grid - Alt alta düzenlendi */}
       <div className="grid grid-cols-1 gap-6 mb-8">
         {/* Market Share Distribution */}
-        <div className="bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-800/50 p-6">
+        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-800/50 p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
@@ -751,7 +751,7 @@ const Dominance = () => {
         </div>
 
         {/* Volume Analysis */}
-        <div className="bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-800/50 p-6">
+        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-800/50 p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">

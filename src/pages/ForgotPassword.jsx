@@ -339,8 +339,8 @@ const ForgotPassword = () => {
             onChange={(e) => changeLanguage(e.target.value)}
             className="bg-slate-800/60 backdrop-blur-sm border border-blue-500/30 rounded-lg px-1 py-1 text-sm text-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
           >
-            <option value="tr" className="bg-gray-800 text-white">{t('turkish')}</option>
-            <option value="en" className="bg-gray-800 text-white">{t('english')}</option>
+            <option value="tr" className="bg-gray-800 text-white">{t('Turkish')}</option>
+            <option value="en" className="bg-gray-800 text-white">{t('English')}</option>
           </select>
         </div>
 
@@ -460,8 +460,8 @@ const ForgotPassword = () => {
           onChange={(e) => changeLanguage(e.target.value)}
           className="bg-slate-800/60 backdrop-blur-sm border border-blue-500/30 rounded-lg px-1 py-1 text-sm text-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
         >
-          <option value="tr" className="bg-gray-800 text-white">{t('turkish')}</option>
-          <option value="en" className="bg-gray-800 text-white">{t('english')}</option>
+          <option value="tr" className="bg-gray-800 text-white">{t('Turkish')}</option>
+          <option value="en" className="bg-gray-800 text-white">{t('English')}</option>
         </select>
       </div>
 
@@ -488,7 +488,7 @@ const ForgotPassword = () => {
                 {t('email')}
               </label>
               <div className="relative">
-                <Mail className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-white w-3 h-3" />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white w-4 h-4" />
                 <input
                   id="email"
                   name="email"
@@ -498,10 +498,11 @@ const ForgotPassword = () => {
                   onChange={handleEmailChange}
                   onInput={handleEmailChange}
                   onInvalid={handleEmailInvalid}
-                  className="input pl-8 sm:pl-10"
+                  className="input"
                   placeholder={t('emailPlaceholderRegister')}
                   autoComplete="email"
                   disabled={loading}
+                  style={{ paddingLeft: '2.5rem' }}
                 />
               </div>
             </div>

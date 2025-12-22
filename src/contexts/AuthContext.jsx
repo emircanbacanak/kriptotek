@@ -17,7 +17,15 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [isPremium, setIsPremium] = useState(false)
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(() => {
+    // localStorage'dan admin durumunu oku (sayfa yenilendiğinde korunması için)
+    try {
+      const savedAdmin = localStorage.getItem('kriptotek_isAdmin')
+      return savedAdmin === 'true'
+    } catch {
+      return false
+    }
+  })
   const [isActive, setIsActive] = useState(true) // Varsayılan aktif
   const [userSettings, setUserSettings] = useState(null)
   const settingsPollIntervalRef = useRef(null)
@@ -131,7 +139,29 @@ export const AuthProvider = ({ children }) => {
             }
           }
 
+          // Eğer backend'den admin verisi yoksa (isAdminValue = false) ama localStorage'da true varsa,
+          // localStorage değerini koru (dil değişikliği sırasında admin durumu kaybolmasın)
+          if (!isAdminValue && prevIsAdmin) {
+            try {
+              const savedAdmin = localStorage.getItem('kriptotek_isAdmin')
+              if (savedAdmin === 'true') {
+                // localStorage'da admin durumu var, backend verisi henüz gelmemiş olabilir
+                // Mevcut durumu koru
+                return prevIsAdmin
+              }
+            } catch (e) {
+              // localStorage hatası - mevcut durumu koru
+              return prevIsAdmin
+            }
+          }
+
           if (prevIsAdmin !== isAdminValue) {
+            // localStorage'a kaydet (dil değişikliğinde korunması için)
+            try {
+              localStorage.setItem('kriptotek_isAdmin', isAdminValue.toString())
+            } catch (e) {
+              // localStorage hatası - sessizce geç
+            }
             return isAdminValue
           }
           return prevIsAdmin

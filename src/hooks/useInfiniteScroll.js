@@ -53,81 +53,54 @@ export function useInfiniteScroll(items, options = {}) {
         setVisibleCount(initialCount)
     }, [initialCount])
 
-    // Scroll container'ları bul ve dinle
+    // Scroll container'ları bul ve dinle - IntersectionObserver kullan
     useEffect(() => {
         // Biraz gecikme ile DOM'un hazır olmasını bekle
         const setupTimeout = setTimeout(() => {
-            // Görünür sentinel'i bul (ID ile)
+            // Görünür sentinel'i bul (ID ile veya ref ile)
             let visibleSentinel = null
-            for (const id of sentinelIds) {
-                const el = document.getElementById(id)
-                if (el) {
-                    const rect = el.getBoundingClientRect()
-                    // Element width/height > 0 ve parent görünür mü?
-                    if (rect.width > 0 || el.offsetParent !== null) {
-                        visibleSentinel = el
-                        break
+
+            // sentinelRef ile kontrol et (öncelikli)
+            if (sentinelRef.current) {
+                visibleSentinel = sentinelRef.current
+            } else {
+                // ID ile bul
+                for (const id of sentinelIds) {
+                    const el = document.getElementById(id)
+                    if (el) {
+                        const rect = el.getBoundingClientRect()
+                        if (rect.width > 0 || el.offsetParent !== null) {
+                            visibleSentinel = el
+                            break
+                        }
                     }
                 }
-            }
-
-            // sentinelRef ile de kontrol et
-            if (!visibleSentinel && sentinelRef.current) {
-                visibleSentinel = sentinelRef.current
             }
 
             if (!visibleSentinel) {
                 return
             }
 
-            // En yakın scrollable parent'ı bul
-            const findScrollParent = (element) => {
-                let parent = element.parentElement
-                while (parent) {
-                    const style = window.getComputedStyle(parent)
-
-                    if (style.display === 'none') {
-                        parent = parent.parentElement
-                        continue
-                    }
-
-                    const overflowY = style.overflowY
-                    const maxHeight = style.maxHeight
-
-                    const isScrollable = overflowY === 'auto' || overflowY === 'scroll'
-                    const hasMaxHeight = maxHeight && maxHeight !== 'none' && !maxHeight.includes('100')
-                    const hasContent = parent.scrollHeight > parent.clientHeight
-
-                    if (isScrollable && hasMaxHeight && hasContent) {
-                        return parent
-                    }
-                    parent = parent.parentElement
+            // IntersectionObserver kullan - daha güvenilir
+            const observer = new IntersectionObserver(
+                (entries) => {
+                    entries.forEach((entry) => {
+                        if (entry.isIntersecting && hasMore && !loadingMore) {
+                            loadMore()
+                        }
+                    })
+                },
+                {
+                    root: null, // viewport'u kullan
+                    rootMargin: `${threshold}px`, // threshold kadar önce tetikle
+                    threshold: 0.1
                 }
-                return null
-            }
+            )
 
-            const scrollContainer = findScrollParent(visibleSentinel)
-
-            if (!scrollContainer) {
-                return
-            }
-
-            const handleScroll = () => {
-                if (!hasMore || loadingMore) return
-
-                const scrollBottom = scrollContainer.scrollTop + scrollContainer.clientHeight
-                const scrollHeight = scrollContainer.scrollHeight
-                const isNearBottom = scrollBottom >= scrollHeight - threshold
-
-                if (isNearBottom) {
-                    loadMore()
-                }
-            }
-
-            scrollContainer.addEventListener('scroll', handleScroll, { passive: true })
+            observer.observe(visibleSentinel)
 
             return () => {
-                scrollContainer.removeEventListener('scroll', handleScroll)
+                observer.disconnect()
             }
         }, 100) // 100ms gecikme ile DOM hazır olmasını bekle
 

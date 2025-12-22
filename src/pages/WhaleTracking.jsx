@@ -4,6 +4,7 @@ import { useCurrency } from '../contexts/CurrencyContext'
 import { useTheme } from '../contexts/ThemeContext'
 import multiExchangeWhaleService from '../services/multiExchangeWhaleService'
 import { formatCurrency, formatLargeNumber } from '../utils/currencyConverter'
+import useInfiniteScroll from '../hooks/useInfiniteScroll'
 import {
   Waves,
   Search,
@@ -23,7 +24,7 @@ const WhaleTracking = () => {
   const { isDark } = useTheme()
 
   const [whaleTrades, setWhaleTrades] = useState([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterCurrency, setFilterCurrency] = useState('all')
   const [minValue, setMinValue] = useState(500000) // $500K - Varsayılan minimum
@@ -72,7 +73,7 @@ const WhaleTracking = () => {
 
       const response = await fetch(`${apiUrl}/api/whale/recent-trades?minValue=${minValue}`, {
         headers: { 'Accept': 'application/json' },
-        signal: AbortSignal.timeout(10000)
+        signal: AbortSignal.timeout(5000)
       })
 
       if (response.ok) {
@@ -403,10 +404,30 @@ const WhaleTracking = () => {
     return Array.from(currencies).sort()
   }, [whaleTrades])
 
+  // Infinite scroll hook - dinamik yükleme
+  // Ekran boyutuna göre: 1080p = 10, 1080p üstü = 15
+  const getInitialCount = () => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth > 1920 ? 15 : 10
+    }
+    return 10
+  }
+
+  const {
+    visibleItems: visibleTrades,
+    hasMore,
+    loadingMore,
+    sentinelRef,
+    visibleCount,
+    totalCount
+  } = useInfiniteScroll(filteredTrades, {
+    initialCount: getInitialCount(),
+    incrementCount: 10,
+    threshold: 100
+  })
 
 
   const headerIconGradient = useMemo(() => isDark ? 'from-yellow-600 to-orange-600' : 'from-blue-500 to-indigo-500', [isDark])
-  const headerTextGradient = useMemo(() => isDark ? 'from-yellow-400 to-orange-400' : 'from-blue-600 to-indigo-600', [isDark])
 
   if (loading && whaleTrades.length === 0) {
     return (
@@ -423,10 +444,10 @@ const WhaleTracking = () => {
   }
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900 animate-fade-in">
+    <div className="min-h-screen bg-white dark:bg-gray-900">
       <div className="w-full py-4 sm:py-6 md:py-8 lg:py-12">
         {/* Header */}
-        <div className="mb-4 sm:mb-6 md:mb-8 animate-fade-in">
+        <div className="mb-4 sm:mb-6 md:mb-8">
           <div className="flex flex-col gap-3 sm:gap-4">
             <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
               <div className={`w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 bg-gradient-to-br ${headerIconGradient} rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg transform transition-all duration-300 hover:scale-110 flex-shrink-0`}>
@@ -434,7 +455,7 @@ const WhaleTracking = () => {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                  <h1 className={`text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r ${headerTextGradient} break-words`}>
+                  <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-bold page-header-gradient break-words">
                     {t('whaleTracking') || 'Whale Tracking'}
                   </h1>
                   <div className="flex items-center gap-1.5 px-2 sm:px-3 py-1 bg-green-100 dark:bg-green-900/30 rounded-full border border-green-200 dark:border-green-800 shadow-sm flex-shrink-0">
@@ -451,7 +472,7 @@ const WhaleTracking = () => {
         </div>
 
         {/* Filters */}
-        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-lg sm:rounded-xl md:rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 p-4 sm:p-5 md:p-6 mb-6 sm:mb-8 animate-fade-in transform transition-all duration-300 hover:shadow-xl">
+        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-lg sm:rounded-xl md:rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 p-4 sm:p-5 md:p-6 mb-6 sm:mb-8">
           <div className="space-y-4 md:space-y-6">
             {/* Search */}
             <div className="relative">
@@ -463,12 +484,12 @@ const WhaleTracking = () => {
                   placeholder={t('searchWhaleTransactions') || 'Coin ara...'}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 sm:pl-10 md:pl-12 pr-7 sm:pr-8 md:pr-10 py-2 sm:py-2.5 md:py-3 bg-white/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-all duration-200 text-sm sm:text-base text-gray-900 dark:text-white placeholder-gray-400"
+                  className="w-full pl-9 sm:pl-10 md:pl-12 pr-7 sm:pr-8 md:pr-10 py-2 sm:py-2.5 md:py-3 bg-white/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent text-sm sm:text-base text-gray-900 dark:text-white placeholder-gray-400"
                 />
                 {searchTerm && (
                   <button
                     onClick={() => setSearchTerm('')}
-                    className="absolute right-3 sm:right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                    className="absolute right-3 sm:right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                   >
                     <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -488,7 +509,7 @@ const WhaleTracking = () => {
                 <select
                   value={filterCurrency}
                   onChange={(e) => setFilterCurrency(e.target.value)}
-                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 md:py-3 bg-white/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg sm:rounded-xl text-sm sm:text-base text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-all duration-200"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 md:py-3 bg-white/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg sm:rounded-xl text-sm sm:text-base text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                 >
                   <option value="all">{t('all') || 'Tümü'}</option>
                   {uniqueCurrencies.map(curr => (
@@ -527,7 +548,7 @@ const WhaleTracking = () => {
                     }
                   }}
                   className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 md:py-3 bg-white/50 dark:bg-gray-800/50 border ${minValueError ? 'border-red-300 dark:border-red-700' : 'border-gray-200 dark:border-gray-700'
-                    } rounded-lg sm:rounded-xl text-sm sm:text-base text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-all duration-200 placeholder-gray-400`}
+                    } rounded-lg sm:rounded-xl text-sm sm:text-base text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent placeholder-gray-400`}
                   placeholder="200000"
                 />
                 {minValueError && (
@@ -567,7 +588,7 @@ const WhaleTracking = () => {
                     }
                   }}
                   disabled={!!minValueError || loading}
-                  className="w-full px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 active:scale-95 disabled:hover:scale-100 flex items-center justify-center gap-2 relative"
+                  className="w-full px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed text-white rounded-lg sm:rounded-xl font-semibold shadow-lg flex items-center justify-center gap-2 relative"
                 >
                   {saveSuccess && (
                     <span className="absolute -top-2 -right-2 w-3 h-3 bg-green-500 rounded-full animate-ping"></span>
@@ -581,7 +602,7 @@ const WhaleTracking = () => {
         </div>
 
         {/* Real-time Whale Trades */}
-        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-lg sm:rounded-xl md:rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 p-4 sm:p-5 md:p-6 animate-fade-in transform transition-all duration-300 hover:shadow-xl">
+        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-lg sm:rounded-xl md:rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 p-4 sm:p-5 md:p-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4 mb-4 sm:mb-6">
             <h2 className="text-base sm:text-lg md:text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <Activity className="w-5 h-5 text-green-500 animate-pulse" />
@@ -608,19 +629,18 @@ const WhaleTracking = () => {
               <p className="text-sm text-gray-500 dark:text-gray-400">{t('loading') || 'Yükleniyor...'}</p>
             </div>
           ) : filteredTrades.length > 0 ? (
-            <div className="space-y-2 max-h-[600px] sm:max-h-[700px] overflow-y-auto crypto-list-scrollbar">
-              {filteredTrades.map((trade, index) => (
+            <div className="space-y-2 max-h-[600px] sm:max-h-[700px] 2xl:max-h-[900px] overflow-y-auto crypto-list-scrollbar">
+              {visibleTrades.map((trade, index) => (
                 <div
                   key={trade.id || index}
-                  className="group/trade relative animate-fade-in transform transition-all duration-300 hover:-translate-y-0.5"
-                  style={{ animationDelay: `${index * 30}ms` }}
+                  className="group/trade relative"
                 >
-                  <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-indigo-500/5 rounded-xl opacity-0 group-hover/trade:opacity-100 transition-opacity duration-300"></div>
-                  <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 bg-gray-50/80 dark:bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-200/50 dark:border-gray-700/50 hover:border-blue-300/50 dark:hover:border-blue-600/50 hover:shadow-lg transition-all duration-300 gap-3"
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-indigo-500/5 rounded-xl opacity-0 group-hover/trade:opacity-100"></div>
+                  <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 bg-gray-50/80 dark:bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-200/50 dark:border-gray-700/50 hover:border-blue-300/50 dark:hover:border-blue-600/50 hover:shadow-lg gap-3"
                   >
                     {/* Üst satır - Symbol, Exchange, Type (mobilde) */}
                     <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                      <div className={`w-3 h-3 rounded-full flex-shrink-0 shadow-sm ${trade.type === 'buy' ? 'bg-green-500 dark:bg-green-400' : 'bg-red-500 dark:bg-red-400'} animate-pulse`}></div>
+                      <div className={`w-3 h-3 rounded-full flex-shrink-0 shadow-sm ${trade.type === 'buy' ? 'bg-green-500 dark:bg-green-400' : 'bg-red-500 dark:bg-red-400'}`}></div>
                       <span className="font-bold text-sm sm:text-base md:text-lg text-gray-900 dark:text-white truncate">{trade.symbol}</span>
                       <span className="text-xs px-2 py-0.5 sm:py-1 bg-gradient-to-r from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30 text-blue-700 dark:text-blue-400 rounded-lg border border-blue-200 dark:border-blue-800 font-semibold shadow-sm flex-shrink-0">
                         {trade.source === 'binance' || trade.source === 'binance_realtime' ? 'BN' :
@@ -654,7 +674,7 @@ const WhaleTracking = () => {
                       <span className="hidden sm:inline text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                         {formatLargeNumber(trade.quantity)} @ {formatCurrency(trade.price, currency)}
                       </span>
-                      <span className="text-xs sm:text-sm md:text-base font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
+                      <span className="text-xs sm:text-sm md:text-base font-bold gradient-value-text">
                         = {formatCurrency(trade.tradeValue, currency)}
                       </span>
                     </div>
@@ -697,12 +717,28 @@ const WhaleTracking = () => {
                   </div>
                 </div>
               ))}
+
+              {/* Infinite Scroll Sentinel */}
+              {hasMore && (
+                <div ref={sentinelRef} className="flex justify-center py-4">
+                  {loadingMore ? (
+                    <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                      <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 border-t-blue-500 dark:border-t-blue-400 rounded-full animate-spin"></div>
+                      <span className="text-sm">Yükleniyor...</span>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-400 dark:text-gray-500">
+                      {visibleCount} / {totalCount} işlem
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
-            <div className="relative overflow-hidden rounded-2xl shadow-2xl animate-fade-in">
+            <div className="relative overflow-hidden rounded-2xl shadow-2xl">
               <div className="absolute inset-0 bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-500 dark:from-blue-600 dark:via-indigo-700 dark:to-purple-600"></div>
               <div className="relative z-10 p-8 sm:p-12 text-center">
-                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/20 backdrop-blur-lg border border-white/30 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/20 backdrop-blur-lg border border-white/30 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Activity className="w-10 h-10 sm:w-12 sm:h-12 text-white" />
                 </div>
                 <h3 className="text-xl sm:text-2xl font-bold text-white mb-2">{t('waitingForTrades') || 'Büyük işlemler bekleniyor...'}</h3>

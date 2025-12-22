@@ -401,8 +401,8 @@ const Register = () => {
           onChange={(e) => changeLanguage(e.target.value)}
           className="bg-slate-800/60 backdrop-blur-sm border border-blue-500/30 rounded-lg px-1 py-1 text-sm text-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
         >
-          <option value="tr" className="bg-gray-800 text-white">{t('turkish')}</option>
-          <option value="en" className="bg-gray-800 text-white">{t('english')}</option>
+          <option value="tr" className="bg-gray-800 text-white">{t('Turkish')}</option>
+          <option value="en" className="bg-gray-800 text-white">{t('English')}</option>
         </select>
       </div>
 
@@ -435,7 +435,7 @@ const Register = () => {
                 {t('fullName')}
               </label>
               <div className="relative">
-                <User className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-white w-3 h-3" />
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white w-4 h-4" />
                 <input
                   id="displayName"
                   name="displayName"
@@ -443,9 +443,10 @@ const Register = () => {
                   required
                   value={formData.displayName}
                   onChange={handleChange}
-                  className="input pl-8 sm:pl-10"
+                  className="input"
                   placeholder={t('fullNamePlaceholder')}
                   autoComplete="name"
+                  style={{ paddingLeft: '2.5rem' }}
                 />
               </div>
             </div>
@@ -455,7 +456,7 @@ const Register = () => {
                 {t('email')}
               </label>
               <div className="relative">
-                <Mail className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-white w-3 h-3" />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white w-4 h-4" />
                 <input
                   id="email"
                   name="email"
@@ -463,9 +464,10 @@ const Register = () => {
                   required
                   value={formData.email}
                   onChange={handleChange}
-                  className="input pl-8 sm:pl-10"
+                  className="input"
                   placeholder={t('emailPlaceholderRegister')}
                   autoComplete="email"
+                  style={{ paddingLeft: '2.5rem' }}
                 />
               </div>
             </div>
@@ -475,7 +477,7 @@ const Register = () => {
                 {t('password')}
               </label>
               <div className="relative">
-                <Lock className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-white w-3 h-3" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white w-4 h-4" />
                 <input
                   id="password"
                   name="password"
@@ -483,18 +485,19 @@ const Register = () => {
                   required
                   value={formData.password}
                   onChange={handleChange}
-                  className="input pl-8 sm:pl-10 pr-8 sm:pr-10"
+                  className="input"
                   placeholder={t('passwordPlaceholder')}
                   autoComplete="new-password"
+                  style={{ paddingLeft: '2.5rem', paddingRight: '2.5rem' }}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-200 p-1"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-200 p-1"
                   aria-label={showPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
                   title={showPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
                 >
-                  {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
@@ -504,7 +507,7 @@ const Register = () => {
                 {t('passwordRepeat')}
               </label>
               <div className="relative">
-                <Lock className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-white w-3 h-3" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white w-4 h-4" />
                 <input
                   id="confirmPassword"
                   name="confirmPassword"
@@ -512,18 +515,19 @@ const Register = () => {
                   required
                   value={formData.confirmPassword}
                   onChange={handleChange}
-                  className="input pl-8 sm:pl-10 pr-8 sm:pr-10"
+                  className="input"
                   placeholder={t('confirmPasswordPlaceholder')}
                   autoComplete="new-password"
+                  style={{ paddingLeft: '2.5rem', paddingRight: '2.5rem' }}
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-200 p-1"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-200 p-1"
                   aria-label={showConfirmPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
                   title={showConfirmPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
                 >
-                  {showConfirmPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>

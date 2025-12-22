@@ -558,7 +558,9 @@ const translations = {
     minute: 'Dakika',
     second: 'Saniye',
     fredApiKeyMissing: 'FRED API anahtarı eksik',
-    fedRateDataError: 'Fed Rate verisi yüklenemedi. Lütfen sayfayı yenileyin.'
+    fedRateDataError: 'Fed Rate verisi yüklenemedi. Lütfen sayfayı yenileyin.',
+    turkish: 'Türkçe',
+    english: 'English'
   },
   en: {
     welcome: 'Welcome',
@@ -1115,7 +1117,9 @@ const translations = {
     minute: 'Minute',
     second: 'Second',
     fredApiKeyMissing: 'FRED API key is missing',
-    fedRateDataError: 'Fed Rate data could not be loaded. Please refresh the page.'
+    fedRateDataError: 'Fed Rate data could not be loaded. Please refresh the page.',
+    turkish: 'Turkish',
+    english: 'English'
   }
 }
 
@@ -1141,7 +1145,7 @@ export const LanguageProvider = ({ children }) => {
       setLanguage(newLanguage)
       localStorage.setItem('language', newLanguage) // localStorage'a da kaydet
     }
-    
+
     window.addEventListener('languageChanged', handleLanguageChange)
     return () => window.removeEventListener('languageChanged', handleLanguageChange)
   }, [])

@@ -296,8 +296,8 @@ function SupplyTracking() {
     visibleCount,
     totalCount
   } = useInfiniteScroll(filteredSupplyData, {
-    initialCount: 18,
-    incrementCount: 12,
+    initialCount: 30,
+    incrementCount: 15,
     threshold: 100
   });
 
@@ -391,11 +391,11 @@ function SupplyTracking() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 min-[1921px]:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 overflow-y-auto overflow-x-hidden max-h-[750px] min-[1921px]:max-h-[1100px] pt-4 sm:pt-6 pb-6 crypto-list-scrollbar">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 min-[1921px]:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 overflow-y-auto max-h-[750px] min-[1921px]:max-h-[1100px] pt-4 sm:pt-6 pb-6 px-4 crypto-list-scrollbar">
           {visibleSupplyData.map((coin, index) => (
-            <div key={coin.id} className="group/card relative animate-fade-in" style={{ animationDelay: `${Math.min(index * 10, 250)}ms` }}>
-              <div className="absolute inset-0 bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl opacity-0 group-hover/card:opacity-50 blur-lg transition-opacity duration-500"></div>
-              <div className="relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700 rounded-2xl p-4 sm:p-5 shadow-lg transform transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.02]">
+            <div key={coin.id} className="group/card relative z-10">
+              <div className="absolute inset-0 bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl opacity-0 group-hover/card:opacity-50 blur-md transition-opacity duration-300"></div>
+              <div className="relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-gray-200 dark:border-gray-700 rounded-2xl p-4 sm:p-5 shadow-lg transform transition-all duration-300 hover:shadow-2xl hover:-translate-y-1">
                 {/* Header: Icon, Name, Rank */}
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-3 flex-1 min-w-0">
@@ -475,7 +475,7 @@ function SupplyTracking() {
 
           {/* Infinite Scroll Sentinel */}
           {hasMore && (
-            <div id="supply-scroll-sentinel" className="col-span-full flex justify-center py-6">
+            <div ref={sentinelRef} id="supply-scroll-sentinel" className="col-span-full flex justify-center py-6">
               {loadingMore ? (
                 <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
                   <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 border-t-green-500 dark:border-t-green-400 rounded-full animate-spin"></div>

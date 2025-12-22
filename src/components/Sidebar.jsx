@@ -1,12 +1,12 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useAuth } from '../contexts/AuthContext'
-import { 
-  BarChart3, 
-  TrendingUp, 
-  PieChart, 
-  Settings, 
+import {
+  BarChart3,
+  TrendingUp,
+  PieChart,
+  Settings,
   Home,
   Star,
   Wallet,
@@ -23,8 +23,11 @@ const Sidebar = ({ onItemClick }) => {
   const { t } = useLanguage()
   const { user, isAdmin, isPremium } = useAuth()
   const navigate = useNavigate()
-  
-  const navItems = [
+
+  // DEBUG: isAdmin durumunu logla
+  // Memoize navItems to prevent re-creation on every render
+  // This helps prevent Admin from disappearing during language changes
+  const navItems = useMemo(() => [
     { to: '/', icon: Home, label: t('home'), isPremium: false, isAdmin: false },
     { to: '/market-overview', icon: PieChart, label: t('marketOverview'), isPremium: true, isAdmin: false },
     { to: '/supply-tracking', icon: Activity, label: t('supplyTracking'), isPremium: true, isAdmin: false },
@@ -36,11 +39,11 @@ const Sidebar = ({ onItemClick }) => {
     { to: '/whale-tracking', icon: Waves, label: t('whaleTracking'), isPremium: true, isAdmin: false },
     { to: '/settings', icon: Settings, label: t('settings'), isPremium: false, isAdmin: false },
     { to: '/admin', icon: ShieldCheck, label: t('admin'), isPremium: false, isAdmin: true },
-  ]
+  ], [t, isAdmin])
 
   const handleItemClick = (e, item) => {
     const isLocked = item.isPremium && !isPremium && !isAdmin
-    
+
     if (isLocked) {
       e.preventDefault()
       navigate(item.to)
@@ -58,19 +61,18 @@ const Sidebar = ({ onItemClick }) => {
             if (item.isAdmin && !isAdmin) {
               return null
             }
-            
+
             const isLocked = item.isPremium && !isPremium && !isAdmin
-            
+
             return (
               <li key={item.to}>
                 <NavLink
                   to={item.to}
                   onClick={(e) => handleItemClick(e, item)}
                   className={({ isActive }) =>
-                    `flex items-center justify-between px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-colors ${
-                      isActive
-                        ? 'bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300'
-                        : isLocked
+                    `flex items-center justify-between px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-colors ${isActive
+                      ? 'bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300'
+                      : isLocked
                         ? 'text-gray-400 hover:bg-gray-50 dark:text-gray-500 dark:hover:bg-gray-750 cursor-pointer'
                         : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
                     }`

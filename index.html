@@ -4,6 +4,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Prevent browser dark mode extensions from overriding site colors -->
+  <meta name="color-scheme" content="light dark" />
+  <meta name="supported-color-schemes" content="light dark" />
 
   <!-- Security Meta Tags (only those that work as meta tags) -->
   <meta name="referrer" content="strict-origin-when-cross-origin" />
@@ -101,6 +104,19 @@
       height: 100vh;
       width: 100%;
       background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%);
+    }
+    
+    /* PREVENT BROWSER FORCED DARK MODE */
+    @media (forced-colors: active) {
+      *, *::before, *::after {
+        forced-color-adjust: none !important;
+      }
+    }
+    
+    /* Prevent browser auto-dark mode from affecting gradients and colors */
+    html, body, #root {
+      forced-color-adjust: none;
+      -webkit-forced-color-adjust: none;
     }
   </style>
 </head>

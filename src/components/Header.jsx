@@ -163,16 +163,6 @@ const Header = ({ onMenuClick, className }) => {
                 {user && (
                   <div className="flex items-center space-x-2 sm:space-x-3 ml-2 sm:ml-3">
                     <a
-                      href="https://tinyurl.com/54bf5wes"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label="MEXC"
-                      className="inline-flex w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/90 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 items-center justify-center transition-transform hover:scale-105 p-0 m-0 overflow-hidden"
-                      title="MEXC"
-                    >
-                      <img src="/icons/mexc.png" alt="MEXC" className="w-7 h-7 sm:w-8 sm:h-8 object-contain" />
-                    </a>
-                    <a
                       href="https://tinyurl.com/meusxwb"
                       target="_blank"
                       rel="noopener noreferrer"

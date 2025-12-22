@@ -448,8 +448,8 @@ const Login = () => {
           onChange={(e) => changeLanguage(e.target.value)}
           className="bg-slate-800/60 backdrop-blur-sm border border-blue-500/30 rounded-lg px-1 py-1 text-sm text-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
         >
-          <option value="tr" className="bg-gray-800 text-white">{t('turkish')}</option>
-          <option value="en" className="bg-gray-800 text-white">{t('english')}</option>
+          <option value="tr" className="bg-gray-800 text-white">{t('Turkish')}</option>
+          <option value="en" className="bg-gray-800 text-white">{t('English')}</option>
         </select>
       </div>
 
@@ -473,7 +473,7 @@ const Login = () => {
                 {t('email')}
               </label>
               <div className="relative">
-                <Mail className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-900 z-10 w-4 h-4 sm:w-5 sm:h-5 opacity-100" style={{ color: '#000000' }} />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 z-10 w-4 h-4 sm:w-5 sm:h-5" style={{ color: '#000000' }} />
                 <input
                   id="email"
                   name="email"
@@ -481,10 +481,10 @@ const Login = () => {
                   required
                   value={formData.email}
                   onChange={handleChange}
-                  className="input pl-8 sm:pl-10"
+                  className="input"
                   placeholder={t('emailPlaceholderRegister')}
                   autoComplete="email"
-                  style={{ backgroundColor: 'rgba(255, 255, 255, 0.9)', color: '#000000' }}
+                  style={{ backgroundColor: 'rgba(255, 255, 255, 0.9)', color: '#000000', paddingLeft: '2.5rem' }}
                 />
               </div>
             </div>
@@ -494,7 +494,7 @@ const Login = () => {
                 {t('password')}
               </label>
               <div className="relative">
-                <Lock className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-900 z-10 w-4 h-4 sm:w-5 sm:h-5 opacity-100" style={{ color: '#000000' }} />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 z-10 w-4 h-4 sm:w-5 sm:h-5" style={{ color: '#000000' }} />
                 <input
                   id="password"
                   name="password"
@@ -502,20 +502,20 @@ const Login = () => {
                   required
                   value={formData.password}
                   onChange={handleChange}
-                  className="input pl-8 pr-8 sm:pl-10 sm:pr-10"
+                  className="input"
                   placeholder={t('passwordPlaceholder')}
                   autoComplete="current-password"
-                  style={{ backgroundColor: 'rgba(255, 255, 255, 0.9)', color: '#000000' }}
+                  style={{ backgroundColor: 'rgba(255, 255, 255, 0.9)', color: '#000000', paddingLeft: '2.5rem', paddingRight: '2.5rem' }}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 text-gray-900 hover:text-gray-700 z-10 p-1"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 z-10 p-1"
                   style={{ color: '#000000' }}
                   aria-label={showPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
                   title={showPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4 sm:w-5 sm:h-5 opacity-100" style={{ color: '#000000' }} /> : <Eye className="w-4 h-4 sm:w-5 sm:h-5 opacity-100" style={{ color: '#000000' }} />}
+                  {showPassword ? <EyeOff className="w-4 h-4 sm:w-5 sm:h-5" style={{ color: '#000000' }} /> : <Eye className="w-4 h-4 sm:w-5 sm:h-5" style={{ color: '#000000' }} />}
                 </button>
               </div>
             </div>

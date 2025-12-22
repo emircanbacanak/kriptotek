@@ -706,7 +706,7 @@ function News() {
               const k = `${item.id || item.url || item.link || item.title}-${ts}`
               const isImportant = isImportantNews(item)
               return (
-                <div key={k} className="group relative animate-fade-in" style={{ animationDelay: `${index * 50}ms` }}>
+                <div key={k} className="group relative">
                   <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-2xl opacity-0 group-hover:opacity-30 blur-xl transition-opacity"></div>
                   <article className={`relative bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-lg shadow-sm border border-gray-200/50 dark:border-gray-700/50 overflow-hidden transform transition-all duration-300 hover:shadow-lg hover:-translate-y-1 hover:scale-[1.01] flex flex-col h-full min-h-[480px] sm:min-h-[400px] group/article ${isImportant ? 'important-news-card' : ''}`}>
                     {/* Image */}

@@ -1167,7 +1167,7 @@ const Portfolio = () => {
       <div className="relative z-10">
         {positionsWithData.length > 0 && (
           <div className="space-y-4 mb-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Giriş Değeri */}
               <div className="relative bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-xl border border-gray-200/50 dark:border-gray-700/50 p-5 hover:shadow-lg transition-all">
                 <div className="flex items-center justify-between mb-3">

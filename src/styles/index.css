@@ -3,6 +3,91 @@
 @tailwind utilities;
 
 /* ============================================
+   BROWSER COLOR SCHEME PROTECTION
+   Prevents browser dark mode extensions from
+   overriding site colors
+   ============================================ */
+
+/* Explicitly define color scheme - prevents browser auto dark mode */
+:root {
+  color-scheme: light dark;
+  forced-color-adjust: none;
+  -webkit-forced-color-adjust: none;
+}
+
+/* Prevent forced colors mode from overriding our colors */
+@media (forced-colors: active) {
+
+  *,
+  *::before,
+  *::after {
+    forced-color-adjust: none !important;
+    -webkit-forced-color-adjust: none !important;
+  }
+}
+
+/* Disable browser auto dark mode injection */
+html {
+  color-scheme: light dark;
+  forced-color-adjust: none;
+  -webkit-forced-color-adjust: none;
+}
+
+html.light {
+  color-scheme: light only;
+}
+
+html.dark {
+  color-scheme: dark only;
+}
+
+/* Prevent browser extensions from overriding colors */
+body,
+#root,
+main,
+div,
+section,
+article,
+aside,
+header,
+footer,
+nav {
+  forced-color-adjust: none !important;
+  -webkit-forced-color-adjust: none !important;
+}
+
+/* Protect text colors */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+span,
+a,
+button,
+input,
+textarea,
+select,
+label,
+li,
+td,
+th {
+  forced-color-adjust: none !important;
+  -webkit-forced-color-adjust: none !important;
+}
+
+/* Protect backgrounds and borders */
+*[class*="bg-"],
+*[class*="border-"],
+*[class*="text-"],
+*[class*="gradient"] {
+  forced-color-adjust: none !important;
+  -webkit-forced-color-adjust: none !important;
+}
+
+/* ============================================
    BASE STYLES
    ============================================ */
 *,
@@ -215,6 +300,76 @@ body::-webkit-scrollbar {
   .bg-clip-text.from-blue-600 {
     color: #3b82f6 !important;
     -webkit-text-fill-color: #3b82f6 !important;
+  }
+}
+
+/* Forced-colors mode fallback - ensures text visibility when browser forces colors */
+@media (forced-colors: active) {
+
+  .bg-clip-text,
+  .text-transparent {
+    -webkit-text-fill-color: currentColor !important;
+    color: CanvasText !important;
+    background: none !important;
+    forced-color-adjust: auto !important;
+  }
+}
+
+/* Utility class for gradient value text (whale tracking, portfolio, etc.) */
+/* This ensures $ values are always visible */
+.gradient-value-text {
+  background: linear-gradient(to right, #3b82f6, #6366f1);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: #3b82f6;
+  /* Fallback for old browsers */
+}
+
+.dark .gradient-value-text {
+  background: linear-gradient(to right, #60a5fa, #818cf8);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: #60a5fa;
+  /* Fallback for old browsers */
+}
+
+@media (forced-colors: active) {
+  .gradient-value-text {
+    background: none !important;
+    -webkit-text-fill-color: currentColor !important;
+    color: CanvasText !important;
+    forced-color-adjust: auto !important;
+  }
+}
+
+/* Utility class for page header gradients */
+/* Provides fallback for all browsers and forced-colors mode */
+.page-header-gradient {
+  background: linear-gradient(to right, #3b82f6, #6366f1);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: #3b82f6;
+  /* Fallback */
+}
+
+.dark .page-header-gradient {
+  background: linear-gradient(to right, #facc15, #fb923c);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: #facc15;
+  /* Fallback */
+}
+
+@media (forced-colors: active) {
+  .page-header-gradient {
+    background: none !important;
+    -webkit-text-fill-color: currentColor !important;
+    color: CanvasText !important;
+    forced-color-adjust: auto !important;
   }
 }
 

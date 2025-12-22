@@ -69,7 +69,6 @@ export async function fetchFedRateData(dbInstance = null) {
                   const date = new Date(impl.pubDate)
                   if (!isNaN(date.getTime())) {
                     lastAnnounceDate = date.toISOString()
-                    console.log(`✅ RSS feed'den son açıklanma tarihi alındı: ${lastAnnounceDate}`)
                     break
                   }
                 }
@@ -113,7 +112,6 @@ export async function fetchFedRateData(dbInstance = null) {
 
       if (latestDate) {
         lastAnnounceDate = latestDate.toISOString()
-        console.log(`✅ RSS feed'den Implementation Note tarihi bulundu: ${lastAnnounceDate}`)
       } else {
         const allItemsRegex = /<item>[\s\S]*?<pubDate>([\s\S]*?)<\/pubDate>[\s\S]*?<\/item>/gi
         let allMatches = []
@@ -128,7 +126,6 @@ export async function fetchFedRateData(dbInstance = null) {
         if (allMatches.length > 0) {
           allMatches.sort((a, b) => b - a)
           lastAnnounceDate = allMatches[0].toISOString()
-          console.log(`✅ RSS feed'den en son haber tarihi alındı: ${lastAnnounceDate}`)
         }
       }
     }
@@ -139,8 +136,6 @@ export async function fetchFedRateData(dbInstance = null) {
   // 2. FRED API'den mevcut ve önceki oranları çek (tarih bazlı)
   if (FRED_API_KEY) {
     try {
-      console.log('📊 FRED API\'den veri çekiliyor...')
-
       // Mevcut değerler için (en güncel)
       const fredParams = `api_key=${FRED_API_KEY}&file_type=json&sort_order=desc&limit=1`
 
@@ -168,8 +163,6 @@ export async function fetchFedRateData(dbInstance = null) {
           // Mevcut değerler (en güncel) - ilk gözlem
           announcedUpper = parseValue(upperObs[0]?.value)
           announcedLower = parseValue(lowerObs[0]?.value)
-
-          console.log(`✅ FRED API'den mevcut değerler alındı: Upper=${announcedUpper}, Lower=${announcedLower}`)
 
           // ÖNCEKİ DEĞERLER: Son açıklanma tarihinden önceki en son gerçek açıklanma tarihindeki değerleri çek
           if (lastAnnounceDate) {
@@ -210,7 +203,6 @@ export async function fetchFedRateData(dbInstance = null) {
                     previousUpper = obsUpper
                     previousLower = obsLower
                     foundPrevious = true
-                    console.log(`✅ FRED API'den önceki değerler alındı (tarih bazlı): Upper=${previousUpper}, Lower=${previousLower}, Tarih: ${obsDate} (${Math.round(daysDiff)} gün önce)`)
                     break
                   }
                 }
@@ -253,7 +245,6 @@ export async function fetchFedRateData(dbInstance = null) {
                 if (obsUpper !== null && obsLower !== null && obsDate && obsDate !== currentDate) {
                   previousUpper = obsUpper
                   previousLower = obsLower
-                  console.log(`✅ FRED API'den önceki değerler alındı (farklı tarih): Upper=${previousUpper}, Lower=${previousLower}, Tarih: ${obsDate}`)
                   break
                 }
               }

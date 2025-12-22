@@ -193,10 +193,10 @@ const Settings = () => {
         setOriginalSettings(settings)
         setSaveMessage({ type: 'success', text: t('saveSuccess') })
         setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000)
-        // AuthContext'i güncelle
-        if (refreshUserSettings) {
-          await refreshUserSettings()
-        }
+        // NOT: Display ayarları değişikliği admin/premium durumunu etkilemez
+        // refreshUserSettings çağrısı burada yapılmaz - bu fonksiyon MongoDB'den yeniden yükler
+        // ve admin durumunu geçici olarak sıfırlayabilir. Display ayarları zaten
+        // localStorage ve event dispatch ile anında uygulanır.
       } else {
         throw new Error(result.error)
       }
@@ -647,8 +647,8 @@ const Settings = () => {
                   onChange={(e) => handleSettingChange('display', 'language', e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="tr">{t('turkish')}</option>
-                  <option value="en">{t('english')}</option>
+                  <option value="tr">{t('Turkish')}</option>
+                  <option value="en">{t('English')}</option>
                 </select>
               </div>
             </div>
@@ -819,7 +819,7 @@ const Settings = () => {
           <div>
             <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">{t('languageLabel')}</p>
             <p className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 dark:text-white">
-              {settings.display.language === 'tr' ? t('turkish') : t('english')}
+              {settings.display.language === 'tr' ? t('Turkish') : t('English')}
             </p>
           </div>
         </div>
