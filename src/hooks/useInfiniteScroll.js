@@ -53,6 +53,29 @@ export function useInfiniteScroll(items, options = {}) {
         setVisibleCount(initialCount)
     }, [initialCount])
 
+    // Scroll container'ı bul - sentinel'in overflow scroll parent'ı
+    const findScrollParent = useCallback((element) => {
+        if (!element) return null
+
+        let parent = element.parentElement
+        while (parent) {
+            const style = window.getComputedStyle(parent)
+            const overflowY = style.overflowY
+            const overflowX = style.overflowX
+
+            // overflow-auto veya overflow-scroll olan parent'ı bul
+            if (overflowY === 'auto' || overflowY === 'scroll' ||
+                overflowX === 'auto' || overflowX === 'scroll') {
+                // Gerçekten scroll edilebilir olup olmadığını kontrol et
+                if (parent.scrollHeight > parent.clientHeight || parent.scrollWidth > parent.clientWidth) {
+                    return parent
+                }
+            }
+            parent = parent.parentElement
+        }
+        return null // Bulunamazsa viewport kullanılacak
+    }, [])
+
     // Scroll container'ları bul ve dinle - IntersectionObserver kullan
     useEffect(() => {
         // Biraz gecikme ile DOM'un hazır olmasını bekle
@@ -81,7 +104,10 @@ export function useInfiniteScroll(items, options = {}) {
                 return
             }
 
-            // IntersectionObserver kullan - daha güvenilir
+            // Scroll container'ı bul - tablo gibi iç container'lar için
+            const scrollContainer = findScrollParent(visibleSentinel)
+
+            // IntersectionObserver kullan - scroll container varsa onu root olarak kullan
             const observer = new IntersectionObserver(
                 (entries) => {
                     entries.forEach((entry) => {
@@ -91,7 +117,7 @@ export function useInfiniteScroll(items, options = {}) {
                     })
                 },
                 {
-                    root: null, // viewport'u kullan
+                    root: scrollContainer, // Scroll container varsa onu kullan, yoksa viewport
                     rootMargin: `${threshold}px`, // threshold kadar önce tetikle
                     threshold: 0.1
                 }
@@ -107,7 +133,7 @@ export function useInfiniteScroll(items, options = {}) {
         return () => {
             clearTimeout(setupTimeout)
         }
-    }, [hasMore, loadingMore, loadMore, threshold, sentinelIds])
+    }, [hasMore, loadingMore, loadMore, threshold, sentinelIds, findScrollParent])
 
     return {
         visibleItems,
