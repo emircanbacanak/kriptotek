@@ -156,13 +156,12 @@ function isStablecoin(coin) {
  */
 async function fetchCryptoList() {
   try {
-    // İlk 3 batch çek (540 coin için - her batch 195 coin) - MEMORY OPTIMIZED
-    // CoinGecko API maksimum per_page=250 destekliyor, biz 195 kullanıyoruz
-    // 3 batch x 195 coin = 540 coin (memory azaltma için 615'ten düşürüldü)
+    // CoinGecko API maksimum per_page=250 destekliyor, biz 200 kullanıyoruz
+    // 3 batch x 200 coin = 600 coin (memory azaltma için sparkline kapalı)
     let pages = [
       { url: `${COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=200&page=1&sparkline=false&price_change_percentage=24h`, name: 'CoinGecko Batch 1 (200 coin)' },
-      { url: `${COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=195&page=2&sparkline=false&price_change_percentage=24h`, name: 'CoinGecko Batch 2 (195 coin)' },
-      { url: `${COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=195&page=3&sparkline=false&price_change_percentage=24h`, name: 'CoinGecko Batch 3 (195 coin)' }
+      { url: `${COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=200&page=2&sparkline=false&price_change_percentage=24h`, name: 'CoinGecko Batch 2 (200 coin)' },
+      { url: `${COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=200&page=3&sparkline=false&price_change_percentage=24h`, name: 'CoinGecko Batch 3 (200 coin)' }
     ]
 
     // Sıralı fetch (rate limit'i önlemek için) - Her batch için farklı proxy ile
@@ -328,20 +327,12 @@ async function fetchCryptoList() {
 
     console.log(`📊 İlk 3 batch sonrası: ${uniqueData.length} unique coin, ${filteredData.length} coin (stablecoin'ler filtrelendi)`)
 
-    // 3 batch x 195 coin = 615 coin hedefleniyor
-    // Ek sayfa çekme mantığı kaldırıldı - 3 batch yeterli
+    // 3 batch x 200 coin = 600 coin çekiliyor, stablecoin filtresi sonrası ilk 500'e sınırlanıyor
 
-    // 615 coin'e sınırla (3 batch x 195 coin) ve market_cap_rank'i düzelt
-    const limitedData = filteredData.slice(0, 615)
+    // 500 coin'e sınırla ve market_cap_rank'i düzelt
+    const limitedData = filteredData.slice(0, 500)
 
-    // Eğer hala 615'ten az coin varsa, uyarı ver
-    if (limitedData.length < 615) {
-      console.warn(`⚠️ UYARI: Sadece ${limitedData.length} coin çekilebildi (615 hedeflendi - 3 batch x 195 coin).`)
-    } else {
-      console.log(`✅ Başarılı: ${limitedData.length} coin çekildi (615 hedeflendi - 3 batch x 195 coin)`)
-    }
-
-    console.log(`📊 Final coin sayısı: ${limitedData.length} coin (615 hedeflendi - 3 batch x 195 coin)`)
+    console.log(`📊 Final coin sayısı: ${limitedData.length} coin (max 500)`)
 
     // Tüm 615 coin için detaylı bilgi çek (total_supply ve max_supply için)
     const allCoinIds = limitedData.map(coin => coin.id)
@@ -373,9 +364,9 @@ async function fetchCryptoList() {
     }
 
     // Eksik olan coin'ler için /coins/{id} endpoint'ini kullan
-    // Top 615 coin için supply bilgileri çekiliyor (anasayfadaki filtrelenmiş 615 coin - 3 batch x 195)
+    // Top 500 coin için supply bilgileri çekiliyor
     const missingCoins = allCoinIds.filter(id => !supplyDataMap.has(id))
-    const coinsToFetch = missingCoins.slice(0, 615) // Top 615 coin için supply bilgisi
+    const coinsToFetch = missingCoins.slice(0, 500) // Top 500 coin için supply bilgisi
 
     if (coinsToFetch.length > 0) {
       console.log(`📊 ${coinsToFetch.length} coin için supply bilgisi eksik (top ${coinsToFetch.length} coin), detaylı bilgi çekiliyor...`)
@@ -635,8 +626,8 @@ async function fetchCryptoList() {
       console.log(`✅ Tüm coin'ler için supply bilgileri mevcut (${supplyDataMap.size} coin)`)
     }
 
-    if (missingCoins.length > 615) {
-      console.log(`ℹ️ ${missingCoins.length - 615} coin için supply bilgisi çekilmedi (sadece top 615 coin çekildi - 3 batch x 195)`)
+    if (missingCoins.length > 500) {
+      console.log(`ℹ️ ${missingCoins.length - 500} coin için supply bilgisi çekilmedi (sadece top 500 coin)`)
     }
 
     // Normalize et ve market_cap_rank'i düzelt (1'den başlayarak)
