@@ -21,25 +21,27 @@ const useTrendingData = () => {
       // Cache'den veri varsa direkt çık, MongoDB'den çekmeye gerek yok
       // Abone ol ama (güncellemeler için)
       const unsubscribe = globalDataManager.subscribe((data) => {
-        setTrendingCoins(data.trendingCoins || [])
-        setLastUpdate(data.lastTrendingUpdate)
-        setIsUpdating(data.isUpdating || false)
+        // KRİTİK: Sadece geçerli veri varsa güncelle, yoksa mevcut veriyi koru
         if (data.trendingCoins && data.trendingCoins.length > 0) {
+          setTrendingCoins(data.trendingCoins)
+          setLastUpdate(data.lastTrendingUpdate)
           setLoading(false)
         }
+        setIsUpdating(data.isUpdating || false)
       })
       return () => unsubscribe()
     }
-    
+
     // Cache'de veri yoksa MongoDB'den ANINDA çek (interval yok, direkt subscribe)
     // Abone ol - veri geldiğinde ANINDA göster
     const unsubscribe = globalDataManager.subscribe((data) => {
-      setTrendingCoins(data.trendingCoins || [])
-      setLastUpdate(data.lastTrendingUpdate)
-      setIsUpdating(data.isUpdating || false)
+      // KRİTİK: Sadece geçerli veri varsa güncelle, yoksa mevcut veriyi koru
       if (data.trendingCoins && data.trendingCoins.length > 0) {
+        setTrendingCoins(data.trendingCoins)
+        setLastUpdate(data.lastTrendingUpdate)
         setLoading(false)
       }
+      setIsUpdating(data.isUpdating || false)
     })
 
     return () => {

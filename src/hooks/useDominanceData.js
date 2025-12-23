@@ -25,24 +25,24 @@ const useDominanceData = () => {
       // Cache'de veri yoksa MongoDB'den çekilecek, loading true kalsın
       // loadMissingDataFromMongoDB() constructor'da çağrılıyor
     }
-    
+
     // Abone ol - veri geldiğinde ANINDA göster (cache veya MongoDB'den)
     const unsubscribe = globalDataManager.subscribe((data) => {
-      setDominanceData(data.dominanceData)
-      setFearGreedIndex(data.fearGreedIndex)
-      setIsUpdating(data.isUpdating || false)
-      setLastUpdate(data.lastDominanceUpdate)
-      
-      // Veri geldiğinde loading'i kapat
+      // KRİTİK: Sadece geçerli veri varsa güncelle, yoksa mevcut veriyi koru
+      // Bu sayede notifySubscribers() null veri gönderirse sayfa içeriği kaybolmaz
       if (data.dominanceData && data.dominanceData.global && data.dominanceData.dominanceData) {
+        setDominanceData(data.dominanceData)
+        setLastUpdate(data.lastDominanceUpdate)
         setLoading(false)
         setError(null)
       }
-      
-      // Eğer veri yoksa ve güncelleme yapılmıyorsa, hata göster
-      if (!data.dominanceData && !data.isUpdating && data.lastDominanceUpdate === null) {
-        setError('Veri yüklenemedi. Lütfen sayfayı yenileyin.')
+
+      // Fear & Greed index için ayrı kontrol
+      if (data.fearGreedIndex && data.fearGreedIndex.value !== undefined) {
+        setFearGreedIndex(data.fearGreedIndex)
       }
+
+      setIsUpdating(data.isUpdating || false)
     })
 
     // Cleanup

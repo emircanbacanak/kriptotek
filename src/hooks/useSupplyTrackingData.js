@@ -28,15 +28,14 @@ const useSupplyTrackingData = () => {
 
     // Abone ol ve güncellemeleri dinle
     const unsubscribe = globalDataManager.subscribe((data) => {
-      setSupplyTrackingData(data.supplyTrackingData)
-      setLastUpdate(data.lastSupplyTrackingUpdate)
-      setIsUpdating(data.isUpdating || false)
-      if (data.supplyTrackingData) {
-        setLoading(false)
-      } else {
-        // Veri yoksa bile loading'i kapat (timeout durumunda)
+      // KRİTİK: Sadece geçerli veri varsa güncelle, yoksa mevcut veriyi koru
+      // Bu sayede notifySubscribers() null veri gönderirse sayfa içeriği kaybolmaz
+      if (data.supplyTrackingData && Object.keys(data.supplyTrackingData).length > 0) {
+        setSupplyTrackingData(data.supplyTrackingData)
+        setLastUpdate(data.lastSupplyTrackingUpdate)
         setLoading(false)
       }
+      setIsUpdating(data.isUpdating || false)
     })
 
     return () => {

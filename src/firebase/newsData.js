@@ -1,9 +1,9 @@
-import { 
-  collection, 
-  addDoc, 
-  query, 
-  orderBy, 
-  limit, 
+import {
+  collection,
+  addDoc,
+  query,
+  orderBy,
+  limit,
   onSnapshot,
   where,
   getDocs,
@@ -114,7 +114,7 @@ export async function saveNewsToFirestore(newsItems) {
 
       for (let i = 0; i < batches.length; i += MAX_CONCURRENT_BATCHES) {
         const concurrentBatches = batches.slice(i, i + MAX_CONCURRENT_BATCHES)
-        
+
         await Promise.all(
           concurrentBatches.map(async (batchItems) => {
             const batch = writeBatch(db)
@@ -124,7 +124,7 @@ export async function saveNewsToFirestore(newsItems) {
             for (const item of batchItems) {
               if (!item.url) continue
               const existing = existingUrlsMap.get(item.url)
-              
+
               if (!existing) {
                 const docRef = doc(newsRef)
                 batch.set(docRef, {
@@ -180,15 +180,15 @@ export async function cleanOldNews() {
   try {
     const cutoffDate = new Date()
     cutoffDate.setDate(cutoffDate.getDate() - MAX_NEWS_AGE_DAYS)
-    
+
     const newsRef = collection(db, NEWS_COLLECTION)
     const oldNewsQuery = query(
       newsRef,
       where('publishedAt', '<', Timestamp.fromDate(cutoffDate))
     )
-    
+
     const snapshot = await getDocs(oldNewsQuery)
-    
+
     if (!snapshot.empty) {
       const batch = writeBatch(db)
       snapshot.docs.forEach(doc => {
@@ -209,12 +209,12 @@ export function subscribeToNews(callback, limitCount = 100, errorCallback = null
   if (USE_MONGO) {
     let allNews = []
     let isInitialized = false
-    
+
     // İlk yükleme - MongoDB API'den çek
     const loadInitialNews = async () => {
       try {
         const news = await mongoApiClient.getNews({ limit: limitCount, orderBy: 'publishedAt', order: 'desc' })
-        
+
         // MongoDB'den gelen veriyi formatla
         const formattedNews = news.map(item => {
           let publishedAt = item.publishedAt ? new Date(item.publishedAt) : new Date()
@@ -228,10 +228,10 @@ export function subscribeToNews(callback, limitCount = 100, errorCallback = null
             createdAt: item.createdAt ? new Date(item.createdAt) : new Date()
           }
         })
-        
+
         formattedNews.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime())
         allNews = formattedNews
-        
+
         if (!isInitialized) {
           isInitialized = true
           callback(allNews)
@@ -241,22 +241,27 @@ export function subscribeToNews(callback, limitCount = 100, errorCallback = null
         if (errorCallback) {
           errorCallback(error)
         }
-        // Hata durumunda boş array gönder (sayfa boş kalmasın)
-        callback([])
+        // KRİTİK: Hata durumunda mevcut veriyi koru, boş array gönderme!
+        // Eğer zaten veri varsa callback çağırma, yoksa ve ilk yükleme ise boş gönder
+        if (!isInitialized && allNews.length === 0) {
+          isInitialized = true
+          callback([]) // Sadece ilk yüklemede ve hiç veri yoksa boş gönder
+        }
+        // Mevcut veri varsa dokunma - kartlar kaybolmasın
       }
     }
-    
+
     // İlk yükleme
     loadInitialNews()
-    
+
     // Haberler yenilendiğinde tüm haberleri yeniden yükle
     const handleNewsRefreshed = () => {
       loadInitialNews()
     }
-    
+
     // news_refreshed event'ini dinle
     window.addEventListener('news_refreshed', handleNewsRefreshed)
-    
+
     // WebSocket'ten gelen güncellemeleri dinle
     const handleNewsUpdate = ({ operationType, documentId, data, fullDocument }) => {
       // data veya fullDocument yoksa sessizce çık
@@ -264,7 +269,7 @@ export function subscribeToNews(callback, limitCount = 100, errorCallback = null
       if (!newsData) {
         return
       }
-      
+
       // Yeni haber eklendi veya güncellendi
       // Haberi formatla
       let publishedAt = newsData.publishedAt ? new Date(newsData.publishedAt) : new Date()
@@ -273,46 +278,46 @@ export function subscribeToNews(callback, limitCount = 100, errorCallback = null
       if (newsData.tzHint === 'utc' && newsData.source !== 'cointelegraph') {
         publishedAt = new Date(publishedAt.getTime() + (3 * 60 * 60 * 1000))
       }
-      
+
       const formattedItem = {
         id: newsData._id || newsData.url || documentId || Math.random().toString(),
         ...newsData,
         publishedAt,
         createdAt: newsData.createdAt ? new Date(newsData.createdAt) : new Date()
       }
-      
+
       // Mevcut listede var mı kontrol et
       const existingIndex = allNews.findIndex(n => n.id === formattedItem.id)
-      
+
       if (existingIndex >= 0) {
         // Güncelle
         allNews[existingIndex] = formattedItem
       } else {
         // Yeni haber ekle (en başa)
         allNews.unshift(formattedItem)
-        
+
         // Limit'i aşmamak için son elemanı çıkar
         if (allNews.length > limitCount) {
           allNews = allNews.slice(0, limitCount)
         }
       }
-      
+
       // Tarihe göre sırala
       allNews.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime())
-      
+
       // Callback çağır
       callback([...allNews])
-      
+
       // NOT: window event dispatch'i kaldırıldı - sonsuz döngüye neden oluyordu
       // WebSocket üzerinden zaten güncellemeler geliyor, window event'e gerek yok
     }
-    
+
     // RealtimeService ile crypto_news collection'ını dinle
     const unsubscribeRealtime = realtimeService.subscribe('crypto_news', handleNewsUpdate)
-    
+
     // Window event listener kaldırıldı - WebSocket zaten güncellemeleri sağlıyor
     // Gerekirse başka bir kaynaktan window event'i dinlemek için ayrı bir handler yazılabilir
-    
+
     // Cleanup fonksiyonu
     return () => {
       unsubscribeRealtime()
@@ -367,14 +372,14 @@ export async function getLastUpdateTime() {
       orderBy('createdAt', 'desc'),
       limit(1)
     )
-    
+
     const snapshot = await getDocs(lastNewsQuery)
-    
+
     if (!snapshot.empty) {
       const lastNews = snapshot.docs[0].data()
       return lastNews.createdAt?.toDate() || null
     }
-    
+
     return null
   } catch (error) {
     console.error('❌ Son güncelleme zamanı alma hatası:', error)
@@ -403,13 +408,13 @@ export async function getNewsByCategory() {
   try {
     const newsRef = collection(db, NEWS_COLLECTION)
     const snapshot = await getDocs(newsRef)
-    
+
     const categoryCounts = {}
     snapshot.docs.forEach(doc => {
       const category = doc.data().category || 'general'
       categoryCounts[category] = (categoryCounts[category] || 0) + 1
     })
-    
+
     return categoryCounts
   } catch (error) {
     console.error('❌ Kategori sayıları alma hatası:', error)

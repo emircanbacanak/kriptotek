@@ -49,7 +49,7 @@ const fetchFromMongoDB = async () => {
       },
       cache: 'no-cache'
     })
-    
+
     if (response.ok) {
       const result = await response.json()
       if (result.success && result.data) {
@@ -115,17 +115,16 @@ const useFedRateData = () => {
 
     // Abone ol ve güncellemeleri dinle
     const unsubscribe = globalDataManager.subscribe((data) => {
-      setFedRateData(data.fedRateData)
-      setLastUpdate(data.lastFedRateUpdate)
-      setIsUpdating(data.isUpdating || false)
+      // KRİTİK: Sadece geçerli veri varsa güncelle, yoksa mevcut veriyi koru
+      // Bu sayede notifySubscribers() null veri gönderirse sayfa içeriği kaybolmaz
       if (data.fedRateData) {
+        setFedRateData(data.fedRateData)
+        setLastUpdate(data.lastFedRateUpdate)
         setLoading(false)
         // localStorage'a kaydet
         setCachedData(data.fedRateData)
-      } else if (!data.isUpdating) {
-        // Veri yok ve güncelleme yapılmıyor, MongoDB'den çek
-        fetchData()
       }
+      setIsUpdating(data.isUpdating || false)
     })
 
     return () => {
