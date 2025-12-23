@@ -36,6 +36,8 @@ const Portfolio = () => {
     takeProfit: ''
   })
   const isMountedRef = useRef(true)
+  const [visibleCoinCount, setVisibleCoinCount] = useState(30) // Dropdown için infinite scroll
+  const coinListRef = useRef(null) // Dropdown scroll ref
 
   useEffect(() => {
     updatePageSEO('portfolio', language)
@@ -64,10 +66,11 @@ const Portfolio = () => {
     }
   }, [showCoinDropdown])
 
-  // Filter coins based on search term
+  // Filter coins based on search term - tüm 500 coin'i kullan
   const filteredCoinsForSelection = useMemo(() => {
     if (!coins) return []
-    const coinsList = coins.slice(0, 100)
+    // Tüm coinleri al (globalDataManager'dan 500 coin geliyor)
+    const coinsList = coins
     if (!coinSearchTerm.trim()) return coinsList
 
     const searchLower = coinSearchTerm.toLowerCase().trim()
@@ -77,6 +80,27 @@ const Portfolio = () => {
       return nameLower.includes(searchLower) || symbolLower.includes(searchLower)
     })
   }, [coins, coinSearchTerm])
+
+  // Infinite scroll için görünür coinler
+  const visibleCoinsForDropdown = useMemo(() => {
+    return filteredCoinsForSelection.slice(0, visibleCoinCount)
+  }, [filteredCoinsForSelection, visibleCoinCount])
+
+  // Dropdown scroll handler - aşağı indikçe daha fazla coin yükle
+  const handleCoinListScroll = useCallback((e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.target
+    // Scroll'un %80'ine ulaşınca daha fazla yükle
+    if (scrollTop + clientHeight >= scrollHeight * 0.8) {
+      setVisibleCoinCount(prev => Math.min(prev + 30, filteredCoinsForSelection.length))
+    }
+  }, [filteredCoinsForSelection.length])
+
+  // Dropdown açıldığında veya arama değiştiğinde visible count'u sıfırla
+  useEffect(() => {
+    if (showCoinDropdown) {
+      setVisibleCoinCount(30)
+    }
+  }, [showCoinDropdown, coinSearchTerm])
 
   const loadPortfolio = useCallback(async () => {
     if (!user || !user.uid) {
@@ -778,48 +802,60 @@ const Portfolio = () => {
                       </div>
                     </div>
 
-                    {/* Coin List */}
-                    <div className="max-h-80 overflow-y-auto custom-scrollbar">
-                      {filteredCoinsForSelection.length > 0 ? (
-                        filteredCoinsForSelection.map(coin => (
-                          <button
-                            key={coin.id}
-                            type="button"
-                            onClick={() => {
-                              const price = coin.current_price || 0
-                              const decimalPlaces = getDecimalPlaces(price)
-                              const formattedPrice = price > 0 ? parseFloat(price).toFixed(decimalPlaces) : ''
-                              setFormData({ ...formData, coinId: coin.id, entryPrice: formattedPrice })
-                              setShowCoinDropdown(false)
-                              setCoinSearchTerm('')
-                            }}
-                            className={`w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all border-b border-gray-100 dark:border-gray-700/50 last:border-b-0 ${formData.coinId === coin.id
-                              ? 'bg-blue-50 dark:bg-blue-900/20'
-                              : ''
-                              }`}
-                          >
-                            <div className="flex items-center gap-3 flex-1 min-w-0">
-                              <img
-                                src={coin.image}
-                                alt={coin.name}
-                                className="w-10 h-10 rounded-full flex-shrink-0"
-                              />
-                              <div className="flex-1 min-w-0 text-left">
-                                <div className="font-bold text-sm text-gray-900 dark:text-white truncate">
-                                  {coin.name}
-                                </div>
-                                <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-                                  {coin.symbol.toUpperCase()}
+                    {/* Coin List - Infinite Scroll */}
+                    <div
+                      ref={coinListRef}
+                      className="max-h-80 overflow-y-auto custom-scrollbar"
+                      onScroll={handleCoinListScroll}
+                    >
+                      {visibleCoinsForDropdown.length > 0 ? (
+                        <>
+                          {visibleCoinsForDropdown.map(coin => (
+                            <button
+                              key={coin.id}
+                              type="button"
+                              onClick={() => {
+                                const price = coin.current_price || 0
+                                const decimalPlaces = getDecimalPlaces(price)
+                                const formattedPrice = price > 0 ? parseFloat(price).toFixed(decimalPlaces) : ''
+                                setFormData({ ...formData, coinId: coin.id, entryPrice: formattedPrice })
+                                setShowCoinDropdown(false)
+                                setCoinSearchTerm('')
+                              }}
+                              className={`w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all border-b border-gray-100 dark:border-gray-700/50 last:border-b-0 ${formData.coinId === coin.id
+                                ? 'bg-blue-50 dark:bg-blue-900/20'
+                                : ''
+                                }`}
+                            >
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <img
+                                  src={coin.image}
+                                  alt={coin.name}
+                                  className="w-10 h-10 rounded-full flex-shrink-0"
+                                />
+                                <div className="flex-1 min-w-0 text-left">
+                                  <div className="font-bold text-sm text-gray-900 dark:text-white truncate">
+                                    {coin.name}
+                                  </div>
+                                  <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                                    {coin.symbol.toUpperCase()}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                            <div className="text-right flex-shrink-0 ml-3">
-                              <div className="font-bold text-sm text-gray-900 dark:text-white">
-                                {formatPrice(coin.current_price || 0)}
+                              <div className="text-right flex-shrink-0 ml-3">
+                                <div className="font-bold text-sm text-gray-900 dark:text-white">
+                                  {formatPrice(coin.current_price || 0)}
+                                </div>
                               </div>
+                            </button>
+                          ))}
+                          {/* Loading indicator - daha fazla coin varsa göster */}
+                          {visibleCoinCount < filteredCoinsForSelection.length && (
+                            <div className="p-3 text-center text-gray-400 dark:text-gray-500 text-xs">
+                              Daha fazla için aşağı kaydır... ({visibleCoinCount}/{filteredCoinsForSelection.length})
                             </div>
-                          </button>
-                        ))
+                          )}
+                        </>
                       ) : (
                         <div className="p-6 text-center text-gray-500 dark:text-gray-400 text-sm">
                           {t('noCoinFound')}

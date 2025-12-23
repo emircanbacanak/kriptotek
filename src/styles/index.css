@@ -915,3 +915,149 @@ input[type="number"] {
   background-color: #020617;
   color: #e5e7eb;
 }
+
+/* ============================================
+   PORTFOLIO MODAL - FORCED COLORS COMPATIBILITY
+   Ensures text and colors are visible when browser
+   forces dark mode (Chrome "Force Dark Mode" etc.)
+   ============================================ */
+
+/* Modal container - explicit background colors */
+.portfolio-modal,
+[class*="bg-white"][class*="dark:bg-gray-800"] {
+  background-color: var(--modal-bg, #ffffff);
+  color: var(--modal-text, #1f2937);
+}
+
+.dark .portfolio-modal,
+.dark [class*="bg-white"][class*="dark:bg-gray-800"] {
+  --modal-bg: #1f2937;
+  --modal-text: #f3f4f6;
+}
+
+/* Input fields - ensure visible text */
+input[class*="dark:text-white"],
+input[class*="text-gray-900"] {
+  color: inherit !important;
+  -webkit-text-fill-color: inherit !important;
+}
+
+.dark input[class*="dark:text-white"] {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+/* Label text visibility */
+label[class*="text-gray-700"],
+label[class*="dark:text-gray-300"] {
+  color: inherit !important;
+  -webkit-text-fill-color: inherit !important;
+}
+
+.dark label[class*="dark:text-gray-300"] {
+  color: #d1d5db !important;
+  -webkit-text-fill-color: #d1d5db !important;
+}
+
+/* Button text visibility */
+button[class*="text-gray-700"],
+button[class*="dark:text-gray-300"] {
+  color: inherit !important;
+  -webkit-text-fill-color: inherit !important;
+}
+
+.dark button[class*="dark:text-gray-300"] {
+  color: #d1d5db !important;
+  -webkit-text-fill-color: #d1d5db !important;
+}
+
+/* Gradient text fallback for modal headers */
+h3[class*="bg-clip-text"],
+h2[class*="bg-clip-text"],
+h1[class*="bg-clip-text"] {
+  /* Fallback color if gradient fails */
+  color: #1f2937;
+}
+
+.dark h3[class*="bg-clip-text"],
+.dark h2[class*="bg-clip-text"],
+.dark h1[class*="bg-clip-text"] {
+  color: #f3f4f6;
+}
+
+/* Forced colors mode - Modal specific fixes */
+@media (forced-colors: active) {
+  /* Modal background and text */
+  [class*="bg-white"][class*="dark:bg-gray-800"],
+  [class*="bg-gray-50"][class*="dark:bg-gray-700"] {
+    background-color: Canvas !important;
+    color: CanvasText !important;
+    border-color: CanvasText !important;
+  }
+
+  /* Input fields in modal */
+  input[class*="dark:bg-gray-700"],
+  input[class*="bg-gray-50"] {
+    background-color: Field !important;
+    color: FieldText !important;
+    border-color: CanvasText !important;
+    -webkit-text-fill-color: FieldText !important;
+  }
+
+  /* Buttons in modal */
+  button[class*="bg-gradient"],
+  button[class*="bg-white"],
+  button[class*="dark:bg-gray-700"] {
+    background-color: ButtonFace !important;
+    color: ButtonText !important;
+    border-color: ButtonText !important;
+    -webkit-text-fill-color: ButtonText !important;
+  }
+
+  /* Active/selected buttons */
+  button[class*="bg-gradient-to-r"][class*="text-white"] {
+    background-color: Highlight !important;
+    color: HighlightText !important;
+    -webkit-text-fill-color: HighlightText !important;
+  }
+
+  /* Labels and small text */
+  label,
+  span[class*="text-gray"],
+  p[class*="text-gray"],
+  div[class*="text-gray"] {
+    color: CanvasText !important;
+    -webkit-text-fill-color: CanvasText !important;
+  }
+
+  /* Info boxes */
+  [class*="bg-blue-50"],
+  [class*="dark:bg-blue-900"],
+  [class*="bg-green-50"],
+  [class*="dark:bg-green-900"],
+  [class*="bg-red-50"],
+  [class*="dark:bg-red-900"],
+  [class*="bg-orange-50"],
+  [class*="dark:bg-orange-900"] {
+    background-color: Canvas !important;
+    border-color: CanvasText !important;
+    color: CanvasText !important;
+  }
+
+  /* Coin dropdown items */
+  [class*="hover:bg-gray-50"],
+  [class*="dark:hover:bg-gray-700"] {
+    background-color: Canvas !important;
+    color: CanvasText !important;
+  }
+
+  /* Icon containers */
+  [class*="bg-gradient-to-br"] {
+    background-color: Highlight !important;
+  }
+
+  /* All text should be visible */
+  * {
+    -webkit-text-fill-color: inherit !important;
+  }
+}
