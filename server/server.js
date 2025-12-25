@@ -557,7 +557,7 @@ async function loadMemoryCache() {
   }
 }
 
-// User Settings - GET
+// User Settings - GET (yoksa Firebase'den oluştur)
 app.get('/api/user-settings/:userId', async (req, res) => {
   try {
     if (!db) {
@@ -571,7 +571,45 @@ app.get('/api/user-settings/:userId', async (req, res) => {
 
     const collection = db.collection(COLLECTION_NAME)
 
-    const settings = await collection.findOne({ userId })
+    let settings = await collection.findOne({ userId })
+
+    // ✅ Eğer settings yoksa, Firebase'den kullanıcıyı çekip oluştur
+    if (!settings && firebaseAdmin) {
+      try {
+        console.log(`🔄 [User Settings] Kullanıcı MongoDB'de yok, Firebase'den çekiliyor: ${userId}`)
+        const fbUser = await firebaseAdmin.auth().getUser(userId)
+
+        if (fbUser) {
+          // Firebase'den gelen kullanıcı için varsayılan settings oluştur
+          const defaultSettings = {
+            userId: userId,
+            email: fbUser.email || null,
+            displayName: fbUser.displayName || (fbUser.email ? fbUser.email.split('@')[0] : 'Kullanıcı'),
+            photoURL: fbUser.photoURL || null,
+            display: {
+              currency: 'USD',
+              language: 'tr',
+              theme: 'dark'
+            },
+            isPremium: false, // Varsayılan
+            isActive: true,   // Varsayılan aktif
+            createdAt: fbUser.metadata.creationTime ? new Date(fbUser.metadata.creationTime).getTime() : Date.now(),
+            updatedAt: Date.now()
+          }
+
+          // MongoDB'ye kaydet
+          const insertResult = await collection.insertOne(defaultSettings)
+          if (insertResult.acknowledged && insertResult.insertedId) {
+            console.log(`✅ [User Settings] Kullanıcı otomatik oluşturuldu: ${userId} (email: ${fbUser.email})`)
+            settings = defaultSettings
+          } else {
+            console.error(`❌ [User Settings] MongoDB insertOne başarısız: ${userId}`)
+          }
+        }
+      } catch (fbError) {
+        console.error(`❌ [User Settings] Firebase kullanıcısı çekilemedi: ${userId}`, fbError.message)
+      }
+    }
 
     if (settings) {
       // _id'yi kaldır
