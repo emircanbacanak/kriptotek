@@ -92,10 +92,17 @@ export const clearSettingsCache = (userId = null) => {
 /**
  * MongoDB'den kullanıcı ayarlarını yükle (localStorage cache ile)
  * @param {string} userId - Kullanıcı ID
+ * @param {boolean} forceRefresh - Cache'i bypass edip doğrudan MongoDB'den çek (varsayılan: false)
  * @returns {Promise<Object>} Kullanıcı ayarları
  */
-export const loadUserSettingsFromMongo = async (userId) => {
+export const loadUserSettingsFromMongo = async (userId, forceRefresh = false) => {
   try {
+    // ✅ forceRefresh true ise cache'i tamamen bypass et
+    if (forceRefresh) {
+      clearSettingsCache(userId)
+      return await fetchAndCacheFromMongo(userId)
+    }
+
     // PERFORMANS: Önce cache'e bak (anında dönüş)
     const cached = getCachedSettings(userId)
     if (cached && !cached._stale) {
@@ -245,11 +252,12 @@ export const saveUserSettingsToMongo = async (userId, settings) => {
 /**
  * Kullanıcı ayarlarını yükle (MongoDB'den)
  * @param {string} userId - Kullanıcı ID
+ * @param {boolean} forceRefresh - Cache'i bypass edip doğrudan MongoDB'den çek (varsayılan: false)
  * @returns {Promise<Object>} Kullanıcı ayarları
  */
-export const loadUserSettings = async (userId) => {
+export const loadUserSettings = async (userId, forceRefresh = false) => {
   // MongoDB'den çek (sadece MongoDB kullanılıyor)
-  const mongoResult = await loadUserSettingsFromMongo(userId)
+  const mongoResult = await loadUserSettingsFromMongo(userId, forceRefresh)
   // Veri yok (404 veya boş)
   if (mongoResult.success && !mongoResult.exists) {
     logger.log('ℹ️ [mongoUserSettings] No user settings found in MongoDB (this is normal for new users)')

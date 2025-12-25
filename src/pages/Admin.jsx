@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { updatePageSEO } from '../utils/seoMetaTags'
@@ -13,7 +13,10 @@ import {
   Power,
   Users,
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  CheckCircle,
+  XCircle,
+  X
 } from 'lucide-react'
 
 const Admin = () => {
@@ -27,6 +30,23 @@ const Admin = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterType, setFilterType] = useState('all') // all, premium, regular, admin, inactive
   const [refreshing, setRefreshing] = useState(false)
+
+  // Toast state
+  const [toasts, setToasts] = useState([])
+
+  // Toast functions
+  const showToast = useCallback((type, message, title = null) => {
+    const id = Date.now() + Math.random()
+    setToasts(prev => [...prev, { id, type, message, title }])
+    // 5 saniye sonra otomatik kaldır
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id))
+    }, 5000)
+  }, [])
+
+  const removeToast = useCallback((id) => {
+    setToasts(prev => prev.filter(t => t.id !== id))
+  }, [])
 
   // Header gradients
   const headerIconGradient = theme === 'dark'
@@ -152,6 +172,9 @@ const Admin = () => {
   const handleTogglePremium = async (userId, currentPremium, userSource) => {
     const newPremiumStatus = !currentPremium
 
+    // ✅ ÖNCELİK 1: Cache'i HEMEN temizle (stale data'nın premium'u ezmesini önle)
+    clearSettingsCache(userId)
+
     // Önce local state'i anında güncelle (optimistic update)
     setUsers(prevUsers =>
       prevUsers.map(u =>
@@ -168,7 +191,7 @@ const Admin = () => {
     adminService.toggleUserPremium(userId, newPremiumStatus)
       .then((result) => {
         if (result.success) {
-          // Kullanıcının cache'ini temizle (taze veri için)
+          // ✅ Backend başarılı - cache'i tekrar temizle (çift güvenlik)
           clearSettingsCache(userId)
 
           // Kullanıcı listesini sessizce yenile (loading gösterme) - arka planda
@@ -178,12 +201,12 @@ const Admin = () => {
 
           // Eğer kullanıcı kendisini premium yapıyorsa, backend'den doğrulama yap (arka planda)
           if (user && user.uid === userId) {
-            // Kısa bir süre bekleyip refresh yap (backend'in güncellemesi için)
+            // Daha uzun süre bekleyip refresh yap (backend'in güncellemesi için)
             setTimeout(() => {
               refreshUserSettings().catch(() => {
                 // Hata olsa bile optimistic update zaten yapıldı
               })
-            }, 500) // 0.5 saniye sonra doğrulama yap
+            }, 2000) // 2 saniye sonra doğrulama yap (artırıldı)
           }
         } else {
           // Hata durumunda geri al (rollback)
@@ -198,7 +221,7 @@ const Admin = () => {
             updatePremiumStatus(currentPremium)
           }
 
-          alert(t('togglePremiumError') + ': ' + result.error)
+          showToast('error', result.error, t('togglePremiumError'))
         }
       })
       .catch((error) => {
@@ -214,9 +237,10 @@ const Admin = () => {
           updatePremiumStatus(currentPremium)
         }
 
-        alert(t('togglePremiumError') + ': ' + error.message)
+        showToast('error', error.message, t('togglePremiumError'))
       })
   }
+
 
   const handleToggleActive = async (userId, currentActive, userSource) => {
     const newActiveStatus = !currentActive
@@ -247,7 +271,7 @@ const Admin = () => {
               u.uid === userId ? { ...u, isActive: currentActive } : u
             )
           )
-          alert(t('toggleActiveError') + ': ' + result.error)
+          showToast('error', result.error, t('toggleActiveError'))
         }
       })
       .catch((error) => {
@@ -257,7 +281,7 @@ const Admin = () => {
             u.uid === userId ? { ...u, isActive: currentActive } : u
           )
         )
-        alert(t('toggleActiveError') + ': ' + error.message)
+        showToast('error', error.message, t('toggleActiveError'))
       })
   }
 
@@ -307,7 +331,7 @@ const Admin = () => {
             updateAdminStatus(currentAdmin)
           }
 
-          alert(t('toggleAdminError') + ': ' + result.error)
+          showToast('error', result.error, t('toggleAdminError'))
         }
       })
       .catch((error) => {
@@ -323,7 +347,7 @@ const Admin = () => {
           updateAdminStatus(currentAdmin)
         }
 
-        alert(t('toggleAdminError') + ': ' + error.message)
+        showToast('error', error.message, t('toggleAdminError'))
       })
   }
 
@@ -341,6 +365,48 @@ const Admin = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Toast Notifications */}
+      {toasts.length > 0 && (
+        <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-3">
+          {toasts.map((toast) => {
+            const isError = toast.type === 'error'
+            const isSuccess = toast.type === 'success'
+            const isWarning = toast.type === 'warning'
+
+            return (
+              <div
+                key={toast.id}
+                className={`flex items-start gap-3 p-4 rounded-xl shadow-2xl border min-w-[320px] max-w-[420px] animate-slide-in-right backdrop-blur-sm
+                  ${isError ? 'bg-red-500 border-red-600 text-white' : ''}
+                  ${isSuccess ? 'bg-green-500 border-green-600 text-white' : ''}
+                  ${isWarning ? 'bg-yellow-500 border-yellow-600 text-white' : ''}
+                  ${!isError && !isSuccess && !isWarning ? 'bg-blue-500 border-blue-600 text-white' : ''}
+                `}
+                role="alert"
+              >
+                {isError && <XCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />}
+                {isSuccess && <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />}
+                {isWarning && <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />}
+                {!isError && !isSuccess && !isWarning && <Shield className="w-5 h-5 flex-shrink-0 mt-0.5" />}
+                <div className="flex-1 min-w-0">
+                  {toast.title && (
+                    <h4 className="font-semibold text-sm mb-1">{toast.title}</h4>
+                  )}
+                  <p className="text-sm opacity-95 break-words">{toast.message}</p>
+                </div>
+                <button
+                  onClick={() => removeToast(toast.id)}
+                  className="flex-shrink-0 p-1 hover:bg-white/20 rounded-lg transition-colors"
+                  aria-label="Kapat"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
       {/* Modern Header - Home sayfası stiliyle uyumlu */}
       <div className="w-full py-4 sm:py-6 md:py-8 mb-6">
         <div className="flex items-center justify-between">

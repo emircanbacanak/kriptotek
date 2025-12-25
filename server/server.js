@@ -982,24 +982,19 @@ app.get('/api/admin/users', async (req, res) => {
     // MongoDB'de olup Firebase'de olmayan "yetim" kayıtları filtrele
     const validMongoUsers = mongoUsersList.filter(user => user.existsInFirebase)
 
-    // Firebase'den Google provider'ı olan kullanıcıları çek (MongoDB'de olmayanlar)
-    let firebaseGoogleUsers = []
+    // Firebase'den MongoDB'de olmayan TÜM kullanıcıları çek (Google + Email/Password)
+    let firebaseOnlyUsers = []
     if (firebaseAdmin) {
       try {
         const listUsersResult = await firebaseAdmin.auth().listUsers(1000) // Max 1000 kullanıcı
-        firebaseGoogleUsers = listUsersResult.users
+        firebaseOnlyUsers = listUsersResult.users
           .filter(fbUser => {
-            // Google provider'ı olan kullanıcıları filtrele
-            return fbUser.providerData && fbUser.providerData.some(provider => provider.providerId === 'google.com')
-          })
-          .map(fbUser => {
             // MongoDB'de (ve Firebase'de) zaten varsa atla (duplicate kontrolü)
             const existsInMongo = validMongoUsers.some(mu => mu.uid === fbUser.uid)
-            if (existsInMongo) {
-              return null
-            }
-
-            // MongoDB'de yoksa Firebase'den ekle
+            return !existsInMongo // MongoDB'de yoksa dahil et
+          })
+          .map(fbUser => {
+            // Kullanıcı bilgilerini oluştur
             const email = fbUser.email || null
             let displayName = fbUser.displayName || null
             if (!displayName && email) {
@@ -1009,6 +1004,10 @@ app.get('/api/admin/users', async (req, res) => {
             if (!displayName && !email && fbUser.uid) {
               displayName = 'User_' + fbUser.uid.substring(0, 8)
             }
+
+            // Provider bilgisini belirle
+            const isGoogleUser = fbUser.providerData && fbUser.providerData.some(provider => provider.providerId === 'google.com')
+            const isEmailUser = fbUser.providerData && fbUser.providerData.some(provider => provider.providerId === 'password')
 
             return {
               uid: fbUser.uid,
@@ -1020,7 +1019,8 @@ app.get('/api/admin/users', async (req, res) => {
               isActive: true, // Varsayılan
               createdAt: fbUser.metadata.creationTime ? new Date(fbUser.metadata.creationTime).getTime() : null,
               updatedAt: fbUser.metadata.lastSignInTime ? new Date(fbUser.metadata.lastSignInTime).getTime() : null,
-              source: 'firebase' // Firebase'den geldiğini belirt
+              source: 'firebase', // Firebase'den geldiğini belirt
+              providerType: isGoogleUser ? 'google' : (isEmailUser ? 'email' : 'other') // Provider tipi
             }
           })
           .filter(user => user !== null) // null'ları filtrele
@@ -1030,7 +1030,7 @@ app.get('/api/admin/users', async (req, res) => {
     }
 
     // MongoDB (Firebase'de de var olanlar) ve Firebase kullanıcılarını birleştir
-    const allUsers = [...validMongoUsers, ...firebaseGoogleUsers]
+    const allUsers = [...validMongoUsers, ...firebaseOnlyUsers]
 
     return res.json({
       success: true,
@@ -1048,23 +1048,31 @@ app.get('/api/admin/users', async (req, res) => {
 // Admin - Toggle Premium
 app.patch('/api/admin/users/:userId/premium', async (req, res) => {
   try {
+    const { userId } = req.params
+    const { isPremium } = req.body
+
+    console.log(`\n🔄 [Premium Toggle] ===== BAŞLADI =====`)
+    console.log(`🔄 [Premium Toggle] userId: ${userId}`)
+    console.log(`🔄 [Premium Toggle] isPremium değeri: ${isPremium} (tip: ${typeof isPremium})`)
+
     if (!db) {
+      console.error(`❌ [Premium Toggle] MongoDB bağlantısı yok!`)
       return res.status(503).json({
         success: false,
         error: 'MongoDB bağlantısı yok'
       })
     }
 
-    const { userId } = req.params
-    const { isPremium } = req.body
-
     const collection = db.collection(COLLECTION_NAME)
 
     // Önce kullanıcıyı kontrol et
     let existingUser = await collection.findOne({ userId })
 
+    console.log(`🔄 [Premium Toggle] MongoDB findOne sonucu:`, existingUser ? `BULUNDU (email: ${existingUser.email}, isPremium: ${existingUser.isPremium})` : 'BULUNAMADI')
+
     // Eğer kullanıcı yoksa, Firebase'den bilgilerini çek ve MongoDB'de oluştur
     if (!existingUser) {
+      console.log(`🔄 [Premium Toggle] Kullanıcı MongoDB'de yok, Firebase'den çekilecek...`)
       if (firebaseAdmin) {
         try {
           const fbUser = await firebaseAdmin.auth().getUser(userId)

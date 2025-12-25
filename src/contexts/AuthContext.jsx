@@ -84,11 +84,11 @@ export const AuthProvider = ({ children }) => {
           // Bu, admin panelinden yapılan değişikliklerin ezilmesini önler
           if (lastOptimisticUpdateRef.current) {
             const timeSinceOptimisticUpdate = Date.now() - lastOptimisticUpdateRef.current
-            if (timeSinceOptimisticUpdate < 10000) { // 10 saniye koruma süresi
+            if (timeSinceOptimisticUpdate < 30000) { // 30 saniye koruma süresi (artırıldı)
               // Optimistic update hala geçerli, backend verisini ignore et
               return prevIsPremium
             }
-            // 10 saniye geçti, artık backend verisini kullan
+            // 30 saniye geçti, artık backend verisini kullan
             lastOptimisticUpdateRef.current = null
           }
 
@@ -131,10 +131,10 @@ export const AuthProvider = ({ children }) => {
 
         // Sadece değer değiştiyse ve optimistic update yoksa state'i güncelle
         setIsAdmin(prevIsAdmin => {
-          // Optimistic update yapıldıysa ve 10 saniye geçmediyse, backend verisini kullanma
+          // Optimistic update yapıldıysa ve 30 saniye geçmediyse, backend verisini kullanma
           if (lastOptimisticUpdateRef.current) {
             const timeSinceOptimisticUpdate = Date.now() - lastOptimisticUpdateRef.current
-            if (timeSinceOptimisticUpdate < 10000) { // 10 saniye koruma süresi
+            if (timeSinceOptimisticUpdate < 30000) { // 30 saniye koruma süresi (artırıldı)
               return prevIsAdmin
             }
           }
@@ -356,7 +356,7 @@ export const AuthProvider = ({ children }) => {
       clearInterval(settingsPollIntervalRef.current)
       settingsPollIntervalRef.current = null
 
-      // 5 saniye sonra polling'i tekrar başlat (backend güncellemesi için yeterli süre)
+      // 15 saniye sonra polling'i tekrar başlat (backend güncellemesi için yeterli süre)
       setTimeout(() => {
         if (user && !settingsPollIntervalRef.current) {
           settingsPollIntervalRef.current = setInterval(() => {
@@ -365,7 +365,7 @@ export const AuthProvider = ({ children }) => {
             })
           }, 5000) // 5 saniye
         }
-      }, 5000) // 5 saniye (önceden 2 saniyeydi)
+      }, 15000) // 15 saniye bekle (artırıldı)
     }
   }
 
@@ -393,7 +393,7 @@ export const AuthProvider = ({ children }) => {
       clearInterval(settingsPollIntervalRef.current)
       settingsPollIntervalRef.current = null
 
-      // 5 saniye sonra polling'i tekrar başlat (backend güncellemesi için yeterli süre)
+      // 15 saniye sonra polling'i tekrar başlat (backend güncellemesi için yeterli süre)
       setTimeout(() => {
         if (user && !settingsPollIntervalRef.current) {
           settingsPollIntervalRef.current = setInterval(() => {
@@ -402,7 +402,7 @@ export const AuthProvider = ({ children }) => {
             })
           }, 5000) // 5 saniye
         }
-      }, 5000) // 5 saniye (önceden 2 saniyeydi)
+      }, 15000) // 15 saniye bekle (artırıldı)
     }
   }
 
